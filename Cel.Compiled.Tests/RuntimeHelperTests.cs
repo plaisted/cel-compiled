@@ -6,6 +6,46 @@ namespace Cel.Compiled.Tests;
 
 public class RuntimeHelperTests
 {
+    [Fact]
+    public void OptionalOf_CreatesPresentOptional()
+    {
+        var optional = CelRuntimeHelpers.OptionalOf("abc");
+
+        Assert.True(optional.HasValue);
+        Assert.Equal("abc", optional.Value);
+    }
+
+    [Fact]
+    public void OptionalOf_CanWrapPresentNull()
+    {
+        var optional = CelRuntimeHelpers.OptionalOf(null);
+
+        Assert.True(optional.HasValue);
+        Assert.Null(optional.Value);
+    }
+
+    [Fact]
+    public void OptionalNone_IsEmpty()
+    {
+        var optional = CelRuntimeHelpers.OptionalNone();
+
+        Assert.False(optional.HasValue);
+        Assert.Null(optional.Value);
+    }
+
+    [Fact]
+    public void OptionalOrValue_UsesFallbackOnlyForEmptyOptional()
+    {
+        Assert.Equal("value", CelRuntimeHelpers.OptionalOrValue(CelRuntimeHelpers.OptionalOf("value"), "fallback"));
+        Assert.Equal("fallback", CelRuntimeHelpers.OptionalOrValue(CelRuntimeHelpers.OptionalNone(), "fallback"));
+    }
+
+    [Fact]
+    public void OptionalValue_ThrowsForEmptyOptional()
+    {
+        Assert.Throws<InvalidOperationException>(() => CelRuntimeHelpers.OptionalValue(CelRuntimeHelpers.OptionalNone()));
+    }
+
     // int vs uint (long vs ulong)
     [Fact]
     public void NumericEquals_IntUint_Equal()

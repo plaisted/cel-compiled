@@ -13,8 +13,14 @@ internal sealed class JsonNodeCelBinder : ICelBinder
     private static readonly MethodInfo s_hasJsonNodeProperty =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.HasJsonNodeProperty), new[] { typeof(JsonNode), typeof(string) })!;
 
+    private static readonly MethodInfo s_getOptionalJsonNodeProperty =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetOptionalJsonNodeProperty), new[] { typeof(JsonNode), typeof(string) })!;
+
     private static readonly MethodInfo s_getJsonNodeArrayElement =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetJsonNodeArrayElement), new[] { typeof(JsonNode), typeof(long) })!;
+
+    private static readonly MethodInfo s_getOptionalJsonNodeArrayElement =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetOptionalJsonNodeArrayElement), new[] { typeof(JsonNode), typeof(long) })!;
 
     private static readonly MethodInfo s_getJsonNodeSize =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetJsonNodeSize), new[] { typeof(JsonNode) })!;
@@ -51,6 +57,11 @@ internal sealed class JsonNodeCelBinder : ICelBinder
         return Expression.Call(s_hasJsonNodeProperty, Normalize(operandExpression), Expression.Constant(memberName));
     }
 
+    public Expression ResolveOptionalMember(Expression operandExpression, string memberName)
+    {
+        return Expression.Call(s_getOptionalJsonNodeProperty, Normalize(operandExpression), Expression.Constant(memberName));
+    }
+
     public bool TryResolveIndex(Expression operandExpression, Expression indexExpression, out Expression boundExpression)
     {
         var node = Normalize(operandExpression);
@@ -64,6 +75,25 @@ internal sealed class JsonNodeCelBinder : ICelBinder
         if (indexExpression.Type == typeof(string))
         {
             boundExpression = Expression.Call(s_getJsonNodeProperty, node, indexExpression);
+            return true;
+        }
+
+        throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operandExpression.Type, indexExpression.Type).Message);
+    }
+
+    public bool TryResolveOptionalIndex(Expression operandExpression, Expression indexExpression, out Expression optionalExpression)
+    {
+        var node = Normalize(operandExpression);
+
+        if (indexExpression.Type == typeof(long))
+        {
+            optionalExpression = Expression.Call(s_getOptionalJsonNodeArrayElement, node, indexExpression);
+            return true;
+        }
+
+        if (indexExpression.Type == typeof(string))
+        {
+            optionalExpression = Expression.Call(s_getOptionalJsonNodeProperty, node, indexExpression);
             return true;
         }
 

@@ -6,7 +6,7 @@ namespace Cel.Compiled.Compiler;
 /// Represents a CEL error as a value, without using exceptions.
 /// Used by the non-throwing result channel for error-absorption in &&/|| and comprehensions.
 /// </summary>
-public sealed class CelError
+internal sealed class CelError
 {
     public string ErrorCode { get; }
     public string Message { get; }
@@ -50,7 +50,7 @@ public sealed class CelError
 /// This is the foundation for error-absorption in && / || (CEL spec: false && error → false,
 /// true || error → true) and comprehension macros.
 /// </summary>
-public readonly struct CelResult<T>
+internal readonly struct CelResult<T>
 {
     private readonly T _value;
     private readonly CelError? _error;

@@ -30,6 +30,8 @@ public static class CelCompiler
         public required Func<Expression, Expression> ReadItem { get; init; }
     }
 
+    private readonly record struct CompiledOptional(Expression Expression, Type ValueType);
+
     private static readonly PropertyInfo s_jsonElementValueKind =
         typeof(JsonElement).GetProperty(nameof(JsonElement.ValueKind))!;
 
@@ -226,6 +228,55 @@ public static class CelCompiler
 
     private static readonly MethodInfo s_toCelTypeObject = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelType), new[] { typeof(object) })!;
 
+    private static readonly MethodInfo s_optionalOf =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.OptionalOf), new[] { typeof(object) })!;
+
+    private static readonly MethodInfo s_optionalNone =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.OptionalNone), Type.EmptyTypes)!;
+
+    private static readonly MethodInfo s_optionalHasValue =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.OptionalHasValue), new[] { typeof(CelOptional) })!;
+
+    private static readonly MethodInfo s_optionalValue =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.OptionalValue), new[] { typeof(CelOptional) })!;
+
+    private static readonly MethodInfo s_optionalOr =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.OptionalOr), new[] { typeof(CelOptional), typeof(CelOptional) })!;
+
+    private static readonly MethodInfo s_optionalOrValue =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.OptionalOrValue), new[] { typeof(CelOptional), typeof(object) })!;
+
+    private static readonly MethodInfo s_getOptionalArrayElement =
+        typeof(CelRuntimeHelpers).GetMethods().Single(method =>
+            method.Name == nameof(CelRuntimeHelpers.GetOptionalArrayElement) &&
+            method.IsGenericMethodDefinition);
+
+    private static readonly MethodInfo s_getOptionalGenericListElement =
+        typeof(CelRuntimeHelpers).GetMethods().Single(method =>
+            method.Name == nameof(CelRuntimeHelpers.GetOptionalListElement) &&
+            method.IsGenericMethodDefinition);
+
+    private static readonly MethodInfo s_getOptionalReadOnlyListElement =
+        typeof(CelRuntimeHelpers).GetMethods().Single(method =>
+            method.Name == nameof(CelRuntimeHelpers.GetOptionalReadOnlyListElement) &&
+            method.IsGenericMethodDefinition);
+
+    private static readonly MethodInfo s_getOptionalNonGenericListElement =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetOptionalListElement), new[] { typeof(IList), typeof(long) })!;
+
+    private static readonly MethodInfo s_getOptionalGenericDictionaryValue =
+        typeof(CelRuntimeHelpers).GetMethods().Single(method =>
+            method.Name == nameof(CelRuntimeHelpers.GetOptionalDictionaryValue) &&
+            method.IsGenericMethodDefinition);
+
+    private static readonly MethodInfo s_getOptionalReadOnlyDictionaryValue =
+        typeof(CelRuntimeHelpers).GetMethods().Single(method =>
+            method.Name == nameof(CelRuntimeHelpers.GetOptionalReadOnlyDictionaryValue) &&
+            method.IsGenericMethodDefinition);
+
+    private static readonly MethodInfo s_getOptionalNonGenericDictionaryValue =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetOptionalDictionaryValue), new[] { typeof(IDictionary), typeof(object) })!;
+
     private static readonly MethodInfo s_stringContains = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.StringContains), new[] { typeof(string), typeof(string) })!;
     private static readonly MethodInfo s_stringStartsWith = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.StringStartsWith), new[] { typeof(string), typeof(string) })!;
     private static readonly MethodInfo s_stringEndsWith = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.StringEndsWith), new[] { typeof(string), typeof(string) })!;
@@ -239,12 +290,12 @@ public static class CelCompiler
     /// <summary>
     /// Compiles a CEL expression into a strongly-typed delegate for a specific context.
     /// </summary>
-    public static Func<TContext, object?> Compile<TContext>(CelExpr expr)
+    internal static Func<TContext, object?> Compile<TContext>(CelExpr expr)
     {
         return Compile<TContext>(expr, CelCompileOptions.Default);
     }
 
-    public static Func<TContext, object?> Compile<TContext>(CelExpr expr, CelCompileOptions? options)
+    internal static Func<TContext, object?> Compile<TContext>(CelExpr expr, CelCompileOptions? options)
     {
         var effectiveOptions = options ?? CelCompileOptions.Default;
         return effectiveOptions.EnableCaching
@@ -255,12 +306,12 @@ public static class CelCompiler
     /// <summary>
     /// Compiles a CEL expression into a strongly-typed delegate for a specific context and result type.
     /// </summary>
-    public static Func<TContext, TResult> Compile<TContext, TResult>(CelExpr expr)
+    internal static Func<TContext, TResult> Compile<TContext, TResult>(CelExpr expr)
     {
         return Compile<TContext, TResult>(expr, CelCompileOptions.Default);
     }
 
-    public static Func<TContext, TResult> Compile<TContext, TResult>(CelExpr expr, CelCompileOptions? options)
+    internal static Func<TContext, TResult> Compile<TContext, TResult>(CelExpr expr, CelCompileOptions? options)
     {
         var effectiveOptions = options ?? CelCompileOptions.Default;
         return effectiveOptions.EnableCaching
@@ -268,24 +319,50 @@ public static class CelCompiler
             : CompileUncached<TContext, TResult>(expr, effectiveOptions);
     }
 
+    /// <summary>
+    /// Compiles a CEL expression string into a delegate for a specific context type.
+    /// </summary>
     public static Func<TContext, object?> Compile<TContext>(string celExpression)
     {
         return Compile<TContext>(celExpression, CelCompileOptions.Default);
     }
 
+    /// <summary>
+    /// Compiles a CEL expression string into a delegate for a specific context type using compile options.
+    /// </summary>
     public static Func<TContext, object?> Compile<TContext>(string celExpression, CelCompileOptions? options)
     {
-        return Compile<TContext>(Cel.Compiled.Parser.CelParser.Parse(celExpression), options);
+        try
+        {
+            return Compile<TContext>(Cel.Compiled.Parser.CelParser.Parse(celExpression), options);
+        }
+        catch (Cel.Compiled.Parser.CelParseException ex)
+        {
+            throw CelCompilationException.Parse(celExpression, ex.Message, ex.Position, ex);
+        }
     }
 
+    /// <summary>
+    /// Compiles a CEL expression string into a strongly typed delegate for a specific context and result type.
+    /// </summary>
     public static Func<TContext, TResult> Compile<TContext, TResult>(string celExpression)
     {
         return Compile<TContext, TResult>(celExpression, CelCompileOptions.Default);
     }
 
+    /// <summary>
+    /// Compiles a CEL expression string into a strongly typed delegate for a specific context and result type using compile options.
+    /// </summary>
     public static Func<TContext, TResult> Compile<TContext, TResult>(string celExpression, CelCompileOptions? options)
     {
-        return Compile<TContext, TResult>(Cel.Compiled.Parser.CelParser.Parse(celExpression), options);
+        try
+        {
+            return Compile<TContext, TResult>(Cel.Compiled.Parser.CelParser.Parse(celExpression), options);
+        }
+        catch (Cel.Compiled.Parser.CelParseException ex)
+        {
+            throw CelCompilationException.Parse(celExpression, ex.Message, ex.Position, ex);
+        }
     }
 
     internal static Func<TContext, object?> CompileUncached<TContext>(CelExpr expr, CelCompileOptions options)
@@ -296,7 +373,7 @@ public static class CelCompiler
     internal static Func<TContext, TResult> CompileUncached<TContext, TResult>(CelExpr expr, CelCompileOptions options)
     {
         var contextParam = Expression.Parameter(typeof(TContext), "context");
-        var binders = CelBinderSet.Create(typeof(TContext), options.BinderMode);
+        var binders = CelBinderSet.Create(typeof(TContext), options.BinderMode, options.FunctionRegistry, options.TypeRegistry);
         var bodyExpr = CompileNode(expr, contextParam, binders, null);
 
         if (bodyExpr.Type != typeof(TResult))
@@ -307,7 +384,10 @@ public static class CelCompiler
             }
             catch (InvalidOperationException ex)
             {
-                throw new CelCompilationException($"Cannot convert CEL expression result type '{bodyExpr.Type.Name}' to requested type '{typeof(TResult).Name}'", ex);
+                throw new CelCompilationException(
+                    $"Cannot convert CEL expression result type '{bodyExpr.Type.Name}' to requested type '{typeof(TResult).Name}'",
+                    "result_type_conversion_failed",
+                    innerException: ex);
             }
         }
 
@@ -443,8 +523,59 @@ public static class CelCompiler
 
     private static Expression CompileSelect(CelSelect select, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
     {
+        if (select.IsOptional)
+            return CompileOptionalSelect(select, contextExpr, binders, scope).Expression;
+
         var operandExpr = CompileNode(select.Operand, contextExpr, binders, scope);
         return binders.ResolveMember(operandExpr, select.Field);
+    }
+
+    private static CompiledOptional CompileOptionalSelect(CelSelect select, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    {
+        if (TryCompileOptionalValue(select.Operand, contextExpr, binders, scope, out var operandOptional))
+        {
+            var optionalVar = Expression.Variable(typeof(CelOptional), "optional");
+            var valueVar = Expression.Variable(operandOptional.ValueType, "optionalValue");
+            var optionalExpression = Expression.Block(
+                typeof(CelOptional),
+                new[] { optionalVar, valueVar },
+                Expression.Assign(optionalVar, operandOptional.Expression),
+                Expression.Condition(
+                    Expression.Call(s_optionalHasValue, optionalVar),
+                    Expression.Block(
+                        Expression.Assign(valueVar, Expression.Convert(Expression.Call(s_optionalValue, optionalVar), operandOptional.ValueType)),
+                        binders.ResolveOptionalMember(valueVar, select.Field)),
+                    Expression.Call(s_optionalNone)));
+
+            var memberType = binders.ResolveMember(Expression.Parameter(operandOptional.ValueType, "value"), select.Field).Type;
+            return new CompiledOptional(optionalExpression, memberType);
+        }
+
+        var operandExpr = CompileNode(select.Operand, contextExpr, binders, scope);
+        return new CompiledOptional(binders.ResolveOptionalMember(operandExpr, select.Field), binders.ResolveMember(operandExpr, select.Field).Type);
+    }
+
+    private static bool TryCompileOptionalValue(CelExpr expr, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope, out CompiledOptional compiledOptional)
+    {
+        switch (expr)
+        {
+            case CelSelect select when select.IsOptional:
+                compiledOptional = CompileOptionalSelect(select, contextExpr, binders, scope);
+                return true;
+            case CelIndex index when index.IsOptional:
+                compiledOptional = CompileOptionalIndex(index, contextExpr, binders, scope);
+                return true;
+            case CelCall call when IsOptionalOfCall(call):
+                var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
+                compiledOptional = new CompiledOptional(Expression.Call(s_optionalOf, BoxIfNeeded(arg)), arg.Type);
+                return true;
+            case CelCall call when IsOptionalNoneCall(call):
+                compiledOptional = new CompiledOptional(Expression.Call(s_optionalNone), typeof(object));
+                return true;
+            default:
+                compiledOptional = default;
+                return false;
+        }
     }
 
     private static Expression CompileCall(CelCall call, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
@@ -665,6 +796,37 @@ public static class CelCompiler
             return Expression.Call(s_toCelTypeObject, BoxIfNeeded(arg));
         }
 
+        if (IsOptionalOfCall(call))
+        {
+            var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
+            return Expression.Call(s_optionalOf, BoxIfNeeded(arg));
+        }
+
+        if (IsOptionalNoneCall(call))
+            return Expression.Call(s_optionalNone);
+
+        if (call.Target != null && call.Target is not CelIdent { Name: "optional" })
+        {
+            var target = CompileNode(call.Target, contextExpr, binders, scope);
+            if (target.Type == typeof(CelOptional))
+            {
+                if (call.Function == "hasValue" && call.Args.Count == 0)
+                    return Expression.Call(s_optionalHasValue, target);
+
+                if (call.Function == "value" && call.Args.Count == 0)
+                    return Expression.Call(s_optionalValue, target);
+
+                if (call.Function == "or" && call.Args.Count == 1)
+                    return Expression.Call(s_optionalOr, target, EnsureOptionalArgument(call.Args[0], contextExpr, binders, scope));
+
+                if (call.Function == "orValue" && call.Args.Count == 1)
+                    return Expression.Call(s_optionalOrValue, target, BoxIfNeeded(CompileNode(call.Args[0], contextExpr, binders, scope)));
+
+                throw new NotSupportedException(
+                    $"Optional receiver function '{call.Function}' is not supported with {call.Args.Count} arguments.");
+            }
+        }
+
         if (call.Function == "has")
         {
             if (call.Args.Count != 1 || call.Args[0] is not CelSelect select)
@@ -676,7 +838,7 @@ public static class CelCompiler
             return binders.ResolvePresence(operand, select.Field);
         }
 
-        if (call.Args.Count == 2)
+        if (call.Args.Count == 2 && IsBinaryOperator(call.Function))
         {
             var left = CompileNode(call.Args[0], contextExpr, binders, scope);
             var right = CompileNode(call.Args[1], contextExpr, binders, scope);
@@ -691,22 +853,230 @@ public static class CelCompiler
                 "_<_" or "_<=_" or "_>_" or "_>=_" => CompareExpr(call.Function, left, right),
                 "_&&_" => CompileLogicalAnd(left, right),
                 "_||_" => CompileLogicalOr(left, right),
-                _ => throw new NotSupportedException($"Binary operator {call.Function} is not supported.")
+                _ => throw new InvalidOperationException($"Unrecognized binary operator '{call.Function}'.")
             };
         }
 
-        if (call.Args.Count == 1)
+        if (call.Args.Count == 1 && IsUnaryOperator(call.Function))
         {
             var operand = CompileNode(call.Args[0], contextExpr, binders, scope);
             return call.Function switch
             {
                 "!_" => Expression.Not(operand),
                 "-_" => CompileUnaryMinus(operand),
-                _ => throw new NotSupportedException($"Unary operator {call.Function} is not supported.")
+                _ => throw new InvalidOperationException($"Unrecognized unary operator '{call.Function}'.")
             };
         }
 
+        // Custom function lookup: resolve registered functions after all built-ins, including operators.
+        if (binders.FunctionRegistry != null)
+        {
+            var customResult = TryCompileCustomFunction(call, contextExpr, binders, scope);
+            if (customResult != null)
+                return customResult;
+        }
+
         throw new NotSupportedException($"Function {call.Function} is not supported with {call.Args.Count} arguments.");
+    }
+
+    private static bool IsBinaryOperator(string function) => function is
+        "_+_" or "_-_" or "_*_" or "_/_" or "_%_" or
+        "_==_" or "_!=_" or "_<_" or "_<=_" or "_>_" or "_>=_" or
+        "_&&_" or "_||_";
+
+    private static bool IsUnaryOperator(string function) => function is "!_" or "-_";
+
+    private static bool IsOptionalOfCall(CelCall call) =>
+        call.Target is CelIdent { Name: "optional" } && call.Function == "of" && call.Args.Count == 1;
+
+    private static bool IsOptionalNoneCall(CelCall call) =>
+        call.Target is CelIdent { Name: "optional" } && call.Function == "none" && call.Args.Count == 0;
+
+    private static Expression EnsureOptionalArgument(CelExpr expr, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    {
+        if (TryCompileOptionalValue(expr, contextExpr, binders, scope, out var optional))
+            return optional.Expression;
+
+        var compiled = CompileNode(expr, contextExpr, binders, scope);
+        if (compiled.Type != typeof(CelOptional))
+            throw new CelCompilationException("Optional receiver function 'or' requires a CEL optional argument.");
+
+        return compiled;
+    }
+
+    private static Expression? TryCompileCustomFunction(
+        CelCall call,
+        Expression contextExpr,
+        CelBinderSet binders,
+        IReadOnlyDictionary<string, Expression>? scope)
+    {
+        var registry = binders.FunctionRegistry!;
+
+        if (call.Target != null)
+        {
+            // Receiver-style: target.function(args...)
+            var overloads = registry.GetOverloads(call.Function, CelFunctionKind.Receiver);
+            if (overloads.Count == 0)
+                return null;
+
+            var target = CompileNode(call.Target, contextExpr, binders, scope);
+            var args = call.Args.Select(a => CompileNode(a, contextExpr, binders, scope)).ToArray();
+
+            // Build combined argument expressions: [receiver, arg0, arg1, ...]
+            var allArgExprs = new Expression[args.Length + 1];
+            allArgExprs[0] = target;
+            Array.Copy(args, 0, allArgExprs, 1, args.Length);
+
+            return ResolveAndEmitCustomCall(call.Function, overloads, allArgExprs, binders);
+        }
+        else
+        {
+            // Global-style: function(args...)
+            var overloads = registry.GetOverloads(call.Function, CelFunctionKind.Global);
+            if (overloads.Count == 0)
+                return null;
+
+            var args = call.Args.Select(a => CompileNode(a, contextExpr, binders, scope)).ToArray();
+            return ResolveAndEmitCustomCall(call.Function, overloads, args, binders);
+        }
+    }
+
+    /// <summary>
+    /// Resolves a single overload and emits the call expression.
+    /// Precedence: exact typed match, then binder-coerced match, then single object fallback.
+    /// </summary>
+    private static Expression ResolveAndEmitCustomCall(
+        string functionName,
+        IReadOnlyList<CelFunctionDescriptor> overloads,
+        Expression[] arguments,
+        CelBinderSet binders)
+    {
+        var argTypes = arguments.Select(a => a.Type).ToArray();
+
+        // Pass 1: exact typed match
+        CelFunctionDescriptor? exactMatch = null;
+        foreach (var overload in overloads)
+        {
+            if (IsExactMatch(overload, argTypes))
+            {
+                if (exactMatch != null)
+                    throw CelCompilationException.AmbiguousOverload(functionName, argTypes);
+                exactMatch = overload;
+            }
+        }
+
+        if (exactMatch != null)
+            return EmitCustomCall(exactMatch, arguments);
+
+        // Pass 2: binder-coerced match — try coercing arguments via binders to match a typed overload
+        CelFunctionDescriptor? coercedMatch = null;
+        Expression[]? coercedArgs = null;
+        foreach (var overload in overloads)
+        {
+            if (overload.ParameterTypes.Length != argTypes.Length)
+                continue;
+
+            // Skip all-object overloads (handled in pass 3)
+            if (overload.ParameterTypes.All(t => t == typeof(object)))
+                continue;
+
+            var converted = TryCoerceArguments(overload, arguments, binders);
+            if (converted != null)
+            {
+                if (coercedMatch != null)
+                    throw CelCompilationException.AmbiguousOverload(functionName, argTypes);
+                coercedMatch = overload;
+                coercedArgs = converted;
+            }
+        }
+
+        if (coercedMatch != null)
+            return EmitCustomCall(coercedMatch, coercedArgs!);
+
+        // Pass 3: single object fallback — all parameters declared as object
+        CelFunctionDescriptor? objectFallback = null;
+        foreach (var overload in overloads)
+        {
+            if (overload.ParameterTypes.Length != argTypes.Length)
+                continue;
+
+            if (overload.ParameterTypes.All(t => t == typeof(object)))
+            {
+                if (objectFallback != null)
+                    throw CelCompilationException.AmbiguousOverload(functionName, argTypes);
+                objectFallback = overload;
+            }
+        }
+
+        if (objectFallback != null)
+            return EmitCustomCall(objectFallback, arguments);
+
+        throw CelCompilationException.NoMatchingOverload(functionName, argTypes);
+    }
+
+    private static bool IsExactMatch(CelFunctionDescriptor overload, Type[] argTypes)
+    {
+        if (overload.ParameterTypes.Length != argTypes.Length)
+            return false;
+
+        for (int i = 0; i < argTypes.Length; i++)
+        {
+            if (overload.ParameterTypes[i] != argTypes[i])
+                return false;
+        }
+
+        return true;
+    }
+
+    private static Expression[]? TryCoerceArguments(CelFunctionDescriptor overload, Expression[] arguments, CelBinderSet binders)
+    {
+        var result = new Expression[arguments.Length];
+        for (int i = 0; i < arguments.Length; i++)
+        {
+            if (arguments[i].Type == overload.ParameterTypes[i])
+            {
+                result[i] = arguments[i];
+            }
+            else if (overload.ParameterTypes[i].IsAssignableFrom(arguments[i].Type))
+            {
+                result[i] = Expression.Convert(arguments[i], overload.ParameterTypes[i]);
+            }
+            else if (binders.TryCoerceValue(arguments[i], overload.ParameterTypes[i], out var coerced))
+            {
+                result[i] = coerced;
+            }
+            else
+            {
+                return null; // Cannot coerce this argument
+            }
+        }
+
+        return result;
+    }
+
+    private static Expression EmitCustomCall(CelFunctionDescriptor descriptor, Expression[] arguments)
+    {
+        // Convert arguments to match parameter types if needed (e.g., boxing for object params)
+        var convertedArgs = new Expression[arguments.Length];
+        for (int i = 0; i < arguments.Length; i++)
+        {
+            if (arguments[i].Type != descriptor.ParameterTypes[i])
+                convertedArgs[i] = Expression.Convert(arguments[i], descriptor.ParameterTypes[i]);
+            else
+                convertedArgs[i] = arguments[i];
+        }
+
+        if (descriptor.Target != null)
+        {
+            // Closed delegate: call instance method on the captured target
+            return Expression.Call(
+                Expression.Constant(descriptor.Target),
+                descriptor.Method,
+                convertedArgs);
+        }
+
+        // Static method call
+        return Expression.Call(descriptor.Method, convertedArgs);
     }
 
     private static bool IsTimestampAccessor(string function) => function is
@@ -808,9 +1178,39 @@ public static class CelCompiler
 
     private static Expression CompileIndex(CelIndex index, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
     {
+        if (index.IsOptional)
+            return CompileOptionalIndex(index, contextExpr, binders, scope).Expression;
+
         var operand = CompileNode(index.Operand, contextExpr, binders, scope);
         var indexExpr = CompileNode(index.Index, contextExpr, binders, scope);
         return CompileIndexAccess(operand, indexExpr, binders);
+    }
+
+    private static CompiledOptional CompileOptionalIndex(CelIndex index, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    {
+        if (TryCompileOptionalValue(index.Operand, contextExpr, binders, scope, out var operandOptional))
+        {
+            var compiledIndex = CompileNode(index.Index, contextExpr, binders, scope);
+            var optionalVar = Expression.Variable(typeof(CelOptional), "optional");
+            var valueVar = Expression.Variable(operandOptional.ValueType, "optionalValue");
+            var innerOptional = CompileOptionalIndexAccess(valueVar, compiledIndex, binders);
+            var optionalExpression = Expression.Block(
+                typeof(CelOptional),
+                new[] { optionalVar, valueVar },
+                Expression.Assign(optionalVar, operandOptional.Expression),
+                Expression.Condition(
+                    Expression.Call(s_optionalHasValue, optionalVar),
+                    Expression.Block(
+                        Expression.Assign(valueVar, Expression.Convert(Expression.Call(s_optionalValue, optionalVar), operandOptional.ValueType)),
+                        innerOptional.Expression),
+                    Expression.Call(s_optionalNone)));
+
+            return new CompiledOptional(optionalExpression, innerOptional.ValueType);
+        }
+
+        var operand = CompileNode(index.Operand, contextExpr, binders, scope);
+        var indexExpr = CompileNode(index.Index, contextExpr, binders, scope);
+        return CompileOptionalIndexAccess(operand, indexExpr, binders);
     }
 
     private static Expression CompileIn(Expression needle, Expression haystack)
@@ -1330,6 +1730,104 @@ public static class CelCompiler
                 s_getNonGenericListElement,
                 Expression.Convert(operand, typeof(IList)),
                 index);
+        }
+
+        throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operand.Type, index.Type).Message);
+    }
+
+    private static CompiledOptional CompileOptionalIndexAccess(Expression operand, Expression index, CelBinderSet binders)
+    {
+        if (binders.TryResolveOptionalIndex(operand, index, out var optionalIndex))
+        {
+            var valueType = binders.TryResolveIndex(operand, index, out var boundIndex)
+                ? boundIndex.Type
+                : typeof(object);
+            return new CompiledOptional(optionalIndex, valueType);
+        }
+
+        if (operand.Type.IsArray && operand.Type.GetArrayRank() == 1)
+        {
+            if (index.Type != typeof(long))
+                throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operand.Type, index.Type).Message);
+
+            return new CompiledOptional(
+                Expression.Call(s_getOptionalArrayElement.MakeGenericMethod(operand.Type.GetElementType()!), operand, index),
+                operand.Type.GetElementType()!);
+        }
+
+        if (TryGetGenericInterface(operand.Type, typeof(IDictionary<,>), out var dictionaryInterface))
+        {
+            var keyType = dictionaryInterface.GetGenericArguments()[0];
+            var valueType = dictionaryInterface.GetGenericArguments()[1];
+            return new CompiledOptional(
+                Expression.Call(
+                    s_getOptionalGenericDictionaryValue.MakeGenericMethod(keyType, valueType),
+                    Expression.Convert(operand, dictionaryInterface),
+                    ConvertIndexForKey(index, keyType, operand.Type)),
+                valueType);
+        }
+
+        if (TryGetGenericInterface(operand.Type, typeof(IReadOnlyDictionary<,>), out var readOnlyDictionaryInterface))
+        {
+            var keyType = readOnlyDictionaryInterface.GetGenericArguments()[0];
+            var valueType = readOnlyDictionaryInterface.GetGenericArguments()[1];
+            return new CompiledOptional(
+                Expression.Call(
+                    s_getOptionalReadOnlyDictionaryValue.MakeGenericMethod(keyType, valueType),
+                    Expression.Convert(operand, readOnlyDictionaryInterface),
+                    ConvertIndexForKey(index, keyType, operand.Type)),
+                valueType);
+        }
+
+        if (typeof(IDictionary).IsAssignableFrom(operand.Type))
+        {
+            return new CompiledOptional(
+                Expression.Call(
+                    s_getOptionalNonGenericDictionaryValue,
+                    Expression.Convert(operand, typeof(IDictionary)),
+                    Expression.Convert(index, typeof(object))),
+                typeof(object));
+        }
+
+        if (TryGetGenericInterface(operand.Type, typeof(IList<>), out var listInterface))
+        {
+            if (index.Type != typeof(long))
+                throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operand.Type, index.Type).Message);
+
+            var itemType = listInterface.GetGenericArguments()[0];
+            return new CompiledOptional(
+                Expression.Call(
+                    s_getOptionalGenericListElement.MakeGenericMethod(itemType),
+                    Expression.Convert(operand, listInterface),
+                    index),
+                itemType);
+        }
+
+        if (TryGetGenericInterface(operand.Type, typeof(IReadOnlyList<>), out var readOnlyListInterface))
+        {
+            if (index.Type != typeof(long))
+                throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operand.Type, index.Type).Message);
+
+            var itemType = readOnlyListInterface.GetGenericArguments()[0];
+            return new CompiledOptional(
+                Expression.Call(
+                    s_getOptionalReadOnlyListElement.MakeGenericMethod(itemType),
+                    Expression.Convert(operand, readOnlyListInterface),
+                    index),
+                itemType);
+        }
+
+        if (typeof(IList).IsAssignableFrom(operand.Type))
+        {
+            if (index.Type != typeof(long))
+                throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operand.Type, index.Type).Message);
+
+            return new CompiledOptional(
+                Expression.Call(
+                    s_getOptionalNonGenericListElement,
+                    Expression.Convert(operand, typeof(IList)),
+                    index),
+                typeof(object));
         }
 
         throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operand.Type, index.Type).Message);

@@ -37,6 +37,9 @@ internal sealed class JsonElementCelBinder : ICelBinder
     private static readonly MethodInfo s_getJsonElementProperty =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetJsonElementProperty), new[] { typeof(JsonElement), typeof(string) })!;
 
+    private static readonly MethodInfo s_getOptionalJsonElementProperty =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetOptionalJsonElementProperty), new[] { typeof(JsonElement), typeof(string) })!;
+
     private static readonly MethodInfo s_getJsonElementSize =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetJsonElementSize), new[] { typeof(JsonElement) })!;
 
@@ -79,6 +82,11 @@ internal sealed class JsonElementCelBinder : ICelBinder
             Expression.Call(local, s_tryGetProperty, Expression.Constant(memberName), outVar));
     }
 
+    public Expression ResolveOptionalMember(Expression operandExpression, string memberName)
+    {
+        return Expression.Call(s_getOptionalJsonElementProperty, Normalize(operandExpression), Expression.Constant(memberName));
+    }
+
     public bool TryResolveIndex(Expression operandExpression, Expression indexExpression, out Expression boundExpression)
     {
         var element = Normalize(operandExpression);
@@ -92,6 +100,25 @@ internal sealed class JsonElementCelBinder : ICelBinder
         if (indexExpression.Type == typeof(string))
         {
             boundExpression = Expression.Call(s_getJsonElementProperty, element, indexExpression);
+            return true;
+        }
+
+        throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operandExpression.Type, indexExpression.Type).Message);
+    }
+
+    public bool TryResolveOptionalIndex(Expression operandExpression, Expression indexExpression, out Expression optionalExpression)
+    {
+        var element = Normalize(operandExpression);
+
+        if (indexExpression.Type == typeof(long))
+        {
+            optionalExpression = Expression.Call(typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetOptionalJsonElementArrayElement), new[] { typeof(JsonElement), typeof(long) })!, element, indexExpression);
+            return true;
+        }
+
+        if (indexExpression.Type == typeof(string))
+        {
+            optionalExpression = Expression.Call(s_getOptionalJsonElementProperty, element, indexExpression);
             return true;
         }
 

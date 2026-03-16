@@ -4,9 +4,14 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <NoWarn>$(NoWarn);NU1904</NoWarn>
+    <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
+    <PackageReference Include="Cel" Version="0.3.2" />
+    <PackageReference Include="Cel.NET" Version="1.0.0" />
     <ProjectReference Include="..\Cel.Compiled\Cel.Compiled.csproj" />
   </ItemGroup>
 </Project>

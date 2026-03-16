@@ -6,7 +6,7 @@ using Cel.Compiled.Ast;
 
 namespace Cel.Compiled.Parser;
 
-public enum CelTokenType
+internal enum CelTokenType
 {
     None,
     Ident, Int, UInt, Double, String, Bytes, Bool, Null,
@@ -17,9 +17,9 @@ public enum CelTokenType
     EOF
 }
 
-public record CelToken(CelTokenType Type, object? Value, int Position);
+internal record CelToken(CelTokenType Type, object? Value, int Position);
 
-public class CelLexer
+internal class CelLexer
 {
     private readonly string _input;
     private int _pos;
@@ -568,7 +568,7 @@ public class CelLexer
     private CelToken ConsumeAndReturn(CelTokenType type, int start) => new CelToken(type, null, start);
 }
 
-public class CelParser
+internal class CelParser
 {
     private readonly List<CelToken> _tokens;
     private int _pos;
@@ -744,23 +744,28 @@ public class CelParser
         {
             if (Match(CelTokenType.Dot))
             {
+                var isOptional = Match(CelTokenType.Question);
                 var fieldToken = Expect(CelTokenType.Ident);
                 string fieldName = (string)fieldToken.Value!;
                 if (Match(CelTokenType.LParen))
                 {
+                    if (isOptional)
+                        throw new CelParseException("Optional-safe syntax is not supported for method calls.", fieldToken.Position);
+
                     var args = ParseArgs();
                     expr = new CelCall(fieldName, expr, args);
                 }
                 else
                 {
-                    expr = new CelSelect(expr, fieldName);
+                    expr = new CelSelect(expr, fieldName, isOptional);
                 }
             }
             else if (Match(CelTokenType.LBracket))
             {
+                var isOptional = Match(CelTokenType.Question);
                 var indexExpr = ParseExpression();
                 Expect(CelTokenType.RBracket);
-                expr = new CelIndex(expr, indexExpr);
+                expr = new CelIndex(expr, indexExpr, isOptional);
             }
             else break;
         }

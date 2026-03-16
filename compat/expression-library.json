@@ -1,0 +1,605 @@
+{
+  "schemaVersion": "1.0",
+  "cases": [
+    {
+      "id": "arithmetic/add",
+      "expression": "1 + 2",
+      "inputs": {},
+      "expected": { "type": "int", "value": 3 }
+    },
+    {
+      "id": "arithmetic/precedence",
+      "expression": "1 + 2 * 3",
+      "inputs": {},
+      "expected": { "type": "int", "value": 7 }
+    },
+    {
+      "id": "arithmetic/division",
+      "expression": "8 / 2",
+      "inputs": {},
+      "expected": { "type": "int", "value": 4 }
+    },
+    {
+      "id": "arithmetic/modulo",
+      "expression": "8 % 3",
+      "inputs": {},
+      "expected": { "type": "int", "value": 2 }
+    },
+    {
+      "id": "comparison/less-than",
+      "expression": "1 < 2",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "comparison/equality",
+      "expression": "2 == 2",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "logical/and",
+      "expression": "true && false",
+      "inputs": {},
+      "expected": { "type": "bool", "value": false }
+    },
+    {
+      "id": "logical/or-error-absorption",
+      "expression": "true || (1 / 0 > 0)",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "logical/and-error-absorption",
+      "expression": "false && (1 / 0 > 0)",
+      "inputs": {},
+      "expected": { "type": "bool", "value": false }
+    },
+    {
+      "id": "ternary/true-branch",
+      "expression": "true ? 'yes' : 'no'",
+      "inputs": {},
+      "expected": { "type": "string", "value": "yes" }
+    },
+    {
+      "id": "ternary/false-branch",
+      "expression": "false ? 'yes' : 'no'",
+      "inputs": {},
+      "expected": { "type": "string", "value": "no" }
+    },
+    {
+      "id": "string/size-unicode",
+      "expression": "size('hé😊')",
+      "inputs": {},
+      "expected": { "type": "int", "value": 3 }
+    },
+    {
+      "id": "string/contains",
+      "expression": "text.contains('pha')",
+      "inputs": {
+        "text": { "type": "string", "value": "alphabet" }
+      },
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "string/starts-with",
+      "expression": "text.startsWith('al')",
+      "inputs": {
+        "text": { "type": "string", "value": "alphabet" }
+      },
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "string/ends-with",
+      "expression": "text.endsWith('bet')",
+      "inputs": {
+        "text": { "type": "string", "value": "alphabet" }
+      },
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "string/matches",
+      "expression": "'hello'.matches('^h.*o$')",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "conversion/int-from-string",
+      "expression": "int('42')",
+      "inputs": {},
+      "expected": { "type": "int", "value": 42 }
+    },
+    {
+      "id": "conversion/uint-from-string",
+      "expression": "uint('42')",
+      "inputs": {},
+      "expected": { "type": "uint", "value": 42 }
+    },
+    {
+      "id": "conversion/double-from-string",
+      "expression": "double('3.5')",
+      "inputs": {},
+      "expected": { "type": "double", "value": 3.5 }
+    },
+    {
+      "id": "conversion/bool-from-string",
+      "expression": "bool('true')",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "conversion/string-from-int",
+      "expression": "string(42)",
+      "inputs": {},
+      "expected": { "type": "string", "value": "42" }
+    },
+    {
+      "id": "container/list-size",
+      "expression": "size(items)",
+      "inputs": {
+        "items": {
+          "type": "list",
+          "value": [
+            { "type": "int", "value": 1 },
+            { "type": "int", "value": 2 },
+            { "type": "int", "value": 3 }
+          ]
+        }
+      },
+      "expected": { "type": "int", "value": 3 }
+    },
+    {
+      "id": "container/map-size",
+      "expression": "size(config)",
+      "inputs": {
+        "config": {
+          "type": "map",
+          "value": {
+            "enabled": { "type": "bool", "value": true },
+            "retries": { "type": "int", "value": 2 }
+          }
+        }
+      },
+      "expected": { "type": "int", "value": 2 }
+    },
+    {
+      "id": "container/nested-index",
+      "expression": "matrix[1][0]",
+      "inputs": {
+        "matrix": {
+          "type": "list",
+          "value": [
+            {
+              "type": "list",
+              "value": [
+                { "type": "int", "value": 1 },
+                { "type": "int", "value": 2 }
+              ]
+            },
+            {
+              "type": "list",
+              "value": [
+                { "type": "int", "value": 3 },
+                { "type": "int", "value": 4 }
+              ]
+            }
+          ]
+        }
+      },
+      "expected": { "type": "int", "value": 3 }
+    },
+    {
+      "id": "container/map-index",
+      "expression": "user['name']",
+      "inputs": {
+        "user": {
+          "type": "map",
+          "value": {
+            "name": { "type": "string", "value": "Alice" },
+            "age": { "type": "int", "value": 27 }
+          }
+        }
+      },
+      "expected": { "type": "string", "value": "Alice" }
+    },
+    {
+      "id": "container/in-list",
+      "expression": "2 in [1, 2, 3]",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "container/in-map",
+      "expression": "'enabled' in {'enabled': true, 'retries': 2}",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "container/in-empty-list",
+      "expression": "5 in []",
+      "inputs": {},
+      "expected": { "type": "bool", "value": false }
+    },
+    {
+      "id": "member/nested-access",
+      "expression": "user.profile.name",
+      "inputs": {
+        "user": {
+          "type": "map",
+          "value": {
+            "profile": {
+              "type": "map",
+              "value": {
+                "name": { "type": "string", "value": "Alice" }
+              }
+            }
+          }
+        }
+      },
+      "expected": { "type": "string", "value": "Alice" }
+    },
+    {
+      "id": "member/comparison",
+      "expression": "user.age >= 21",
+      "inputs": {
+        "user": {
+          "type": "map",
+          "value": {
+            "age": { "type": "int", "value": 27 }
+          }
+        }
+      },
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "optional/field-present",
+      "expression": "user.?address.hasValue()",
+      "inputs": {
+        "user": {
+          "type": "map",
+          "value": {
+            "address": { "type": "string", "value": "Main" }
+          }
+        }
+      },
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "optional/field-missing",
+      "expression": "user.?address.hasValue()",
+      "inputs": {
+        "user": {
+          "type": "map",
+          "value": {}
+        }
+      },
+      "expected": { "type": "bool", "value": false }
+    },
+    {
+      "id": "optional/or-value",
+      "expression": "user.?address.orValue('unknown')",
+      "inputs": {
+        "user": {
+          "type": "map",
+          "value": {}
+        }
+      },
+      "expected": { "type": "string", "value": "unknown" }
+    },
+    {
+      "id": "optional/index-missing",
+      "expression": "items[?5].orValue(-1)",
+      "inputs": {
+        "items": {
+          "type": "list",
+          "value": [
+            { "type": "int", "value": 1 },
+            { "type": "int", "value": 2 },
+            { "type": "int", "value": 3 }
+          ]
+        }
+      },
+      "expected": { "type": "int", "value": -1 }
+    },
+    {
+      "id": "optional/helper-none",
+      "expression": "optional.none().orValue('fallback')",
+      "inputs": {},
+      "expected": { "type": "string", "value": "fallback" }
+    },
+    {
+      "id": "optional/helper-or",
+      "expression": "optional.none().or(optional.of(42)).orValue(0)",
+      "inputs": {},
+      "expected": { "type": "int", "value": 42 }
+    },
+    {
+      "id": "null/equality",
+      "expression": "nullable == null",
+      "inputs": {
+        "nullable": { "type": "null", "value": null }
+      },
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "presence/has-present-null",
+      "expression": "has(user.nickname)",
+      "inputs": {
+        "user": {
+          "type": "map",
+          "value": {
+            "nickname": { "type": "null", "value": null }
+          }
+        }
+      },
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "comprehension/all",
+      "expression": "[1, 2, 3].all(x, x > 0)",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "comprehension/exists",
+      "expression": "[1, 2, 3].exists(x, x == 2)",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "comprehension/exists-one",
+      "expression": "[1, 2, 3].exists_one(x, x == 2)",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "comprehension/map",
+      "expression": "[1, 2, 3].map(x, x * 2)",
+      "inputs": {},
+      "expected": {
+        "type": "list",
+        "value": [
+          { "type": "int", "value": 2 },
+          { "type": "int", "value": 4 },
+          { "type": "int", "value": 6 }
+        ]
+      }
+    },
+    {
+      "id": "comprehension/filter",
+      "expression": "[1, 2, 3].filter(x, x > 1)",
+      "inputs": {},
+      "expected": {
+        "type": "list",
+        "value": [
+          { "type": "int", "value": 2 },
+          { "type": "int", "value": 3 }
+        ]
+      }
+    },
+    {
+      "id": "comprehension/filter-map",
+      "expression": "[1, 2, 3].filter(x, x > 1).map(x, string(x))",
+      "inputs": {},
+      "expected": {
+        "type": "list",
+        "value": [
+          { "type": "string", "value": "2" },
+          { "type": "string", "value": "3" }
+        ]
+      }
+    },
+    {
+      "id": "comprehension/map-keys-filter",
+      "expression": "{'a': 1, 'b': 2}.filter(k, k == 'a')",
+      "inputs": {},
+      "expected": {
+        "type": "list",
+        "value": [
+          { "type": "string", "value": "a" }
+        ]
+      }
+    },
+    {
+      "id": "timestamp/epoch-seconds",
+      "expression": "int(timestamp('1970-01-01T00:00:00Z'))",
+      "inputs": {},
+      "expected": { "type": "int", "value": 0 }
+    },
+    {
+      "id": "duration/get-seconds",
+      "expression": "duration('1h30m').getSeconds()",
+      "inputs": {},
+      "expected": { "type": "int", "value": 5400 }
+    },
+    {
+      "id": "timestamp/get-full-year-with-timezone",
+      "expression": "timestamp('2024-01-01T00:30:00Z').getFullYear('-01:00')",
+      "inputs": {},
+      "expected": { "type": "int", "value": 2023 }
+    },
+    {
+      "id": "timestamp/comparison",
+      "expression": "timestamp('2024-01-01T00:00:00Z') < timestamp('2024-01-01T01:00:00Z')",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "type/uint",
+      "expression": "type(1u)",
+      "inputs": {},
+      "expected": { "type": "type", "value": "uint" }
+    },
+    {
+      "id": "duration/string-format",
+      "expression": "string(duration('1m1ms'))",
+      "inputs": {},
+      "expected": { "type": "string", "value": "60.001s" }
+    },
+    {
+      "id": "timestamp/string-format",
+      "expression": "string(timestamp('2024-01-01T00:00:00Z'))",
+      "inputs": {},
+      "expected": { "type": "string", "value": "2024-01-01T00:00:00.0000000+00:00" }
+    },
+    {
+      "id": "error/invalid-int",
+      "expression": "int('bad')",
+      "inputs": {},
+      "expectedError": { "category": "invalid_argument", "messageContains": "invalid string for int()" }
+    },
+    {
+      "id": "error/invalid-duration",
+      "expression": "duration('1d')",
+      "inputs": {},
+      "expectedError": { "category": "invalid_argument", "messageContains": "invalid duration format" }
+    },
+    {
+      "id": "error/index-out-of-bounds",
+      "expression": "items[99]",
+      "inputs": {
+        "items": {
+          "type": "list",
+          "value": [
+            { "type": "int", "value": 1 },
+            { "type": "int", "value": 2 },
+            { "type": "int", "value": 3 }
+          ]
+        }
+      },
+      "expectedError": { "category": "index_out_of_bounds" }
+    },
+    {
+      "id": "error/no-matching-overload",
+      "expression": "timestamp('2024-01-01T00:00:00Z') < duration('1s')",
+      "inputs": {},
+      "expectedError": { "category": "compile_error", "messageContains": "No matching overload" }
+    },
+    {
+      "id": "error/comprehension-division-by-zero",
+      "expression": "[0].map(x, 1 / x)",
+      "inputs": {},
+      "expectedError": { "category": "division_by_zero" }
+    },
+    {
+      "id": "comparison/int-uint-equal",
+      "expression": "1 == 1u",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "comparison/int-uint-less",
+      "expression": "1 < 2u",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "comparison/int-uint-negative",
+      "expression": "-1 == 1u",
+      "inputs": {},
+      "expected": { "type": "bool", "value": false }
+    },
+    {
+      "id": "comparison/int-uint-negative-less",
+      "expression": "-1 < 1u",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "comparison/uint-double-equal",
+      "expression": "1u == 1.0",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "arithmetic/int-overflow",
+      "expression": "9223372036854775807 + 1",
+      "inputs": {},
+      "expectedError": { "category": "overflow" }
+    },
+    {
+      "id": "arithmetic/mixed-numeric-add",
+      "expression": "1 + 1.0",
+      "inputs": {},
+      "expectedError": { "category": "compile_error", "messageContains": "No matching overload" }
+    },
+    {
+      "id": "bytes/equality",
+      "expression": "b\"abc\" == b\"abc\"",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "bytes/ordering",
+      "expression": "b\"abc\" < b\"def\"",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "bytes/size",
+      "expression": "size(b\"\\x00\\x01\\x02\")",
+      "inputs": {},
+      "expected": { "type": "int", "value": 3 }
+    },
+    {
+      "id": "conversion/string-from-bytes",
+      "expression": "string(b\"hello\")",
+      "inputs": {},
+      "expected": { "type": "string", "value": "hello" }
+    },
+    {
+      "id": "comparison/list-recursive",
+      "expression": "[[1], [2, 3]] == [[1], [2, 3]]",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "comparison/map-recursive",
+      "expression": "{\"a\": [1]} == {\"a\": [1]}",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "timestamp/get-month",
+      "expression": "timestamp('2024-05-20T10:00:00Z').getMonth()",
+      "inputs": {},
+      "expected": { "type": "int", "value": 4 }
+    },
+    {
+      "id": "timestamp/get-day-of-week",
+      "expression": "timestamp('2024-05-20T10:00:00Z').getDayOfWeek()",
+      "inputs": {},
+      "expected": { "type": "int", "value": 1 }
+    },
+    {
+      "id": "timestamp/add-duration",
+      "expression": "timestamp('2024-01-01T00:00:00Z') + duration('24h')",
+      "inputs": {},
+      "expected": { "type": "timestamp", "value": "2024-01-02T00:00:00Z" }
+    },
+    {
+      "id": "duration/get-hours",
+      "expression": "duration('1h30m').getHours()",
+      "inputs": {},
+      "expected": { "type": "int", "value": 1 }
+    },
+    {
+      "id": "logical/and-error-absorption-commutative",
+      "expression": "(1 / 0 > 0) && false",
+      "inputs": {},
+      "expected": { "type": "bool", "value": false }
+    },
+    {
+      "id": "logical/or-error-absorption-commutative",
+      "expression": "(1 / 0 > 0) || true",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    },
+    {
+      "id": "comprehension/map-keys-all",
+      "expression": "{'a': 1, 'b': 2}.all(k, k.startsWith('a') || k.startsWith('b'))",
+      "inputs": {},
+      "expected": { "type": "bool", "value": true }
+    }
+  ]
+}

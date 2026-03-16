@@ -10,8 +10,122 @@ using System.Text.RegularExpressions;
 
 namespace Cel.Compiled.Compiler;
 
-public static class CelRuntimeHelpers
+internal static class CelRuntimeHelpers
 {
+    public static CelOptional OptionalOf(object? value) => CelOptional.Of(value);
+
+    public static CelOptional OptionalNone() => CelOptional.None;
+
+    public static bool OptionalHasValue(CelOptional optional) => optional.HasValue;
+
+    public static object? OptionalValue(CelOptional optional)
+    {
+        if (!optional.HasValue)
+            throw new InvalidOperationException("Optional value is empty.");
+
+        return optional.Value;
+    }
+
+    public static CelOptional OptionalOr(CelOptional optional, CelOptional fallback) =>
+        optional.HasValue ? optional : fallback;
+
+    public static object? OptionalOrValue(CelOptional optional, object? fallback) =>
+        optional.HasValue ? optional.Value : fallback;
+
+    public static object? GetDescriptorMemberValue(CelTypeMemberDescriptor member, object instance)
+    {
+        if (!member.TryGetValueUntyped(instance, out var value))
+            throw new InvalidOperationException($"Member '{member.Name}' is absent.");
+
+        return value;
+    }
+
+    public static bool HasDescriptorMemberValue(CelTypeMemberDescriptor member, object instance) =>
+        member.TryGetValueUntyped(instance, out _);
+
+    public static CelOptional GetOptionalDescriptorMemberValue(CelTypeMemberDescriptor member, object instance) =>
+        member.TryGetValueUntyped(instance, out var value) ? OptionalOf(value) : OptionalNone();
+
+    public static CelOptional GetOptionalJsonElementProperty(JsonElement element, string memberName)
+    {
+        if (element.TryGetProperty(memberName, out var value))
+            return OptionalOf(value);
+
+        return OptionalNone();
+    }
+
+    public static CelOptional GetOptionalJsonElementArrayElement(JsonElement element, long index)
+    {
+        if (element.ValueKind != JsonValueKind.Array)
+            throw new InvalidOperationException("Operand is not an array.");
+
+        var length = element.GetArrayLength();
+        if (index < 0 || index >= length)
+            return OptionalNone();
+
+        return OptionalOf(element[(int)index]);
+    }
+
+    public static CelOptional GetOptionalJsonNodeProperty(JsonNode? node, string memberName)
+    {
+        if (node is JsonObject obj && obj.TryGetPropertyValue(memberName, out var value))
+            return OptionalOf(value);
+
+        return OptionalNone();
+    }
+
+    public static CelOptional GetOptionalJsonNodeArrayElement(JsonNode? node, long index)
+    {
+        if (node is not JsonArray array)
+            throw new InvalidOperationException("Operand is not an array.");
+
+        if (index < 0 || index >= array.Count)
+            return OptionalNone();
+
+        return OptionalOf(array[(int)index]);
+    }
+
+    public static CelOptional GetOptionalArrayElement<T>(T[] array, long index)
+    {
+        if (index < 0 || index >= array.LongLength)
+            return OptionalNone();
+
+        return OptionalOf(array[index]);
+    }
+
+    public static CelOptional GetOptionalListElement<T>(IList<T> list, long index)
+    {
+        if (index < 0 || index >= list.Count)
+            return OptionalNone();
+
+        return OptionalOf(list[(int)index]);
+    }
+
+    public static CelOptional GetOptionalReadOnlyListElement<T>(IReadOnlyList<T> list, long index)
+    {
+        if (index < 0 || index >= list.Count)
+            return OptionalNone();
+
+        return OptionalOf(list[(int)index]);
+    }
+
+    public static CelOptional GetOptionalListElement(IList list, long index)
+    {
+        if (index < 0 || index >= list.Count)
+            return OptionalNone();
+
+        return OptionalOf(list[(int)index]);
+    }
+
+    public static CelOptional GetOptionalDictionaryValue<TKey, TValue>(IDictionary<TKey, TValue> dictionary, TKey key) where TKey : notnull =>
+        dictionary.TryGetValue(key, out var value) ? OptionalOf(value) : OptionalNone();
+
+    public static CelOptional GetOptionalReadOnlyDictionaryValue<TKey, TValue>(IReadOnlyDictionary<TKey, TValue> dictionary, TKey key) where TKey : notnull =>
+        dictionary.TryGetValue(key, out var value) ? OptionalOf(value) : OptionalNone();
+
+    public static CelOptional GetOptionalDictionaryValue(IDictionary dictionary, object key) =>
+        dictionary.Contains(key) ? OptionalOf(dictionary[key]) : OptionalNone();
+
     public static bool CelEquals(object? left, object? right)
     {
         if (left == null && right == null) return true;

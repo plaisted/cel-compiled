@@ -9,6 +9,8 @@ namespace Cel.Compiled.Compiler;
 internal sealed class PocoCelBinder : ICelBinder
 {
     private static readonly ConcurrentDictionary<Type, TypeAccessorPlan> s_accessorPlans = new();
+    private static readonly MethodInfo s_optionalOf =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.OptionalOf), new[] { typeof(object) })!;
 
     public bool CanBind(Type type)
     {
@@ -45,9 +47,21 @@ internal sealed class PocoCelBinder : ICelBinder
         return Expression.NotEqual(access, Expression.Constant(null, access.Type));
     }
 
+    public Expression ResolveOptionalMember(Expression operandExpression, string memberName)
+    {
+        var access = ResolveMember(operandExpression, memberName);
+        return Expression.Call(s_optionalOf, BoxIfNeeded(access));
+    }
+
     public bool TryResolveIndex(Expression operandExpression, Expression indexExpression, out Expression boundExpression)
     {
         boundExpression = null!;
+        return false;
+    }
+
+    public bool TryResolveOptionalIndex(Expression operandExpression, Expression indexExpression, out Expression optionalExpression)
+    {
+        optionalExpression = null!;
         return false;
     }
 
@@ -67,6 +81,9 @@ internal sealed class PocoCelBinder : ICelBinder
     {
         return s_accessorPlans.GetOrAdd(type, static t => TypeAccessorPlan.Create(t));
     }
+
+    private static Expression BoxIfNeeded(Expression expression) =>
+        expression.Type.IsValueType ? Expression.Convert(expression, typeof(object)) : expression;
 
     private sealed class TypeAccessorPlan
     {

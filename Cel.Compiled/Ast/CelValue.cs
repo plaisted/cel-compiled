@@ -4,7 +4,7 @@ namespace Cel.Compiled.Ast;
 /// A lightweight container for primitive CEL values.
 /// This type is used purely at compile-time to hold literal constant values.
 /// </summary>
-public readonly struct CelValue
+internal readonly struct CelValue
 {
     public object? Value { get; }
 

@@ -18,7 +18,11 @@ internal interface ICelBinder
 
     Expression ResolvePresence(Expression operandExpression, string memberName);
 
+    Expression ResolveOptionalMember(Expression operandExpression, string memberName);
+
     bool TryResolveIndex(Expression operandExpression, Expression indexExpression, out Expression boundExpression);
+
+    bool TryResolveOptionalIndex(Expression operandExpression, Expression indexExpression, out Expression optionalExpression);
 
     bool TryResolveSize(Expression operandExpression, out Expression sizeExpression);
 
