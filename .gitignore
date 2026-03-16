@@ -3,6 +3,14 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+
+todo/
+.agent/
+.claude/
+.codex/
+.gemini/
+.vscode/
+
 # User-specific files
 *.rsuser
 *.suo
