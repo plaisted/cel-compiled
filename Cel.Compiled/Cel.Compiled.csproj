@@ -14,9 +14,13 @@
     <RepositoryUrl>https://github.com/plaisted/cel-compiled</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>cel;expression;compiler</PackageTags>
-    <PackageReadmeFile></PackageReadmeFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Cel.Compiled.Tests" />
