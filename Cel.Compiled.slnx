@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Cel.Compiled.Benchmarks/Cel.Compiled.Benchmarks.csproj" />
+  <Project Path="Cel.Compiled.Tests/Cel.Compiled.Tests.csproj" />
+  <Project Path="Cel.Compiled/Cel.Compiled.csproj" />
+</Solution>
