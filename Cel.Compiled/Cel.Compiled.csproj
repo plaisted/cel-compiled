@@ -15,7 +15,6 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>cel;expression;compiler</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>
