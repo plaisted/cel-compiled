@@ -99,6 +99,7 @@ Steady-state warm execution after compilation:
 
 | Library | Mean | Relative to `Cel.Compiled` | Allocated |
 | --- | ---: | ---: | ---: |
+| Native C# | `7.46 ns` | `2.0x faster` | `0 B` |
 | `Cel.Compiled` | `15.54 ns` | `1.0x` | `72 B` |
 | `Cel.NET` | `376.81 ns` | `24.2x slower` | `1360 B` |
 | `Telus CEL` | `2.97 us` | `191.4x slower` | `8808 B` |
