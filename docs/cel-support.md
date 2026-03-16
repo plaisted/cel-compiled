@@ -158,6 +158,40 @@ var registry = new CelFunctionRegistryBuilder()
 
 Use the `MethodInfo` or untyped `Delegate` overloads only for advanced scenarios such as dynamic registration or shared registration helpers.
 
+### Shipped Extension Bundles
+
+`Cel.Compiled` ships curated extension bundles for common `cel-go`-style helpers, but they are opt-in rather than part of the default environment.
+
+Enable one bundle:
+
+```csharp
+var registry = new CelFunctionRegistryBuilder()
+    .AddStringExtensions()
+    .Build();
+
+var options = new CelCompileOptions { FunctionRegistry = registry };
+var fn = CelExpression.Compile<JsonElement, string>("name.trim().lowerAscii()", options);
+```
+
+Enable the full curated set:
+
+```csharp
+var registry = new CelFunctionRegistryBuilder()
+    .AddStandardExtensions()
+    .Build();
+
+var options = new CelCompileOptions { FunctionRegistry = registry };
+```
+
+Available bundle helpers in the initial release:
+
+- `AddStringExtensions()`: `replace`, `split`, `join`, `substring`, `charAt`, `indexOf`, `lastIndexOf`, `trim`, `lowerAscii`, `upperAscii`
+- `AddListExtensions()`: `flatten`, `slice`, `reverse`, `first`, `last`, `distinct`, `sort`, `sortBy`, `range`
+- `AddMathExtensions()`: `greatest`, `least`, `abs`, `sign`, `ceil`, `floor`, `round`, `trunc`, `sqrt`, `isInf`, `isNaN`, `isFinite`
+- `AddStandardExtensions()`: combines the string, list, and math bundles
+
+These helpers build on the same `CelFunctionRegistry` model as application-defined custom functions, so built-ins still retain precedence and the registry identity still participates in cache isolation.
+
 ### Registration Constraints
 
 - Methods must be `static` or closed delegates (no instance methods on open types)
@@ -275,8 +309,12 @@ fn(doc.RootElement); // "hahaha"
 
 - Protobuf-native values are not implemented; timestamps and durations use `DateTimeOffset` and `TimeSpan`.
 - `matches()` uses the .NET regex engine rather than RE2.
-- `string(timestamp)` uses `DateTimeOffset.ToString("o")`, which is compatible with RFC 3339 but may preserve precision/offset formatting that differs from CEL’s canonical textual examples.
+- Cross-runtime checked-environment parity is not complete: some heterogeneous numeric comparisons that `Cel.Compiled` evaluates at runtime are rejected by the current `cel-go` harness during checked compilation.
 - The initial optional implementation intentionally covers field/index navigation and the core helper set only. Aggregate-literal optional entries/elements and broader `cel-go` optional helpers are still out of scope.
+- Extension libraries are opt-in through `CelFunctionRegistryBuilder`; they are not injected into the default environment automatically.
+- The initial extension-library release is a curated subset rather than full `cel-go ext` parity.
+- `sort()` and `sortBy()` currently support sortable scalar values/keys only and fail clearly for unsupported structures.
+- `greatest()` and `least()` currently ship focused overloads for the supported numeric argument shapes rather than open-ended variadic dispatch.
 
 ## Migration Notes
 

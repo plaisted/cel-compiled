@@ -49,6 +49,48 @@ public sealed class CelFunctionRegistryBuilder
     private bool _built;
 
     /// <summary>
+    /// Registers the shipped string extension library without changing the default CEL environment.
+    /// </summary>
+    public CelFunctionRegistryBuilder AddStringExtensions()
+    {
+        EnsureNotBuilt();
+        CelExtensionLibraryRegistrar.AddStringExtensions(this);
+        return this;
+    }
+
+    /// <summary>
+    /// Registers the shipped list extension library without changing the default CEL environment.
+    /// </summary>
+    public CelFunctionRegistryBuilder AddListExtensions()
+    {
+        EnsureNotBuilt();
+        CelExtensionLibraryRegistrar.AddListExtensions(this);
+        return this;
+    }
+
+    /// <summary>
+    /// Registers the shipped math extension library without changing the default CEL environment.
+    /// </summary>
+    public CelFunctionRegistryBuilder AddMathExtensions()
+    {
+        EnsureNotBuilt();
+        CelExtensionLibraryRegistrar.AddMathExtensions(this);
+        return this;
+    }
+
+    /// <summary>
+    /// Registers the shipped standard extension set (string, list, and math helpers).
+    /// </summary>
+    public CelFunctionRegistryBuilder AddStandardExtensions()
+    {
+        EnsureNotBuilt();
+        CelExtensionLibraryRegistrar.AddStringExtensions(this);
+        CelExtensionLibraryRegistrar.AddListExtensions(this);
+        CelExtensionLibraryRegistrar.AddMathExtensions(this);
+        return this;
+    }
+
+    /// <summary>
     /// Registers a typed global function overload backed by a delegate.
     /// This is the recommended registration path for common application-defined helpers.
     /// </summary>

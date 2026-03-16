@@ -17,6 +17,7 @@ internal sealed class CompatExpressionCase
     public string Id { get; set; } = string.Empty;
     public string Expression { get; set; } = string.Empty;
     public Dictionary<string, CompatValue>? Inputs { get; set; }
+    public List<string>? Extensions { get; set; }
     public CompatValue? Expected { get; set; }
     public CompatExpectedError? ExpectedError { get; set; }
 }
@@ -326,7 +327,23 @@ internal static class CompatTestData
 
         try
         {
-            var compiled = CelCompiler.Compile<JsonElement>(expressionCase.Expression);
+            CelCompileOptions? options = null;
+            if (expressionCase.Extensions is { Count: > 0 })
+            {
+                var builder = new CelFunctionRegistryBuilder();
+                foreach (var ext in expressionCase.Extensions)
+                {
+                    switch (ext)
+                    {
+                        case "strings": builder.AddStringExtensions(); break;
+                        case "lists": builder.AddListExtensions(); break;
+                        case "math": builder.AddMathExtensions(); break;
+                    }
+                }
+                options = new CelCompileOptions { FunctionRegistry = builder.Build() };
+            }
+
+            var compiled = CelCompiler.Compile<JsonElement>(expressionCase.Expression, options);
             var value = compiled(context.RootElement);
             return new CompatCaseResult
             {

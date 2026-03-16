@@ -16,6 +16,7 @@ import (
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/common/types/traits"
+	"github.com/google/cel-go/ext"
 )
 
 type expressionLibrary struct {
@@ -24,11 +25,12 @@ type expressionLibrary struct {
 }
 
 type expressionCase struct {
-	ID            string                   `json:"id"`
-	Expression    string                   `json:"expression"`
-	Inputs        map[string]compatValue   `json:"inputs"`
-	Expected      *compatValue             `json:"expected"`
-	ExpectedError *compatExpectedError     `json:"expectedError"`
+	ID            string                 `json:"id"`
+	Expression    string                 `json:"expression"`
+	Inputs        map[string]compatValue `json:"inputs"`
+	Extensions    []string               `json:"extensions"`
+	Expected      *compatValue           `json:"expected"`
+	ExpectedError *compatExpectedError   `json:"expectedError"`
 }
 
 type compatExpectedError struct {
@@ -116,6 +118,17 @@ func evaluateCase(testCase expressionCase) compatCaseResult {
 	}
 
 	envOptions = append(envOptions, cel.OptionalTypes())
+
+	for _, extension := range testCase.Extensions {
+		switch extension {
+		case "strings":
+			envOptions = append(envOptions, ext.Strings())
+		case "lists":
+			envOptions = append(envOptions, ext.Lists())
+		case "math":
+			envOptions = append(envOptions, ext.Math())
+		}
+	}
 
 	env, err := cel.NewEnv(envOptions...)
 	if err != nil {
@@ -304,6 +317,58 @@ func normalizeValue(value ref.Val) (*compatValue, error) {
 
 	if value.Type().TypeName() == "type" {
 		return scalarCompatValue("type", strings.ToLower(fmt.Sprint(value.Value())))
+	}
+
+	// Some cel-go extension helpers surface native Go scalars rather than CEL
+	// wrapper values, so normalize those too for cross-runtime comparisons.
+	switch typed := value.Value().(type) {
+	case nil:
+		return &compatValue{Type: "null", Value: json.RawMessage("null")}, nil
+	case bool:
+		return scalarCompatValue("bool", typed)
+	case int:
+		return scalarCompatValue("int", int64(typed))
+	case int32:
+		return scalarCompatValue("int", int64(typed))
+	case int64:
+		return scalarCompatValue("int", typed)
+	case uint:
+		return scalarCompatValue("uint", uint64(typed))
+	case uint32:
+		return scalarCompatValue("uint", uint64(typed))
+	case uint64:
+		return scalarCompatValue("uint", typed)
+	case float32:
+		floatValue := float64(typed)
+		switch {
+		case floatValue != floatValue:
+			return scalarCompatValue("double", "NaN")
+		case floatValue > 0 && floatValue > 1e308:
+			return scalarCompatValue("double", "Infinity")
+		case floatValue < 0 && floatValue < -1e308:
+			return scalarCompatValue("double", "-Infinity")
+		default:
+			return scalarCompatValue("double", floatValue)
+		}
+	case float64:
+		switch {
+		case typed != typed:
+			return scalarCompatValue("double", "NaN")
+		case typed > 0 && typed > 1e308:
+			return scalarCompatValue("double", "Infinity")
+		case typed < 0 && typed < -1e308:
+			return scalarCompatValue("double", "-Infinity")
+		default:
+			return scalarCompatValue("double", typed)
+		}
+	case string:
+		return scalarCompatValue("string", typed)
+	case []byte:
+		return scalarCompatValue("bytes", base64.StdEncoding.EncodeToString(typed))
+	case time.Time:
+		return scalarCompatValue("timestamp", typed.Format(time.RFC3339Nano))
+	case time.Duration:
+		return scalarCompatValue("duration", typed.String())
 	}
 
 	if list, ok := value.(traits.Lister); ok {

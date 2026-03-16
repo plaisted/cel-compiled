@@ -779,7 +779,17 @@ internal static class CelRuntimeHelpers
     public static string ToCelString(double value) => value.ToString("G", CultureInfo.InvariantCulture);
     public static string ToCelString(bool value) => value ? "true" : "false";
     public static string ToCelString(byte[] value) => Encoding.UTF8.GetString(value);
-    public static string ToCelString(DateTimeOffset value) => value.ToString("o", CultureInfo.InvariantCulture);
+    public static string ToCelString(DateTimeOffset value)
+    {
+        var utc = value.ToUniversalTime();
+        var baseText = utc.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
+        if (utc.Ticks % TimeSpan.TicksPerSecond == 0)
+            return baseText + "Z";
+
+        var fractionalTicks = utc.Ticks % TimeSpan.TicksPerSecond;
+        var fractional = fractionalTicks.ToString("D7", CultureInfo.InvariantCulture).TrimEnd('0');
+        return $"{baseText}.{fractional}Z";
+    }
     public static string ToCelString(TimeSpan value)
     {
         decimal totalSeconds = (decimal)value.Ticks / TimeSpan.TicksPerSecond;

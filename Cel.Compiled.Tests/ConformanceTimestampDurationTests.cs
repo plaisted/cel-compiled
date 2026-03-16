@@ -14,7 +14,7 @@ public class ConformanceTimestampDurationTests
         Assert.Equal(1704067200L, CelCompiler.Compile<object, long>("int(timestamp('2024-01-01T00:00:00Z'))")(new object()));
         Assert.Equal("60.001s", CelCompiler.Compile<object, string>("string(duration('1m1ms'))")(new object()));
         Assert.True(CelCompiler.Compile<object, bool>("timestamp('2024-01-01T00:00:00Z') < timestamp('2024-01-01T01:00:00Z')")(new object()));
-        Assert.Equal("2024-01-01T00:00:00.0000000+00:00", CelCompiler.Compile<object, string>("string(timestamp('2024-01-01T00:00:00Z'))")(new object()));
+        Assert.Equal("2024-01-01T00:00:00Z", CelCompiler.Compile<object, string>("string(timestamp('2024-01-01T00:00:00Z'))")(new object()));
     }
 
     [Fact]

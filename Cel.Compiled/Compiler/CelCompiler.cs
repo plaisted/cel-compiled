@@ -914,6 +914,18 @@ public static class CelCompiler
 
         if (call.Target != null)
         {
+            // Namespace-style: ident.function(args...) → resolve as global "ident.function"
+            if (call.Target is CelIdent ns)
+            {
+                var qualifiedName = $"{ns.Name}.{call.Function}";
+                var nsOverloads = registry.GetOverloads(qualifiedName, CelFunctionKind.Global);
+                if (nsOverloads.Count > 0)
+                {
+                    var nsArgs = call.Args.Select(a => CompileNode(a, contextExpr, binders, scope)).ToArray();
+                    return ResolveAndEmitCustomCall(qualifiedName, nsOverloads, nsArgs, binders);
+                }
+            }
+
             // Receiver-style: target.function(args...)
             var overloads = registry.GetOverloads(call.Function, CelFunctionKind.Receiver);
             if (overloads.Count == 0)

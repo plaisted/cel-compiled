@@ -19,7 +19,7 @@ The project SHALL include a JSON expression library containing CEL expressions w
 The project MUST distinguish between unexpected runtime mismatches and differences that are already documented as intentional deviations or accepted host-runtime constraints.
 
 #### Scenario: Known divergence is recorded without failing the suite
-- **WHEN** an expression falls into a documented divergence area such as regex engine behavior or timestamp string formatting
+- **WHEN** an expression falls into a documented divergence area such as regex engine behavior or checked-versus-runtime heterogeneous numeric comparison behavior
 - **THEN** the comparison harness records the difference as an allowed divergence rather than failing the test run
 
 #### Scenario: Portable expression cases remain strict

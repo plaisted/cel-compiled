@@ -30,6 +30,11 @@ Implementation difficulty:
 
 These are the features most users will treat as "CEL itself" rather than optional library capabilities.
 
+*   **`[ ]` P1 / D4**: Static type-checking phase (`Env.Check()` in cel-go).
+    *   cel-go's core pipeline is parse → check → evaluate. The check phase validates type correctness at compile time before any evaluation occurs.
+    *   Catches type errors (e.g., `int + string`, undefined fields, wrong function argument types) statically rather than at runtime.
+    *   Produces a checked AST with resolved types and overloads, which enables better code generation and optimization.
+    *   `Cel.Compiled` currently compiles directly from parsed ASTs into .NET expression trees, performing some compile-time binding and overload validation along the way, but it does not expose a dedicated checked environment or checked AST phase comparable to `cel-go`.
 *   **`[x]` P0 / D1**: Core scalar and aggregate types (`bool`, `string`, `bytes`, `int`, `uint`, `double`, `null`, `list`, `map`, `type`).
 *   **`[x]` P0 / D1**: Core expression forms: identifiers, selection, indexing, list/map literals, object construction, function calls, ternary, arithmetic, logical operators, membership.
 *   **`[x]` P0 / D1**: Strict CEL operator dispatch and runtime behavior:
@@ -62,20 +67,30 @@ This group matters quickly for users embedding CEL in a real application.
     *   Public registration through `CelTypeRegistry`.
     *   Registered descriptors are consulted before generic POCO binding.
     *   `JsonElement` / `JsonNode` keep their existing precedence over descriptor-backed binding.
+*   **`[x]` P1 / D2**: Custom function declarations and overload registration.
+    *   cel-go provides `cel.Function()` and `cel.Overload()` for users to register domain-specific functions with typed signatures that participate in type-checking.
+    *   `Cel.Compiled` supports this via `CelFunctionRegistryBuilder` with `AddGlobalFunction()` and `AddReceiverFunction()` methods, plus pre-built extension bundles (`AddStringExtensions()`, `AddMathExtensions()`, `AddListExtensions()`).
+    *   Functions support overloading and are validated during registration.
+*   **`[~]` P1 / D3**: Environment configuration model (`cel.Env()` in cel-go).
+    *   cel-go provides a unified `Env` object where users declaratively register variables (`cel.Variable()`), constants (`cel.Constant()`), functions, types, and feature flags before compilation.
+    *   `Cel.Compiled` uses a lighter-weight approach: `CelCompileOptions` accepts a `FunctionRegistry` and `TypeRegistry`, and the context type `TContext` implicitly declares available variables. There is no single environment abstraction that unifies all declarations.
+    *   This also limits parity with `cel-go`'s checked-environment workflow, because environment declarations are not modeled as a first-class input to a separate checker phase.
 *   **`[ ]` Expected Gap / Intentional Divergence / D4**: Protobuf descriptor-driven typing, `google.protobuf.Any`, and broader protobuf ecosystem integration if those are explicitly not a current target.
 
 ### Group 3: Extension Libraries Users May Expect from `cel-go`
 
 These are not part of the smallest CEL core, but `cel-go` users often perceive them as standard because they ship with the ecosystem.
 
-*   **`[ ]` P1 / D1**: String extensions:
-    *   `replace`, `split`, `join`, `substring`, `charAt`, `indexOf`, `lastIndexOf`, `trim`, `reverse`, `quote`, `lowerAscii`, `upperAscii`, `format`
-*   **`[ ]` P1 / D1**: Math extensions:
-    *   `greatest`, `least`
-    *   bitwise helpers
-    *   floating-point helpers such as `ceil`, `floor`, `round`, `trunc`, `abs`, `sign`, `isInf`, `isNaN`, `isFinite`, `sqrt`
-*   **`[ ]` P1 / D1**: List extensions:
-    *   `flatten`, `slice`, `reverse`, `sort`, `sortBy`, `distinct`, `range`, `first`, `last`
+*   **`[~]` P1 / D1**: String extensions via opt-in extension bundles:
+    *   Implemented: `replace`, `split`, `join`, `substring`, `charAt`, `indexOf`, `lastIndexOf`, `trim`, `lowerAscii`, `upperAscii`
+    *   Still missing: `reverse`, `quote`, `format`
+*   **`[~]` P1 / D1**: Math extensions via opt-in extension bundles:
+    *   Implemented: `greatest`, `least`
+    *   Implemented floating-point helpers: `ceil`, `floor`, `round`, `trunc`, `abs`, `sign`, `isInf`, `isNaN`, `isFinite`, `sqrt`
+    *   Still missing: bitwise helpers and broader parity details
+*   **`[~]` P1 / D1**: List extensions via opt-in extension bundles:
+    *   Implemented: `flatten`, `slice`, `reverse`, `sort`, `sortBy`, `distinct`, `range`, `first`, `last`
+    *   Sorting support is intentionally limited to documented sortable scalar values/keys in the first version
 *   **`[ ]` P2 / D1**: Set extensions:
     *   `contains`, `equivalent`, `intersects`
 *   **`[ ]` P2 / D1**: Regex extraction / replacement helpers beyond core `matches`.
@@ -94,6 +109,12 @@ These are increasingly visible in modern `cel-go` usage and should be treated as
     *   Optional aggregate literal elements/entries remain out of scope.
     *   Broader `cel-go` optional helpers beyond the shipped core set remain out of scope.
 *   **`[ ]` P2 / D2**: Two-variable comprehension support and transform macros.
+*   **`[ ]` P2 / D2**: Custom macro registration.
+    *   cel-go allows defining new macros beyond the standard set (`has`, `all`, `exists`, etc.) via the parser extension API.
+    *   `Cel.Compiled` has a fixed set of hardcoded macros with no public registration mechanism.
+*   **`[ ]` P2 / D2**: Feature flags and language subsetting.
+    *   cel-go allows selective enabling/disabling of language features and extensions (e.g., `cel.OptionalTypes()`, `cel.EnableMacroCallTracking()`) to tighten the environment for security-sensitive contexts.
+    *   `Cel.Compiled` currently enables all language features unconditionally; there is no mechanism to restrict the available syntax or functions per environment.
 
 ### Group 5: Partial Evaluation, Residualization, and Runtime Controls
 
@@ -113,6 +134,8 @@ These features are less about language parity and more about whether advanced us
 *   **`[~]` P1 / D2**: Human-readable parse / type / runtime errors with source locations.
 *   **`[ ]` P2 / D2**: AST validation hooks and built-in validators.
 *   **`[ ]` P2 / D2**: AST optimization hooks such as constant folding and variable inlining.
+*   **`[ ]` P2 / D2**: `cel.block` common subexpression elimination.
+    *   A cel-go optimization that introduces block-scoped bindings to eliminate repeated evaluation of identical subexpressions across an AST. Distinct from the user-facing `cel.bind` helper.
 *   **`[ ]` P2 / D2**: AST round-tripping / unparse support.
 *   **`[ ]` P2 / D2**: Container / namespace helpers such as `Container` and `Abbrevs`.
 
@@ -129,6 +152,10 @@ To make the checklist useful during planning, classify each gap using one of the
 ## Core Language Semantics
 
 *   **Data Types**: `int` (64-bit signed), `uint` (64-bit unsigned), `double` (64-bit IEEE float), `bool`, `string` (UTF-8), `bytes`, `list`, `map`, `null_type`, host objects (POCO / JSON / registered descriptor-backed CLR types), `type`, and optional values for the implemented optional subset.
+*   **Compilation Model**:
+    *   **Parse → Check → Evaluate Pipeline**: cel-go's core workflow parses source into an AST, type-checks the AST against declared environment types, and then evaluates the checked AST with runtime inputs.
+    *   **Static Type Checking**: The check phase resolves overloads, validates argument types, and ensures field references exist on declared types — catching errors before evaluation.
+    *   **Environment Declarations**: Users declare available variables (`cel.Variable()`), constants (`cel.Constant()`), custom functions (`cel.Function()`), and types before compilation. These declarations feed the type checker.
 *   **Evaluation Model**:
     *   **Partial State Evaluation**: Support for unknown variables during evaluation.
     *   **Short-Circuiting / Commutative Logic**: `&&` and `||` evaluate effectively commutatively (absorbing errors if the truth value is fully determined by the other side).
@@ -212,7 +239,7 @@ Beyond language elements, `cel-go` provides a powerful API for integrating and c
     *   **Actual Cost Tracking**: Track the exact cost of an expression evaluation during runtime.
 *   **AST Manipulation & Optimization**:
     *   **AST Validators**: Run custom static analysis checks (e.g., `ValidateComprehensionNestingLimit`, `ValidateHomogeneousAggregateLiterals`, `ValidateRegexLiterals`, timestamp/duration literal validation, and format-call validation where supported).
-    *   **AST Optimizers**: Statically optimize the AST before execution, such as **Constant Folding** and **Variable Inlining**.
+    *   **AST Optimizers**: Statically optimize the AST before execution, such as **Constant Folding**, **Variable Inlining**, and **`cel.block` Common Subexpression Elimination**.
     *   **AST Round-Tripping**: Convert parsed/checked ASTs back to source-like CEL text (`AstToString` / unparse support).
 *   **Partial Evaluation (State Tracking)**:
     *   Evaluate expressions over partially known inputs, including fine-grained unknown attribute patterns / partial activations.
@@ -221,6 +248,10 @@ Beyond language elements, `cel-go` provides a powerful API for integrating and c
 *   **Extensible Type System**:
     *   **Custom Type Adapters / Providers**: Map custom native types or domain objects into CEL's type system seamlessly (`CustomTypeAdapter`, `CustomTypeProvider`).
     *   **Container / Namespace Support**: Package-style name resolution via containers and abbreviations (`Container`, `Abbrevs`).
+*   **Extensible Function and Macro System**:
+    *   **Custom Function Declarations**: Register domain-specific global and receiver-style functions with typed overloads via `cel.Function()` and `cel.Overload()`.
+    *   **Custom Macro Registration**: Define new macros beyond the standard set via the parser extension API.
+    *   **Feature Flags / Subsetting**: Selectively enable or disable language features and extensions per environment (e.g., `cel.OptionalTypes()`, `cel.EnableMacroCallTracking()`).
 *   **Advanced Protobuf Support**:
     *   First-class support for `google.protobuf.Any` unpacking.
     *   Dynamic resolution of custom Protobuf descriptors (`DeclareContextProto`, `TypeDescs`).

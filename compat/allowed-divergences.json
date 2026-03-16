@@ -1,16 +1,32 @@
 {
   "allowedDivergences": [
     {
-      "id": "timestamp/string-format",
-      "reason": "Cel.Compiled formats timestamps with DateTimeOffset.ToString(\"o\") while cel-go uses CEL's canonical timestamp formatting."
-    },
-    {
       "id": "error/invalid-int",
       "reason": "cel-go surfaces invalid string-to-int conversions as a generic runtime/type-conversion error rather than the more specific invalid_argument category used by Cel.Compiled."
     },
     {
       "id": "error/invalid-duration",
       "reason": "cel-go surfaces invalid string-to-duration conversions as a generic runtime/type-conversion error rather than the more specific invalid_argument category used by Cel.Compiled."
+    },
+    {
+      "id": "comparison/int-uint-equal",
+      "reason": "Cel.Compiled permits heterogeneous numeric comparison at runtime for int/uint values, while the cel-go harness in this suite rejects this expression during checked compilation."
+    },
+    {
+      "id": "comparison/int-uint-less",
+      "reason": "Cel.Compiled permits heterogeneous numeric comparison at runtime for int/uint values, while the cel-go harness in this suite rejects this expression during checked compilation."
+    },
+    {
+      "id": "comparison/int-uint-negative",
+      "reason": "Cel.Compiled permits heterogeneous numeric comparison at runtime for int/uint values, while the cel-go harness in this suite rejects this expression during checked compilation."
+    },
+    {
+      "id": "comparison/int-uint-negative-less",
+      "reason": "Cel.Compiled permits heterogeneous numeric comparison at runtime for int/uint values, while the cel-go harness in this suite rejects this expression during checked compilation."
+    },
+    {
+      "id": "comparison/uint-double-equal",
+      "reason": "Cel.Compiled permits heterogeneous numeric comparison at runtime for uint/double values, while the cel-go harness in this suite rejects this expression during checked compilation."
     }
   ]
 }

@@ -214,8 +214,7 @@ public class TimestampDurationTests
     {
         Assert.Equal(1704067200L, EvalLong("int(timestamp('2024-01-01T00:00:00Z'))"));
 
-        var timestamp = DateTimeOffset.Parse("2024-01-01T00:00:00+00:00", CultureInfo.InvariantCulture);
-        Assert.Equal(timestamp.ToString("o", CultureInfo.InvariantCulture), EvalString("string(timestamp('2024-01-01T00:00:00Z'))"));
+        Assert.Equal("2024-01-01T00:00:00Z", EvalString("string(timestamp('2024-01-01T00:00:00Z'))"));
         Assert.Equal("60.001s", EvalString("string(duration('1m1ms'))"));
         Assert.Equal("-23.4s", EvalString("string(duration('-23.4s'))"));
     }
