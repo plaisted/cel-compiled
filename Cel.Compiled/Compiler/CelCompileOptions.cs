@@ -52,7 +52,8 @@ public enum CelFeatureFlags
     StringExtensions = 1 << 2,
     ListExtensions = 1 << 3,
     MathExtensions = 1 << 4,
-    All = Macros | OptionalSupport | StringExtensions | ListExtensions | MathExtensions
+    SetExtensions = 1 << 5,
+    All = Macros | OptionalSupport | StringExtensions | ListExtensions | MathExtensions | SetExtensions
 }
 
 /// <summary>

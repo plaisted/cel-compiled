@@ -32,27 +32,13 @@ value?.startsWith("corp-") ?? false
 
 This is not technically correct CEL, so it should remain feature-flagged and clearly documented as a convenience dialect. But for general .NET adoption, it is likely more valuable than closing long-tail extension gaps first.
 
-### Set Extensions — P1 / D1
+### ~~Set Extensions — P1 / D1~~ Done
 
-`sets.contains`, `sets.equivalent`, `sets.intersects`
+`sets.contains`, `sets.equivalent`, `sets.intersects` — implemented as an opt-in set extension bundle with `CelFeatureFlags.SetExtensions` gating. Included in `AddStandardExtensions()`.
 
-Set operations are the bread and butter of RBAC and policy evaluation. Almost every policy engine use case — Kubernetes admission, API gateway rules, authorization checks — needs set membership and comparison.
+### ~~Complete String Extensions — P1 / D1~~ Done
 
-```cel
-sets.contains(user.roles, ["admin", "editor"])
-sets.intersects(user.permissions, resource.required_permissions)
-sets.equivalent(actual_tags, expected_tags)
-```
-
-### Complete String Extensions — P1 / D1
-
-`reverse`, `quote`, `format`
-
-The library already ships `replace`, `split`, `join`, `substring`, `charAt`, `indexOf`, `lastIndexOf`, `trim`, `lowerAscii`, and `upperAscii`. Completing the remaining three removes a "partial" marker from the feature matrix.
-
-*   **`format`** is the most impactful — CEL's string interpolation/formatting function, used for constructing error messages, audit logs, and dynamic strings. It has a specific format spec (`%s`, `%d`, `%f`, `%e`, `%x`, `%o`, `%b`).
-*   **`quote`** wraps a string in quotes with escaping.
-*   **`reverse`** reverses a string.
+`reverse`, `quote`, `format` — added to the string extension bundle, completing `cel-go` string extension parity.
 
 ### Base64 Helpers — P2 / D1
 

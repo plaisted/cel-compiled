@@ -93,6 +93,52 @@ public class ExtensionLibraryTests
     }
 
     [Fact]
+    public void StringExtensions_Reverse()
+    {
+        Assert.Equal("fedcba", CelCompiler.Compile<object, string>("'abcdef'.reverse()", StringOptions)(new object()));
+        Assert.Equal("", CelCompiler.Compile<object, string>("''.reverse()", StringOptions)(new object()));
+    }
+
+    [Fact]
+    public void StringExtensions_Quote()
+    {
+        Assert.Equal("\"hello\"", CelCompiler.Compile<object, string>("'hello'.quote()", StringOptions)(new object()));
+        Assert.Equal("\"line\\none\"", CelCompiler.Compile<object, string>("'line\none'.quote()", StringOptions)(new object()));
+        Assert.Equal("\"say \\\"hi\\\"\"", CelCompiler.Compile<object, string>("'say \"hi\"'.quote()", StringOptions)(new object()));
+    }
+
+    [Fact]
+    public void StringExtensions_FormatBasic()
+    {
+        var fn = CelCompiler.Compile<object, string>("'Hello %s, you are %d years old'.format(['Alice', 30])", StandardOptions);
+        Assert.Equal("Hello Alice, you are 30 years old", fn(new object()));
+    }
+
+    [Fact]
+    public void StringExtensions_FormatNumericVerbs()
+    {
+        Assert.Equal("hex: ff, oct: 10, bin: 101",
+            CelCompiler.Compile<object, string>("'hex: %x, oct: %o, bin: %b'.format([255, 8, 5])", StandardOptions)(new object()));
+    }
+
+    [Fact]
+    public void StringExtensions_FormatLiteralPercent()
+    {
+        Assert.Equal("100%",
+            CelCompiler.Compile<object, string>("'100%%'.format([])", StandardOptions)(new object()));
+    }
+
+    [Fact]
+    public void StringExtensions_FormatFloatVerbs()
+    {
+        var result = CelCompiler.Compile<object, string>("'val: %f'.format([3.14])", StandardOptions)(new object());
+        Assert.StartsWith("val: 3.14", result);
+
+        var sci = CelCompiler.Compile<object, string>("'val: %e'.format([1000.0])", StandardOptions)(new object());
+        Assert.Contains("E+", sci, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ListExtensions_SupportRangeSliceFirstLastDistinctAndReverse()
     {
         var range = CelCompiler.Compile<object, object>("range(0, 5).slice(1, 4).reverse()", ListOptions)(new object());
@@ -195,5 +241,126 @@ public class ExtensionLibraryTests
     public sealed class SortItem
     {
         public long Score { get; init; }
+    }
+
+    // --- Set Extensions ---
+
+    private static CelCompileOptions SetOptions =>
+        new() { FunctionRegistry = new CelFunctionRegistryBuilder().AddSetExtensions().Build(), EnableCaching = false };
+
+    [Fact]
+    public void SetsContains_AllPresent()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.contains([1, 2, 3, 4], [2, 3])", StandardOptions);
+        Assert.True(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsContains_MissingElement()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.contains([1, 2, 3], [2, 5])", StandardOptions);
+        Assert.False(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsContains_EmptySublist()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.contains([1, 2], [])", StandardOptions);
+        Assert.True(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsContains_HeterogeneousNumericEquality()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.contains([1, 2, 3], [1.0, 2.0])", StandardOptions);
+        Assert.True(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsEquivalent_SameElementsDifferentOrder()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.equivalent([3, 2, 1], [1, 2, 3])", StandardOptions);
+        Assert.True(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsEquivalent_DifferentElements()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.equivalent([1, 2], [1, 3])", StandardOptions);
+        Assert.False(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsEquivalent_DuplicatesIgnored()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.equivalent([1, 1, 2], [2, 1])", StandardOptions);
+        Assert.True(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsIntersects_SharedElement()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.intersects([1, 2], [2, 3])", StandardOptions);
+        Assert.True(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsIntersects_NoSharedElements()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.intersects([1, 2], [3, 4])", StandardOptions);
+        Assert.False(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsIntersects_EmptyList()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.intersects([1, 2], [])", StandardOptions);
+        Assert.False(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsContains_JsonInput()
+    {
+        var fn = CelCompiler.Compile<JsonElement, bool>("""sets.contains(roles, ["admin"])""", StandardOptions);
+        using var doc = JsonDocument.Parse("""{"roles":["admin","editor"]}""");
+        Assert.True(fn(doc.RootElement));
+    }
+
+    [Fact]
+    public void SetsIntersects_JsonInput()
+    {
+        var fn = CelCompiler.Compile<JsonElement, bool>("""sets.intersects(perms, ["write"])""", StandardOptions);
+        using var doc = JsonDocument.Parse("""{"perms":["read","write"]}""");
+        Assert.True(fn(doc.RootElement));
+    }
+
+    [Fact]
+    public void SetExtensions_AreOptIn()
+    {
+        Assert.ThrowsAny<CelCompilationException>(() =>
+            CelCompiler.Compile<object, bool>("sets.contains([1], [1])"));
+
+        var fn = CelCompiler.Compile<object, bool>("sets.contains([1], [1])", SetOptions);
+        Assert.True(fn(new object()));
+    }
+
+    [Fact]
+    public void SetExtensions_IncludedInStandard()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.contains([1, 2], [1])", StandardOptions);
+        Assert.True(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsContains_PocoListInput()
+    {
+        var fn = CelCompiler.Compile<RolesContext, bool>("""sets.contains(Roles, ["admin"])""", StandardOptions);
+        Assert.True(fn(new RolesContext { Roles = ["admin", "editor"] }));
+        Assert.False(fn(new RolesContext { Roles = ["viewer"] }));
+    }
+
+    public sealed class RolesContext
+    {
+        public string[] Roles { get; init; } = [];
     }
 }

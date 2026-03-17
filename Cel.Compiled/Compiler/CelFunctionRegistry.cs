@@ -79,7 +79,17 @@ public sealed class CelFunctionRegistryBuilder
     }
 
     /// <summary>
-    /// Registers the shipped standard extension set (string, list, and math helpers).
+    /// Registers the shipped set extension library without changing the default CEL environment.
+    /// </summary>
+    public CelFunctionRegistryBuilder AddSetExtensions()
+    {
+        EnsureNotBuilt();
+        CelExtensionLibraryRegistrar.AddSetExtensions(this);
+        return this;
+    }
+
+    /// <summary>
+    /// Registers the shipped standard extension set (string, list, math, and set helpers).
     /// </summary>
     public CelFunctionRegistryBuilder AddStandardExtensions()
     {
@@ -87,6 +97,7 @@ public sealed class CelFunctionRegistryBuilder
         CelExtensionLibraryRegistrar.AddStringExtensions(this);
         CelExtensionLibraryRegistrar.AddListExtensions(this);
         CelExtensionLibraryRegistrar.AddMathExtensions(this);
+        CelExtensionLibraryRegistrar.AddSetExtensions(this);
         return this;
     }
 
