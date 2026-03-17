@@ -414,7 +414,7 @@ public static class CelCompiler
             CelCall call => CompileCall(call, contextExpr, binders, scope),
             CelList list => CompileList(list, contextExpr, binders, scope),
             CelMap map => CompileMap(map, contextExpr, binders, scope),
-            _ => throw new NotSupportedException($"AST Node of type {expr.GetType().Name} is not yet supported.")
+            _ => throw CompilationError(expr, $"Unsupported expression type '{expr.GetType().Name}'.", "compilation_error")
         };
     }
 
@@ -774,7 +774,11 @@ public static class CelCompiler
                 return binderSize;
             }
 
-            throw new NotSupportedException($"size() is not supported for type {operand.Type.Name}");
+            throw CompilationError(
+                call,
+                $"No matching overload for function 'size' applied to type '{operand.Type.Name}'.",
+                "no_matching_overload",
+                functionName: "size");
         }
 
         if (call.Function == "int" && call.Args.Count == 1)
@@ -894,8 +898,11 @@ public static class CelCompiler
                 if (call.Function == "orValue" && call.Args.Count == 1)
                     return Expression.Call(s_optionalOrValue, target, BoxIfNeeded(CompileNode(call.Args[0], contextExpr, binders, scope)));
 
-                throw new NotSupportedException(
-                    $"Optional receiver function '{call.Function}' is not supported with {call.Args.Count} arguments.");
+                throw CompilationError(
+                    call,
+                    $"Optional type does not support receiver function '{call.Function}' with {call.Args.Count} argument(s). Supported: hasValue(), value(), or(optional), orValue(value).",
+                    "no_matching_overload",
+                    functionName: call.Function);
             }
         }
 
@@ -903,7 +910,10 @@ public static class CelCompiler
         {
             if (call.Args.Count != 1 || call.Args[0] is not CelSelect select)
             {
-                throw new NotSupportedException("has() requires a field selection expression, e.g. has(x.field)");
+                throw CompilationError(
+                    call.Args.Count == 1 ? call.Args[0] : call,
+                    "Invalid argument to has() macro: argument must be a field selection, e.g. has(x.field).",
+                    "invalid_argument");
             }
 
             var operand = CompileNode(select.Operand, contextExpr, binders, scope);
@@ -948,7 +958,17 @@ public static class CelCompiler
                 return customResult;
         }
 
-        throw new NotSupportedException($"Function {call.Function} is not supported with {call.Args.Count} arguments.");
+        throw IsKnownBuiltinFunction(call.Function)
+            ? CompilationError(
+                call,
+                $"No matching overload for function '{call.Function}' with {call.Args.Count} argument(s).",
+                "no_matching_overload",
+                functionName: call.Function)
+            : CompilationError(
+                call,
+                $"Undeclared reference to '{call.Function}' (with {call.Args.Count} argument(s)).",
+                "undeclared_reference",
+                functionName: call.Function);
     }
 
     private static bool IsBinaryOperator(string function) => function is
@@ -959,6 +979,11 @@ public static class CelCompiler
     private static bool IsUnaryOperator(string function) => function is "!_" or "-_";
 
     private static bool IsMacroFunction(string function) => function is "all" or "exists" or "exists_one" or "map" or "filter";
+
+    private static bool IsKnownBuiltinFunction(string function) => function is
+        "size" or "contains" or "startsWith" or "endsWith" or "matches" or
+        "int" or "uint" or "double" or "string" or "bool" or "bytes" or
+        "duration" or "timestamp" or "type" or "has";
 
     private static bool IsOptionalOfCall(CelCall call) =>
         call.Target is CelIdent { Name: "optional" } && call.Function == "of" && call.Args.Count == 1;

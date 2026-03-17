@@ -21,7 +21,8 @@ public class ExtensionLibraryTests
     [Fact]
     public void StringExtensions_AreOptIn()
     {
-        Assert.Throws<NotSupportedException>(() => CelCompiler.Compile<JsonElement, string>("name.trim()"));
+        var ex = Assert.Throws<CelCompilationException>(() => CelCompiler.Compile<JsonElement, string>("name.trim()"));
+        Assert.Equal("undeclared_reference", ex.ErrorCode);
 
         var fn = CelCompiler.Compile<JsonElement, string>("name.trim()", StringOptions);
         var doc = JsonDocument.Parse("""{"name":"  Alice  "}""");

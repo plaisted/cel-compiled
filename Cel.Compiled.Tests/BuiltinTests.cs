@@ -107,7 +107,8 @@ public class BuiltinTests
     public void HasInvalid()
     {
         var ast = CelParser.Parse("has(User)");
-        Assert.ThrowsAny<NotSupportedException>(() => CelCompiler.Compile<TestContext>(ast));
+        var ex = Assert.Throws<CelCompilationException>(() => CelCompiler.Compile<TestContext>(ast));
+        Assert.Equal("invalid_argument", ex.ErrorCode);
     }
 
     [Fact]

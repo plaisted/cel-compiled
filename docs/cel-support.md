@@ -243,10 +243,41 @@ Restrictions are enforced during compilation for both source-string compilation 
 Public failures expose structured metadata through `CelCompilationException` and `CelRuntimeException`.
 
 - Parse and compile failures include stable `ErrorCode` values and, when source text is available, `ExpressionText`, `Position`, `SourceSpan`, `Line`, and `Column`.
-- Common runtime failures now carry the same source metadata for attributed paths such as missing JSON fields and runtime overload mismatches from string-style helpers.
+- Common semantic mistakes such as invalid `has()` arguments and undeclared function references produce deliberate CEL-style messages with dedicated error codes (`invalid_argument`, `undeclared_reference`).
+- Common runtime failures carry the same source metadata for attributed paths such as missing JSON fields and runtime overload mismatches from string-style helpers.
 - Runtime categories that are not yet attributed still preserve stable `ErrorCode` values but may not include source spans.
 
 Use the structured fields for programmatic handling. If you want human-readable output for logs or UI, format the exception with `CelDiagnosticFormatter`.
+
+### Formatting Styles
+
+`CelDiagnosticFormatter.Format` accepts an optional `CelDiagnosticStyle` parameter and, for CEL-style output, an optional input name:
+
+- `CelDiagnosticStyle.Default` — structured format with explicit "line N, column N" labels (the default when omitted).
+- `CelDiagnosticStyle.CelStyle` — compact CEL-style format matching the presentation used by `cel-go`, suitable for CLIs, logs, and developer-facing UI.
+
+```csharp
+try
+{
+    var fn = CelExpression.Compile<object>("has(account)");
+}
+catch (CelCompilationException ex)
+{
+    // Default style:
+    // invalid_argument at line 1, column 5: Invalid argument to has() macro: argument must be a field selection, e.g. has(x.field).
+    // has(account)
+    //     ^^^^^^^
+    Console.WriteLine(CelDiagnosticFormatter.Format(ex));
+
+    // CEL style:
+    // ERROR: policy.cel:1:5: Invalid argument to has() macro: argument must be a field selection, e.g. has(x.field).
+    //  | has(account)
+    //  | ....^^^^^^^
+    Console.WriteLine(CelDiagnosticFormatter.Format(ex, CelDiagnosticStyle.CelStyle, inputName: "policy.cel"));
+}
+```
+
+### Programmatic Error Handling
 
 ```csharp
 try
@@ -263,6 +294,25 @@ catch (CelRuntimeException ex)
     Console.WriteLine(CelDiagnosticFormatter.Format(ex));
 }
 ```
+
+### Error Codes
+
+Stable machine-readable error codes exposed through `ErrorCode`:
+
+| Code | Category | Description |
+| --- | --- | --- |
+| `parse_error` | Compile | Syntax error in CEL source |
+| `compilation_error` | Compile | General compile-time failure |
+| `no_matching_overload` | Compile / Runtime | No function overload matches the argument types |
+| `ambiguous_overload` | Compile | Multiple equally valid overloads |
+| `feature_disabled` | Compile | Feature disabled by compile options |
+| `invalid_argument` | Compile | Invalid argument to a macro (e.g. `has()`) |
+| `undeclared_reference` | Compile | Undeclared function or identifier |
+| `no_such_field` | Runtime | Missing field on object or map |
+| `index_out_of_bounds` | Runtime | List/array index out of range |
+| `division_by_zero` | Runtime | Division by zero |
+| `modulo_by_zero` | Runtime | Modulo by zero |
+| `overflow` | Runtime | Arithmetic overflow |
 
 ### Registration Constraints
 

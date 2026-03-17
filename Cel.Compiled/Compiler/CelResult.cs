@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 
 namespace Cel.Compiled.Compiler;
 
@@ -19,23 +20,23 @@ internal sealed class CelError
 
     public static CelError NoMatchingOverload(string function, params Type[] argumentTypes)
     {
-        var types = string.Join(", ", (object[])argumentTypes);
-        return new CelError("no_matching_overload", $"No matching overload for function '{function}' with argument types ({types})");
+        var types = string.Join(", ", argumentTypes.Select(static t => t.Name));
+        return new CelError("no_matching_overload", $"No matching overload for '{function}' with argument types ({types}).");
     }
 
     public static CelError DivisionByZero()
     {
-        return new CelError("division_by_zero", "Division by zero");
+        return new CelError("division_by_zero", "Division by zero.");
     }
 
     public static CelError Overflow(string op)
     {
-        return new CelError("overflow", $"Arithmetic overflow in '{op}'");
+        return new CelError("overflow", $"Arithmetic overflow in '{op}'.");
     }
 
     public static CelError ModuloByZero()
     {
-        return new CelError("modulo_by_zero", "Modulo by zero");
+        return new CelError("modulo_by_zero", "Modulo by zero.");
     }
 
     public CelRuntimeException ToException()

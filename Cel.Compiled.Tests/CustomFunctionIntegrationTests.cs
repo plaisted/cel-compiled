@@ -223,8 +223,9 @@ public class CustomFunctionIntegrationTests
         Assert.Equal(5L, fn(doc.RootElement));
 
         // Without registry: same AST should fail (no custom function available)
-        Assert.Throws<NotSupportedException>(() =>
+        var ex = Assert.Throws<CelCompilationException>(() =>
             CelCompiler.Compile<JsonElement, long>(ast, new CelCompileOptions { FunctionRegistry = null, EnableCaching = true }));
+        Assert.Equal("undeclared_reference", ex.ErrorCode);
     }
 
     // --- Built-in precedence over custom registrations (Task 3.2) ---
