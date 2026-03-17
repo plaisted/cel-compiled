@@ -16,6 +16,7 @@ internal sealed class CelBinderSet
 
     internal CelFunctionRegistry? FunctionRegistry { get; private set; }
     internal CelTypeRegistry? TypeRegistry { get; private set; }
+    internal CelFeatureFlags EnabledFeatures { get; private set; }
 
     private CelBinderSet(ICelBinder rootBinder, ICelBinder[] binders)
     {
@@ -23,7 +24,7 @@ internal sealed class CelBinderSet
         _binders = binders;
     }
 
-    public static CelBinderSet Create(Type contextType, CelBinderMode binderMode = CelBinderMode.Auto, CelFunctionRegistry? functionRegistry = null, CelTypeRegistry? typeRegistry = null)
+    public static CelBinderSet Create(Type contextType, CelBinderMode binderMode = CelBinderMode.Auto, CelFunctionRegistry? functionRegistry = null, CelTypeRegistry? typeRegistry = null, CelFeatureFlags enabledFeatures = CelFeatureFlags.All)
     {
         var binders = typeRegistry is null
             ? new[] { s_jsonElementBinder, s_jsonNodeBinder, s_pocoBinder }
@@ -32,7 +33,8 @@ internal sealed class CelBinderSet
         return new CelBinderSet(SelectRootBinder(contextType, binderMode, typeRegistry, binders), binders)
         {
             FunctionRegistry = functionRegistry,
-            TypeRegistry = typeRegistry
+            TypeRegistry = typeRegistry,
+            EnabledFeatures = enabledFeatures
         };
     }
 

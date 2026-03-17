@@ -68,7 +68,7 @@ The library MUST implement CEL's cross-type numeric equality where `int`, `uint`
 - **THEN** the result distinguishes `null` values from non-null values using CEL semantics
 
 ### Requirement: Compiler supports comprehension macros
-The library SHALL compile the standard CEL comprehension macros: `all`, `exists`, `exists_one`, `map`, and `filter`.
+The library SHALL compile the standard CEL comprehension macros: `all`, `exists`, `exists_one`, `map`, and `filter`, unless the active compile options explicitly disable macro support for the environment.
 
 #### Scenario: Evaluate all macro on list
 - **WHEN** a compiled expression evaluates `[1, 2, 3].all(x, x > 0)`
@@ -81,6 +81,10 @@ The library SHALL compile the standard CEL comprehension macros: `all`, `exists`
 #### Scenario: Evaluate map macro on list
 - **WHEN** a compiled expression evaluates `[1, 2, 3].map(x, x * 2)`
 - **THEN** the result is `[2, 4, 6]`
+
+#### Scenario: Reject macro when macros are disabled
+- **WHEN** a caller disables macro support in compile options and compiles `[1, 2, 3].exists(x, x > 0)`
+- **THEN** compilation fails with a clear feature-disabled diagnostic
 
 ### Requirement: Compiler supports type conversion functions
 The library SHALL compile the standard CEL type conversion functions: `int()`, `uint()`, `double()`, `string()`, `bool()`, `bytes()`.

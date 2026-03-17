@@ -275,6 +275,13 @@ public class CelNetComparisonBenchmarks
         "'hello world'.contains('world')",
         "[1, 2, 3].exists(x, x == 2)"
     ];
+    private static readonly int[] s_nativeList = [1, 2, 3];
+    private static readonly Func<bool>[] s_nativeDelegates =
+    [
+        static () => 1 + 2 * 3 == 7,
+        static () => "hello world".Contains("world", StringComparison.Ordinal),
+        static () => Array.Exists(s_nativeList, static x => x == 2)
+    ];
 
     private readonly Func<object, bool>[] _compiledDelegates =
         s_expressions.Select(expression => CelExpression.Compile<object, bool>(expression)).ToArray();
@@ -282,7 +289,7 @@ public class CelNetComparisonBenchmarks
     private readonly CelNetBridge _celNetWarm = new();
     private readonly TelusCelBridge _telusCelWarm = new();
 
-    [Benchmark(Baseline = true)]
+    [Benchmark]
     public bool CelCompiledBuildAndRun()
     {
         var result = false;
@@ -311,6 +318,15 @@ public class CelNetComparisonBenchmarks
 
     [Benchmark]
     public bool TelusCelWarmRun() => _telusCelWarm.WarmRunAll(s_expressions);
+
+    [Benchmark(Baseline = true)]
+    public bool NativeWarmRun()
+    {
+        var result = false;
+        foreach (var native in s_nativeDelegates)
+            result ^= native();
+        return result;
+    }
 }
 
 [MemoryDiagnoser]

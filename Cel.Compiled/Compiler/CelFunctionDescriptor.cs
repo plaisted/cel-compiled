@@ -8,7 +8,7 @@ namespace Cel.Compiled.Compiler;
 /// </summary>
 public sealed class CelFunctionDescriptor
 {
-    internal CelFunctionDescriptor(string functionName, CelFunctionKind kind, Type[] parameterTypes, Type returnType, MethodInfo method, object? target)
+    internal CelFunctionDescriptor(string functionName, CelFunctionKind kind, Type[] parameterTypes, Type returnType, MethodInfo method, object? target, CelFunctionOrigin origin)
     {
         FunctionName = functionName;
         Kind = kind;
@@ -16,6 +16,7 @@ public sealed class CelFunctionDescriptor
         ReturnType = returnType;
         Method = method;
         Target = target;
+        Origin = origin;
     }
 
     /// <summary>The CEL function name used in expressions.</summary>
@@ -42,6 +43,8 @@ public sealed class CelFunctionDescriptor
     /// Used as the instance in <c>Expression.Call(instance, method, args)</c>.
     /// </summary>
     internal object? Target { get; }
+
+    internal CelFunctionOrigin Origin { get; }
 }
 
 /// <summary>
@@ -54,4 +57,12 @@ public enum CelFunctionKind
 
     /// <summary>Receiver-style call: <c>name.slugify()</c></summary>
     Receiver
+}
+
+internal enum CelFunctionOrigin
+{
+    Application,
+    StringExtension,
+    ListExtension,
+    MathExtension
 }

@@ -79,4 +79,10 @@ public class CelCompilationException : Exception
             "ambiguous_overload",
             functionName,
             argumentTypes);
+
+    /// <summary>
+    /// Creates a structured feature-disabled error for restricted environments.
+    /// </summary>
+    public static CelCompilationException FeatureDisabled(string featureName) =>
+        new($"CEL feature '{featureName}' is disabled by the active compile options.", "feature_disabled");
 }

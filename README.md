@@ -108,11 +108,11 @@ Build-and-run from scratch for the same three expressions:
 
 | Library | Mean | Relative to `Cel.Compiled` | Allocated |
 | --- | ---: | ---: | ---: |
-| `Cel.Compiled` | `515.85 us` | `1.0x` | `40,988 B` |
-| `Cel.NET` | `1.10 ms` | `2.1x slower` | `3,398,145 B` |
-| `Telus CEL` | `34.92 us` | `14.8x faster` | `124,528 B` |
+| `Cel.Compiled` | `513.07 us` | `1.0x` | `40,948 B` |
+| `Cel.NET` | `1.07 ms` | `2.1x slower` | `3,398,265 B` |
+| `Telus CEL` | `34.91 us` | `14.7x faster` | `124,528 B` |
 
-The important tradeoff is straightforward: `Cel.Compiled` pays more upfront compile cost than the most lightweight interpretive path, but delivers much better warm execution throughput once you reuse the compiled delegate.
+The important tradeoff is straightforward: `Cel.Compiled` pays more upfront compile cost than the most lightweight interpretive path, but once compiled it runs within about `2x` of the equivalent native C# and far ahead of the other measured .NET CEL libraries on this warm-path benchmark.
 
 To reproduce the comparison:
 
