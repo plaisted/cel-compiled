@@ -111,17 +111,19 @@ public static class CelCompiler
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ContainsListElement), new[] { typeof(IList), typeof(object) })!;
 
     private static readonly MethodInfo s_getNonGenericDictionaryValue =
-        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetDictionaryValue), new[] { typeof(IDictionary), typeof(object) })!;
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetDictionaryValue), new[] { typeof(IDictionary), typeof(object), typeof(string), typeof(int), typeof(int) })!;
 
     private static readonly MethodInfo s_getGenericDictionaryValue =
         typeof(CelRuntimeHelpers).GetMethods().Single(method =>
             method.Name == nameof(CelRuntimeHelpers.GetDictionaryValue) &&
-            method.IsGenericMethodDefinition);
+            method.IsGenericMethodDefinition &&
+            method.GetParameters().Length == 5);
 
     private static readonly MethodInfo s_getReadOnlyDictionaryValue =
         typeof(CelRuntimeHelpers).GetMethods().Single(method =>
             method.Name == nameof(CelRuntimeHelpers.GetReadOnlyDictionaryValue) &&
-            method.IsGenericMethodDefinition);
+            method.IsGenericMethodDefinition &&
+            method.GetParameters().Length == 5);
 
     private static readonly MethodInfo s_getGenericDictionaryKeys =
         typeof(CelRuntimeHelpers).GetMethods().Single(method =>
@@ -286,6 +288,10 @@ public static class CelCompiler
     private static readonly MethodInfo s_celStartsWith = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.CelStartsWith), new[] { typeof(object), typeof(object) })!;
     private static readonly MethodInfo s_celEndsWith = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.CelEndsWith), new[] { typeof(object), typeof(object) })!;
     private static readonly MethodInfo s_celMatches = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.CelMatches), new[] { typeof(object), typeof(object) })!;
+    private static readonly MethodInfo s_celContainsWithSource = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.CelContains), new[] { typeof(object), typeof(object), typeof(string), typeof(int), typeof(int) })!;
+    private static readonly MethodInfo s_celStartsWithWithSource = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.CelStartsWith), new[] { typeof(object), typeof(object), typeof(string), typeof(int), typeof(int) })!;
+    private static readonly MethodInfo s_celEndsWithWithSource = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.CelEndsWith), new[] { typeof(object), typeof(object), typeof(string), typeof(int), typeof(int) })!;
+    private static readonly MethodInfo s_celMatchesWithSource = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.CelMatches), new[] { typeof(object), typeof(object), typeof(string), typeof(int), typeof(int) })!;
 
     /// <summary>
     /// Compiles a CEL expression into a strongly-typed delegate for a specific context.
@@ -338,7 +344,7 @@ public static class CelCompiler
         }
         catch (Cel.Compiled.Parser.CelParseException ex)
         {
-            throw CelCompilationException.Parse(celExpression, ex.Message, ex.Position, ex);
+            throw CelCompilationException.Parse(celExpression, ex.Message, ex.Position, ex.EndPosition, ex);
         }
     }
 
@@ -361,7 +367,7 @@ public static class CelCompiler
         }
         catch (Cel.Compiled.Parser.CelParseException ex)
         {
-            throw CelCompilationException.Parse(celExpression, ex.Message, ex.Position, ex);
+            throw CelCompilationException.Parse(celExpression, ex.Message, ex.Position, ex.EndPosition, ex);
         }
     }
 
@@ -372,6 +378,7 @@ public static class CelCompiler
 
     internal static Func<TContext, TResult> CompileUncached<TContext, TResult>(CelExpr expr, CelCompileOptions options)
     {
+        using var _ = CelDiagnosticContext.Push(CelSourceMapRegistry.TryGet(expr, out var sourceMap) ? sourceMap : null);
         var contextParam = Expression.Parameter(typeof(TContext), "context");
         var binders = CelBinderSet.Create(typeof(TContext), options.BinderMode, options.FunctionRegistry, options.TypeRegistry, options.EnabledFeatures);
         var bodyExpr = CompileNode(expr, contextParam, binders, null);
@@ -384,7 +391,8 @@ public static class CelCompiler
             }
             catch (InvalidOperationException ex)
             {
-                throw new CelCompilationException(
+                throw CompilationError(
+                    expr,
                     $"Cannot convert CEL expression result type '{bodyExpr.Type.Name}' to requested type '{typeof(TResult).Name}'",
                     "result_type_conversion_failed",
                     innerException: ex);
@@ -410,6 +418,48 @@ public static class CelCompiler
         };
     }
 
+    private static CelCompilationException CompilationError(
+        CelExpr? expr,
+        string message,
+        string errorCode = "compilation_error",
+        string? functionName = null,
+        IReadOnlyList<Type>? argumentTypes = null,
+        Exception? innerException = null)
+    {
+        if (CelDiagnosticUtilities.TryGetSourceInfo(expr, out var expressionText, out var span))
+        {
+            return CelCompilationException.WithSource(
+                message,
+                errorCode,
+                expressionText,
+                span,
+                functionName,
+                argumentTypes,
+                innerException);
+        }
+
+        return new CelCompilationException(message, errorCode, functionName, argumentTypes, innerException: innerException);
+    }
+
+    private static CelCompilationException NoMatchingOverload(CelExpr? expr, string functionName, params Type[] argumentTypes) =>
+        CompilationError(
+            expr,
+            CelCompilationException.NoMatchingOverload(functionName, argumentTypes).Message,
+            "no_matching_overload",
+            functionName,
+            argumentTypes);
+
+    private static CelCompilationException AmbiguousOverload(CelExpr? expr, string functionName, params Type[] argumentTypes) =>
+        CompilationError(
+            expr,
+            CelCompilationException.AmbiguousOverload(functionName, argumentTypes).Message,
+            "ambiguous_overload",
+            functionName,
+            argumentTypes);
+
+    private static CelCompilationException FeatureDisabled(CelExpr? expr, string featureName) =>
+        CompilationError(expr, CelCompilationException.FeatureDisabled(featureName).Message, "feature_disabled");
+
     private static Expression CompileMap(CelMap map, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
     {
         if (map.Entries.Count == 0)
@@ -428,7 +478,7 @@ public static class CelCompiler
         {
             if (!allowedKeyTypes.Contains(entry.Key.Type))
             {
-                throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("{...}", entry.Key.Type).Message);
+                throw NoMatchingOverload(map, "{...}", entry.Key.Type);
             }
         }
 
@@ -518,19 +568,19 @@ public static class CelCompiler
         if (scope != null && scope.TryGetValue(ident.Name, out var local))
             return local;
 
-        return binders.ResolveIdentifier(contextExpr, ident.Name);
+        return binders.ResolveMember(contextExpr, ident.Name, ident);
     }
 
     private static Expression CompileSelect(CelSelect select, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
     {
         if (select.IsOptional)
         {
-            EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
+            EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support", select);
             return CompileOptionalSelect(select, contextExpr, binders, scope).Expression;
         }
 
         var operandExpr = CompileNode(select.Operand, contextExpr, binders, scope);
-        return binders.ResolveMember(operandExpr, select.Field);
+        return binders.ResolveMember(operandExpr, select.Field, select);
     }
 
     private static CompiledOptional CompileOptionalSelect(CelSelect select, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
@@ -547,15 +597,17 @@ public static class CelCompiler
                     Expression.Call(s_optionalHasValue, optionalVar),
                     Expression.Block(
                         Expression.Assign(valueVar, Expression.Convert(Expression.Call(s_optionalValue, optionalVar), operandOptional.ValueType)),
-                        binders.ResolveOptionalMember(valueVar, select.Field)),
+                        binders.ResolveOptionalMember(valueVar, select.Field, select)),
                     Expression.Call(s_optionalNone)));
 
-            var memberType = binders.ResolveMember(Expression.Parameter(operandOptional.ValueType, "value"), select.Field).Type;
+            var memberType = binders.ResolveMember(Expression.Parameter(operandOptional.ValueType, "value"), select.Field, select).Type;
             return new CompiledOptional(optionalExpression, memberType);
         }
 
         var operandExpr = CompileNode(select.Operand, contextExpr, binders, scope);
-        return new CompiledOptional(binders.ResolveOptionalMember(operandExpr, select.Field), binders.ResolveMember(operandExpr, select.Field).Type);
+        return new CompiledOptional(
+            binders.ResolveOptionalMember(operandExpr, select.Field, select),
+            binders.ResolveMember(operandExpr, select.Field, select).Type);
     }
 
     private static bool TryCompileOptionalValue(CelExpr expr, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope, out CompiledOptional compiledOptional)
@@ -563,20 +615,20 @@ public static class CelCompiler
         switch (expr)
         {
             case CelSelect select when select.IsOptional:
-                EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
+                EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support", select);
                 compiledOptional = CompileOptionalSelect(select, contextExpr, binders, scope);
                 return true;
             case CelIndex index when index.IsOptional:
-                EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
+                EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support", index);
                 compiledOptional = CompileOptionalIndex(index, contextExpr, binders, scope);
                 return true;
             case CelCall call when IsOptionalOfCall(call):
-                EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
+                EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support", call);
                 var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
                 compiledOptional = new CompiledOptional(Expression.Call(s_optionalOf, BoxIfNeeded(arg)), arg.Type);
                 return true;
             case CelCall call when IsOptionalNoneCall(call):
-                EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
+                EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support", call);
                 compiledOptional = new CompiledOptional(Expression.Call(s_optionalNone), typeof(object));
                 return true;
             default:
@@ -590,7 +642,7 @@ public static class CelCompiler
         if (call.Target != null && call.Args.Count == 2 && call.Args[0] is CelIdent iterator)
         {
             if (IsMacroFunction(call.Function))
-                EnsureFeatureEnabled(binders, CelFeatureFlags.Macros, "standard macros");
+                EnsureFeatureEnabled(binders, CelFeatureFlags.Macros, "standard macros", call);
 
             if (call.Function == "all")
                 return CompileQuantifierMacro(call.Target, iterator.Name, call.Args[1], contextExpr, binders, scope, MacroKind.All);
@@ -610,7 +662,7 @@ public static class CelCompiler
 
         if (call.Target != null && call.Function == "map" && call.Args.Count == 3 && call.Args[0] is CelIdent filterIterator)
         {
-            EnsureFeatureEnabled(binders, CelFeatureFlags.Macros, "standard macros");
+            EnsureFeatureEnabled(binders, CelFeatureFlags.Macros, "standard macros", call);
             return CompileMapMacro(call.Target, filterIterator.Name, call.Args[1], call.Args[2], contextExpr, binders, scope);
         }
 
@@ -619,14 +671,16 @@ public static class CelCompiler
             return CompileIndexAccess(
                 CompileNode(call.Args[0], contextExpr, binders, scope),
                 CompileNode(call.Args[1], contextExpr, binders, scope),
-                binders);
+                binders,
+                call);
         }
 
         if (call.Function == "@in" && call.Args.Count == 2)
         {
             return CompileIn(
                 CompileNode(call.Args[0], contextExpr, binders, scope),
-                CompileNode(call.Args[1], contextExpr, binders, scope));
+                CompileNode(call.Args[1], contextExpr, binders, scope),
+                call);
         }
 
         if (call.Function == "_?_:_" && call.Args.Count == 3)
@@ -659,23 +713,24 @@ public static class CelCompiler
 
             var celMethod = call.Function switch
             {
-                "contains" => s_celContains,
-                "startsWith" => s_celStartsWith,
-                "endsWith" => s_celEndsWith,
-                "matches" => s_celMatches,
+                "contains" => s_celContainsWithSource,
+                "startsWith" => s_celStartsWithWithSource,
+                "endsWith" => s_celEndsWithWithSource,
+                "matches" => s_celMatchesWithSource,
                 _ => throw new InvalidOperationException()
             };
-            return Expression.Call(celMethod, BoxIfNeeded(target), BoxIfNeeded(arg));
+            var source = CelDiagnosticUtilities.GetSourceContextConstants(call);
+            return Expression.Call(celMethod, BoxIfNeeded(target), BoxIfNeeded(arg), source.ExpressionText, source.Start, source.End);
         }
 
         if (call.Target != null && (IsDurationAccessor(call.Function) || IsTimestampAccessor(call.Function)))
         {
             var target = CompileNode(call.Target, contextExpr, binders, scope);
             if (target.Type == typeof(TimeSpan) && IsDurationAccessor(call.Function))
-                return CompileDurationAccessor(call.Function, target, call.Args);
+                return CompileDurationAccessor(call.Function, target, call.Args, call);
 
             if (target.Type == typeof(DateTimeOffset) && IsTimestampAccessor(call.Function))
-                return CompileTimestampAccessor(call.Function, target, call.Args, contextExpr, binders, scope);
+                return CompileTimestampAccessor(call.Function, target, call.Args, contextExpr, binders, scope, call);
         }
 
         if (call.Function == "size" && (call.Args.Count == 1 || call.Target != null))
@@ -809,14 +864,14 @@ public static class CelCompiler
 
         if (IsOptionalOfCall(call))
         {
-            EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
+            EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support", call);
             var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
             return Expression.Call(s_optionalOf, BoxIfNeeded(arg));
         }
 
         if (IsOptionalNoneCall(call))
         {
-            EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
+            EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support", call);
             return Expression.Call(s_optionalNone);
         }
 
@@ -825,7 +880,7 @@ public static class CelCompiler
             var target = CompileNode(call.Target, contextExpr, binders, scope);
             if (target.Type == typeof(CelOptional))
             {
-                EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
+                EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support", call);
 
                 if (call.Function == "hasValue" && call.Args.Count == 0)
                     return Expression.Call(s_optionalHasValue, target);
@@ -852,7 +907,7 @@ public static class CelCompiler
             }
 
             var operand = CompileNode(select.Operand, contextExpr, binders, scope);
-            return binders.ResolvePresence(operand, select.Field);
+            return binders.ResolvePresence(operand, select.Field, select);
         }
 
         if (call.Args.Count == 2 && IsBinaryOperator(call.Function))
@@ -864,10 +919,10 @@ public static class CelCompiler
 
             return call.Function switch
             {
-                "_+_" or "_-_" or "_*_" or "_/_" or "_%_" => CompileArithmetic(call.Function, left, right),
-                "_==_" => EqualsExpr(left, right),
-                "_!=_" => Expression.Not(EqualsExpr(left, right)),
-                "_<_" or "_<=_" or "_>_" or "_>=_" => CompareExpr(call.Function, left, right),
+                "_+_" or "_-_" or "_*_" or "_/_" or "_%_" => CompileArithmetic(call.Function, left, right, call),
+                "_==_" => EqualsExpr(left, right, call),
+                "_!=_" => Expression.Not(EqualsExpr(left, right, call)),
+                "_<_" or "_<=_" or "_>_" or "_>=_" => CompareExpr(call.Function, left, right, call),
                 "_&&_" => CompileLogicalAnd(left, right),
                 "_||_" => CompileLogicalOr(left, right),
                 _ => throw new InvalidOperationException($"Unrecognized binary operator '{call.Function}'.")
@@ -880,7 +935,7 @@ public static class CelCompiler
             return call.Function switch
             {
                 "!_" => Expression.Not(operand),
-                "-_" => CompileUnaryMinus(operand),
+                "-_" => CompileUnaryMinus(operand, call),
                 _ => throw new InvalidOperationException($"Unrecognized unary operator '{call.Function}'.")
             };
         }
@@ -913,14 +968,14 @@ public static class CelCompiler
 
     private static Expression EnsureOptionalArgument(CelExpr expr, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
     {
-        EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
+        EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support", expr);
 
         if (TryCompileOptionalValue(expr, contextExpr, binders, scope, out var optional))
             return optional.Expression;
 
         var compiled = CompileNode(expr, contextExpr, binders, scope);
         if (compiled.Type != typeof(CelOptional))
-            throw new CelCompilationException("Optional receiver function 'or' requires a CEL optional argument.");
+            throw CompilationError(expr, "Optional receiver function 'or' requires a CEL optional argument.");
 
         return compiled;
     }
@@ -942,9 +997,9 @@ public static class CelCompiler
                 var nsOverloads = registry.GetOverloads(qualifiedName, CelFunctionKind.Global);
                 if (nsOverloads.Count > 0)
                 {
-                    nsOverloads = FilterFeatureEnabledOverloads(nsOverloads, binders);
+                    nsOverloads = FilterFeatureEnabledOverloads(call, nsOverloads, binders);
                     var nsArgs = call.Args.Select(a => CompileNode(a, contextExpr, binders, scope)).ToArray();
-                    return ResolveAndEmitCustomCall(qualifiedName, nsOverloads, nsArgs, binders);
+                    return ResolveAndEmitCustomCall(call, qualifiedName, nsOverloads, nsArgs, binders);
                 }
             }
 
@@ -953,7 +1008,7 @@ public static class CelCompiler
             if (overloads.Count == 0)
                 return null;
 
-            overloads = FilterFeatureEnabledOverloads(overloads, binders);
+            overloads = FilterFeatureEnabledOverloads(call, overloads, binders);
 
             var target = CompileNode(call.Target, contextExpr, binders, scope);
             var args = call.Args.Select(a => CompileNode(a, contextExpr, binders, scope)).ToArray();
@@ -963,7 +1018,7 @@ public static class CelCompiler
             allArgExprs[0] = target;
             Array.Copy(args, 0, allArgExprs, 1, args.Length);
 
-            return ResolveAndEmitCustomCall(call.Function, overloads, allArgExprs, binders);
+            return ResolveAndEmitCustomCall(call, call.Function, overloads, allArgExprs, binders);
         }
         else
         {
@@ -972,14 +1027,15 @@ public static class CelCompiler
             if (overloads.Count == 0)
                 return null;
 
-            overloads = FilterFeatureEnabledOverloads(overloads, binders);
+            overloads = FilterFeatureEnabledOverloads(call, overloads, binders);
 
             var args = call.Args.Select(a => CompileNode(a, contextExpr, binders, scope)).ToArray();
-            return ResolveAndEmitCustomCall(call.Function, overloads, args, binders);
+            return ResolveAndEmitCustomCall(call, call.Function, overloads, args, binders);
         }
     }
 
     private static IReadOnlyList<CelFunctionDescriptor> FilterFeatureEnabledOverloads(
+        CelExpr? sourceExpr,
         IReadOnlyList<CelFunctionDescriptor> overloads,
         CelBinderSet binders)
     {
@@ -999,7 +1055,7 @@ public static class CelCompiler
         var disabledBundle = overloads.Select(descriptor => GetDisabledFeatureName(descriptor.Origin, binders.EnabledFeatures))
             .FirstOrDefault(static name => name is not null);
         if (disabledBundle != null)
-            throw CelCompilationException.FeatureDisabled(disabledBundle);
+            throw FeatureDisabled(sourceExpr, disabledBundle);
 
         return enabled;
     }
@@ -1009,6 +1065,7 @@ public static class CelCompiler
     /// Precedence: exact typed match, then binder-coerced match, then single object fallback.
     /// </summary>
     private static Expression ResolveAndEmitCustomCall(
+        CelExpr? sourceExpr,
         string functionName,
         IReadOnlyList<CelFunctionDescriptor> overloads,
         Expression[] arguments,
@@ -1023,7 +1080,7 @@ public static class CelCompiler
             if (IsExactMatch(overload, argTypes))
             {
                 if (exactMatch != null)
-                    throw CelCompilationException.AmbiguousOverload(functionName, argTypes);
+                    throw AmbiguousOverload(sourceExpr, functionName, argTypes);
                 exactMatch = overload;
             }
         }
@@ -1047,7 +1104,7 @@ public static class CelCompiler
             if (converted != null)
             {
                 if (coercedMatch != null)
-                    throw CelCompilationException.AmbiguousOverload(functionName, argTypes);
+                    throw AmbiguousOverload(sourceExpr, functionName, argTypes);
                 coercedMatch = overload;
                 coercedArgs = converted;
             }
@@ -1066,7 +1123,7 @@ public static class CelCompiler
             if (overload.ParameterTypes.All(t => t == typeof(object)))
             {
                 if (objectFallback != null)
-                    throw CelCompilationException.AmbiguousOverload(functionName, argTypes);
+                    throw AmbiguousOverload(sourceExpr, functionName, argTypes);
                 objectFallback = overload;
             }
         }
@@ -1074,7 +1131,7 @@ public static class CelCompiler
         if (objectFallback != null)
             return EmitCustomCall(objectFallback, arguments);
 
-        throw CelCompilationException.NoMatchingOverload(functionName, argTypes);
+        throw NoMatchingOverload(sourceExpr, functionName, argTypes);
     }
 
     private static bool IsExactMatch(CelFunctionDescriptor overload, Type[] argTypes)
@@ -1166,16 +1223,17 @@ public static class CelCompiler
         IReadOnlyList<CelExpr> args,
         Expression contextExpr,
         CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope)
+        IReadOnlyDictionary<string, Expression>? scope,
+        CelExpr? sourceExpr)
     {
         if (target.Type != typeof(DateTimeOffset))
-            throw new CelCompilationException($"Receiver '{target.Type.Name}' does not support timestamp function '{function}'.");
+            throw CompilationError(sourceExpr, $"Receiver '{target.Type.Name}' does not support timestamp function '{function}'.");
 
         return args.Count switch
         {
             0 => Expression.Call(GetTimestampAccessorMethod(function, hasTimezone: false), target),
             1 => CompileTimestampAccessorWithTimezone(function, target, args[0], contextExpr, binders, scope),
-            _ => throw new CelCompilationException($"Timestamp function '{function}' expects zero or one arguments.")
+            _ => throw CompilationError(sourceExpr, $"Timestamp function '{function}' expects zero or one arguments.")
         };
     }
 
@@ -1189,7 +1247,7 @@ public static class CelCompiler
     {
         var timezone = CompileNode(timezoneExpr, contextExpr, binders, scope);
         if (timezone.Type != typeof(string))
-            throw new CelCompilationException($"Timestamp function '{function}' timezone argument must be string.");
+            throw CompilationError(timezoneExpr, $"Timestamp function '{function}' timezone argument must be string.");
 
         return Expression.Call(GetTimestampAccessorMethod(function, hasTimezone: true), target, timezone);
     }
@@ -1219,13 +1277,13 @@ public static class CelCompiler
         _ => throw new InvalidOperationException($"Unknown timestamp accessor '{function}'.")
     };
 
-    private static Expression CompileDurationAccessor(string function, Expression target, IReadOnlyList<CelExpr> args)
+    private static Expression CompileDurationAccessor(string function, Expression target, IReadOnlyList<CelExpr> args, CelExpr? sourceExpr)
     {
         if (target.Type != typeof(TimeSpan))
-            throw new CelCompilationException($"Receiver '{target.Type.Name}' does not support duration function '{function}'.");
+            throw CompilationError(sourceExpr, $"Receiver '{target.Type.Name}' does not support duration function '{function}'.");
 
         if (args.Count != 0)
-            throw new CelCompilationException($"Duration function '{function}' expects no arguments.");
+            throw CompilationError(sourceExpr, $"Duration function '{function}' expects no arguments.");
 
         var method = function switch
         {
@@ -1243,13 +1301,13 @@ public static class CelCompiler
     {
         if (index.IsOptional)
         {
-            EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
+            EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support", index);
             return CompileOptionalIndex(index, contextExpr, binders, scope).Expression;
         }
 
         var operand = CompileNode(index.Operand, contextExpr, binders, scope);
         var indexExpr = CompileNode(index.Index, contextExpr, binders, scope);
-        return CompileIndexAccess(operand, indexExpr, binders);
+        return CompileIndexAccess(operand, indexExpr, binders, index);
     }
 
     private static CompiledOptional CompileOptionalIndex(CelIndex index, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
@@ -1259,7 +1317,7 @@ public static class CelCompiler
             var compiledIndex = CompileNode(index.Index, contextExpr, binders, scope);
             var optionalVar = Expression.Variable(typeof(CelOptional), "optional");
             var valueVar = Expression.Variable(operandOptional.ValueType, "optionalValue");
-            var innerOptional = CompileOptionalIndexAccess(valueVar, compiledIndex, binders);
+            var innerOptional = CompileOptionalIndexAccess(valueVar, compiledIndex, binders, index);
             var optionalExpression = Expression.Block(
                 typeof(CelOptional),
                 new[] { optionalVar, valueVar },
@@ -1276,10 +1334,10 @@ public static class CelCompiler
 
         var operand = CompileNode(index.Operand, contextExpr, binders, scope);
         var indexExpr = CompileNode(index.Index, contextExpr, binders, scope);
-        return CompileOptionalIndexAccess(operand, indexExpr, binders);
+        return CompileOptionalIndexAccess(operand, indexExpr, binders, index);
     }
 
-    private static Expression CompileIn(Expression needle, Expression haystack)
+    private static Expression CompileIn(Expression needle, Expression haystack, CelExpr? sourceExpr)
     {
         var boxedNeedle = BoxIfNeeded(needle);
 
@@ -1343,7 +1401,7 @@ public static class CelCompiler
                 boxedNeedle);
         }
 
-        throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("@in", needle.Type, haystack.Type).Message);
+        throw NoMatchingOverload(sourceExpr, "@in", needle.Type, haystack.Type);
     }
 
     private static Expression CompileQuantifierMacro(
@@ -1357,7 +1415,7 @@ public static class CelCompiler
     {
         var target = CompileNode(targetExpr, contextExpr, binders, scope);
         var sourceVar = Expression.Variable(target.Type, "macroSource");
-        var plan = CreateComprehensionPlan(sourceVar);
+        var plan = CreateComprehensionPlan(sourceVar, targetExpr);
         var itemVar = Expression.Variable(plan.ItemType, iteratorName);
         var indexVar = Expression.Variable(typeof(int), "i");
         var resultVar = Expression.Variable(typeof(bool), "result");
@@ -1368,7 +1426,7 @@ public static class CelCompiler
         var predicateScope = ExtendScope(scope, iteratorName, itemVar);
         var predicate = CompileNode(predicateExpr, contextExpr, binders, predicateScope);
         if (predicate.Type != typeof(bool))
-            throw new CelCompilationException($"Comprehension predicate for '{kind.ToString().ToLowerInvariant()}' must return bool.");
+            throw CompilationError(predicateExpr, $"Comprehension predicate for '{kind.ToString().ToLowerInvariant()}' must return bool.");
 
         var currentIsError = Expression.Property(currentVar, nameof(CelResult<bool>.IsError));
         var currentValue = Expression.Property(currentVar, nameof(CelResult<bool>.Value));
@@ -1430,7 +1488,7 @@ public static class CelCompiler
     {
         var target = CompileNode(targetExpr, contextExpr, binders, scope);
         var sourceVar = Expression.Variable(target.Type, "macroSource");
-        var plan = CreateComprehensionPlan(sourceVar);
+        var plan = CreateComprehensionPlan(sourceVar, targetExpr);
         var itemVar = Expression.Variable(plan.ItemType, iteratorName);
         var indexVar = Expression.Variable(typeof(int), "i");
         var countVar = Expression.Variable(typeof(int), "matchCount");
@@ -1439,7 +1497,7 @@ public static class CelCompiler
         var predicateScope = ExtendScope(scope, iteratorName, itemVar);
         var predicate = CompileNode(predicateExpr, contextExpr, binders, predicateScope);
         if (predicate.Type != typeof(bool))
-            throw new CelCompilationException("Comprehension predicate for 'exists_one' must return bool.");
+            throw CompilationError(predicateExpr, "Comprehension predicate for 'exists_one' must return bool.");
 
         var loopBody = Expression.IfThenElse(
             Expression.LessThan(indexVar, plan.CountExpression),
@@ -1482,7 +1540,7 @@ public static class CelCompiler
     {
         var target = CompileNode(targetExpr, contextExpr, binders, scope);
         var sourceVar = Expression.Variable(target.Type, "macroSource");
-        var plan = CreateComprehensionPlan(sourceVar);
+        var plan = CreateComprehensionPlan(sourceVar, targetExpr);
         var itemVar = Expression.Variable(plan.ItemType, iteratorName);
         var indexVar = Expression.Variable(typeof(int), "i");
         var itemScope = ExtendScope(scope, iteratorName, itemVar);
@@ -1492,7 +1550,7 @@ public static class CelCompiler
         {
             predicate = CompileNode(predicateExpr, contextExpr, binders, itemScope);
             if (predicate.Type != typeof(bool))
-                throw new CelCompilationException("Comprehension predicate for 'map' must return bool.");
+                throw CompilationError(predicateExpr, "Comprehension predicate for 'map' must return bool.");
         }
 
         var transform = CompileNode(transformExpr, contextExpr, binders, itemScope);
@@ -1564,13 +1622,13 @@ public static class CelCompiler
     {
         var target = CompileNode(targetExpr, contextExpr, binders, scope);
         var sourceVar = Expression.Variable(target.Type, "macroSource");
-        var plan = CreateComprehensionPlan(sourceVar);
+        var plan = CreateComprehensionPlan(sourceVar, targetExpr);
         var itemVar = Expression.Variable(plan.ItemType, iteratorName);
         var indexVar = Expression.Variable(typeof(int), "i");
         var itemScope = ExtendScope(scope, iteratorName, itemVar);
         var predicate = CompileNode(predicateExpr, contextExpr, binders, itemScope);
         if (predicate.Type != typeof(bool))
-            throw new CelCompilationException("Comprehension predicate for 'filter' must return bool.");
+            throw CompilationError(predicateExpr, "Comprehension predicate for 'filter' must return bool.");
 
         var listType = typeof(List<>).MakeGenericType(plan.ItemType);
         var listVar = Expression.Variable(listType, "result");
@@ -1601,7 +1659,7 @@ public static class CelCompiler
         return Expression.Block(plan.ItemType.MakeArrayType(), variables, expressions);
     }
 
-    private static ComprehensionPlan CreateComprehensionPlan(Expression sourceExpression)
+    private static ComprehensionPlan CreateComprehensionPlan(Expression sourceExpression, CelExpr? sourceExpr)
     {
         if (sourceExpression.Type.IsArray && sourceExpression.Type.GetArrayRank() == 1)
         {
@@ -1716,18 +1774,18 @@ public static class CelCompiler
             };
         }
 
-        throw new CelCompilationException($"Comprehension macros require a list or map target, but got '{sourceExpression.Type.Name}'.");
+        throw CompilationError(sourceExpr, $"Comprehension macros require a list or map target, but got '{sourceExpression.Type.Name}'.");
     }
 
-    private static Expression CompileIndexAccess(Expression operand, Expression index, CelBinderSet binders)
+    private static Expression CompileIndexAccess(Expression operand, Expression index, CelBinderSet binders, CelExpr? sourceExpr)
     {
-        if (binders.TryResolveIndex(operand, index, out var boundIndex))
+        if (binders.TryResolveIndex(operand, index, out var boundIndex, sourceExpr))
             return boundIndex;
 
         if (operand.Type.IsArray && operand.Type.GetArrayRank() == 1)
         {
             if (index.Type != typeof(long))
-                throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operand.Type, index.Type).Message);
+                throw NoMatchingOverload(sourceExpr, "_[_]", operand.Type, index.Type);
 
             return Expression.Call(
                 s_getArrayElement.MakeGenericMethod(operand.Type.GetElementType()!),
@@ -1739,36 +1797,48 @@ public static class CelCompiler
         {
             var keyType = dictionaryInterface.GetGenericArguments()[0];
             var valueType = dictionaryInterface.GetGenericArguments()[1];
-            var keyExpr = ConvertIndexForKey(index, keyType, operand.Type);
+            var keyExpr = ConvertIndexForKey(index, keyType, operand.Type, sourceExpr);
+            var source = CelDiagnosticUtilities.GetSourceContextConstants(sourceExpr);
             return Expression.Call(
                 s_getGenericDictionaryValue.MakeGenericMethod(keyType, valueType),
                 Expression.Convert(operand, dictionaryInterface),
-                keyExpr);
+                keyExpr,
+                source.ExpressionText,
+                source.Start,
+                source.End);
         }
 
         if (TryGetGenericInterface(operand.Type, typeof(IReadOnlyDictionary<,>), out var readOnlyDictionaryInterface))
         {
             var keyType = readOnlyDictionaryInterface.GetGenericArguments()[0];
             var valueType = readOnlyDictionaryInterface.GetGenericArguments()[1];
-            var keyExpr = ConvertIndexForKey(index, keyType, operand.Type);
+            var keyExpr = ConvertIndexForKey(index, keyType, operand.Type, sourceExpr);
+            var source = CelDiagnosticUtilities.GetSourceContextConstants(sourceExpr);
             return Expression.Call(
                 s_getReadOnlyDictionaryValue.MakeGenericMethod(keyType, valueType),
                 Expression.Convert(operand, readOnlyDictionaryInterface),
-                keyExpr);
+                keyExpr,
+                source.ExpressionText,
+                source.Start,
+                source.End);
         }
 
         if (typeof(IDictionary).IsAssignableFrom(operand.Type))
         {
+            var source = CelDiagnosticUtilities.GetSourceContextConstants(sourceExpr);
             return Expression.Call(
                 s_getNonGenericDictionaryValue,
                 Expression.Convert(operand, typeof(IDictionary)),
-                Expression.Convert(index, typeof(object)));
+                Expression.Convert(index, typeof(object)),
+                source.ExpressionText,
+                source.Start,
+                source.End);
         }
 
         if (TryGetGenericInterface(operand.Type, typeof(IList<>), out var listInterface))
         {
             if (index.Type != typeof(long))
-                throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operand.Type, index.Type).Message);
+                throw NoMatchingOverload(sourceExpr, "_[_]", operand.Type, index.Type);
 
             return Expression.Call(
                 s_getGenericListElement.MakeGenericMethod(listInterface.GetGenericArguments()[0]),
@@ -1779,7 +1849,7 @@ public static class CelCompiler
         if (TryGetGenericInterface(operand.Type, typeof(IReadOnlyList<>), out var readOnlyListInterface))
         {
             if (index.Type != typeof(long))
-                throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operand.Type, index.Type).Message);
+                throw NoMatchingOverload(sourceExpr, "_[_]", operand.Type, index.Type);
 
             return Expression.Call(
                 s_getReadOnlyListElement.MakeGenericMethod(readOnlyListInterface.GetGenericArguments()[0]),
@@ -1790,7 +1860,7 @@ public static class CelCompiler
         if (typeof(IList).IsAssignableFrom(operand.Type))
         {
             if (index.Type != typeof(long))
-                throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operand.Type, index.Type).Message);
+                throw NoMatchingOverload(sourceExpr, "_[_]", operand.Type, index.Type);
 
             return Expression.Call(
                 s_getNonGenericListElement,
@@ -1798,14 +1868,14 @@ public static class CelCompiler
                 index);
         }
 
-        throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operand.Type, index.Type).Message);
+        throw NoMatchingOverload(sourceExpr, "_[_]", operand.Type, index.Type);
     }
 
-    private static CompiledOptional CompileOptionalIndexAccess(Expression operand, Expression index, CelBinderSet binders)
+    private static CompiledOptional CompileOptionalIndexAccess(Expression operand, Expression index, CelBinderSet binders, CelExpr? sourceExpr)
     {
-        if (binders.TryResolveOptionalIndex(operand, index, out var optionalIndex))
+        if (binders.TryResolveOptionalIndex(operand, index, out var optionalIndex, sourceExpr))
         {
-            var valueType = binders.TryResolveIndex(operand, index, out var boundIndex)
+            var valueType = binders.TryResolveIndex(operand, index, out var boundIndex, sourceExpr)
                 ? boundIndex.Type
                 : typeof(object);
             return new CompiledOptional(optionalIndex, valueType);
@@ -1814,7 +1884,7 @@ public static class CelCompiler
         if (operand.Type.IsArray && operand.Type.GetArrayRank() == 1)
         {
             if (index.Type != typeof(long))
-                throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operand.Type, index.Type).Message);
+                throw NoMatchingOverload(sourceExpr, "_[_]", operand.Type, index.Type);
 
             return new CompiledOptional(
                 Expression.Call(s_getOptionalArrayElement.MakeGenericMethod(operand.Type.GetElementType()!), operand, index),
@@ -1829,7 +1899,7 @@ public static class CelCompiler
                 Expression.Call(
                     s_getOptionalGenericDictionaryValue.MakeGenericMethod(keyType, valueType),
                     Expression.Convert(operand, dictionaryInterface),
-                    ConvertIndexForKey(index, keyType, operand.Type)),
+                    ConvertIndexForKey(index, keyType, operand.Type, sourceExpr)),
                 valueType);
         }
 
@@ -1841,7 +1911,7 @@ public static class CelCompiler
                 Expression.Call(
                     s_getOptionalReadOnlyDictionaryValue.MakeGenericMethod(keyType, valueType),
                     Expression.Convert(operand, readOnlyDictionaryInterface),
-                    ConvertIndexForKey(index, keyType, operand.Type)),
+                    ConvertIndexForKey(index, keyType, operand.Type, sourceExpr)),
                 valueType);
         }
 
@@ -1858,7 +1928,7 @@ public static class CelCompiler
         if (TryGetGenericInterface(operand.Type, typeof(IList<>), out var listInterface))
         {
             if (index.Type != typeof(long))
-                throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operand.Type, index.Type).Message);
+                throw NoMatchingOverload(sourceExpr, "_[_]", operand.Type, index.Type);
 
             var itemType = listInterface.GetGenericArguments()[0];
             return new CompiledOptional(
@@ -1872,7 +1942,7 @@ public static class CelCompiler
         if (TryGetGenericInterface(operand.Type, typeof(IReadOnlyList<>), out var readOnlyListInterface))
         {
             if (index.Type != typeof(long))
-                throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operand.Type, index.Type).Message);
+                throw NoMatchingOverload(sourceExpr, "_[_]", operand.Type, index.Type);
 
             var itemType = readOnlyListInterface.GetGenericArguments()[0];
             return new CompiledOptional(
@@ -1886,7 +1956,7 @@ public static class CelCompiler
         if (typeof(IList).IsAssignableFrom(operand.Type))
         {
             if (index.Type != typeof(long))
-                throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operand.Type, index.Type).Message);
+                throw NoMatchingOverload(sourceExpr, "_[_]", operand.Type, index.Type);
 
             return new CompiledOptional(
                 Expression.Call(
@@ -1896,10 +1966,10 @@ public static class CelCompiler
                 typeof(object));
         }
 
-        throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operand.Type, index.Type).Message);
+        throw NoMatchingOverload(sourceExpr, "_[_]", operand.Type, index.Type);
     }
 
-    private static Expression CompileArithmetic(string function, Expression left, Expression right)
+    private static Expression CompileArithmetic(string function, Expression left, Expression right, CelExpr? sourceExpr)
     {
         if (function == "_+_" && left.Type == typeof(string) && right.Type == typeof(string))
         {
@@ -1931,12 +2001,12 @@ public static class CelCompiler
                 if (left.Type == typeof(TimeSpan) && right.Type == typeof(TimeSpan))
                     return Expression.Call(s_subtractDurationDuration, left, right);
             }
-            throw new CelCompilationException(CelRuntimeException.NoMatchingOverload(function, left.Type, right.Type).Message);
+            throw NoMatchingOverload(sourceExpr, function, left.Type, right.Type);
         }
 
         if (left.Type != right.Type)
         {
-            throw new CelCompilationException(CelRuntimeException.NoMatchingOverload(function, left.Type, right.Type).Message);
+            throw NoMatchingOverload(sourceExpr, function, left.Type, right.Type);
         }
 
         Type type = left.Type;
@@ -1984,10 +2054,10 @@ public static class CelCompiler
             return Expression.TryCatch(body, catches.ToArray());
         }
 
-        throw new CelCompilationException(CelRuntimeException.NoMatchingOverload(function, left.Type, right.Type).Message);
+        throw NoMatchingOverload(sourceExpr, function, left.Type, right.Type);
     }
 
-    private static Expression CompileUnaryMinus(Expression operand)
+    private static Expression CompileUnaryMinus(Expression operand, CelExpr? sourceExpr)
     {
         Type type = operand.Type;
         if (type == typeof(long) || type == typeof(double))
@@ -2005,10 +2075,10 @@ public static class CelCompiler
             return Expression.Negate(operand);
         }
 
-        throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("-_", type).Message);
+        throw NoMatchingOverload(sourceExpr, "-_", type);
     }
 
-    private static Expression EqualsExpr(Expression left, Expression right)
+    private static Expression EqualsExpr(Expression left, Expression right, CelExpr? sourceExpr = null)
     {
         // 1. Null checks
         if (IsNullConstant(left) && IsNullConstant(right)) return Expression.Constant(true);
@@ -2062,7 +2132,7 @@ public static class CelCompiler
 
         if (IsTimestampOrDurationType(left.Type) || IsTimestampOrDurationType(right.Type))
         {
-            throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_==_", left.Type, right.Type).Message);
+            throw NoMatchingOverload(sourceExpr, "_==_", left.Type, right.Type);
         }
 
         // 4 & 5. Fallback to CelEquals
@@ -2071,7 +2141,7 @@ public static class CelCompiler
             Expression.Convert(right, typeof(object)));
     }
 
-    private static Expression CompareExpr(string function, Expression left, Expression right)
+    private static Expression CompareExpr(string function, Expression left, Expression right, CelExpr? sourceExpr)
     {
         Expression cmpExpr;
 
@@ -2112,7 +2182,7 @@ public static class CelCompiler
         }
         else if (IsTimestampOrDurationType(left.Type) || IsTimestampOrDurationType(right.Type))
         {
-            throw new CelCompilationException(CelRuntimeException.NoMatchingOverload(function, left.Type, right.Type).Message);
+            throw NoMatchingOverload(sourceExpr, function, left.Type, right.Type);
         }
         // 5. Cross-type numeric specialization
         else if (IsNumericType(left.Type) && IsNumericType(right.Type))
@@ -2225,7 +2295,7 @@ public static class CelCompiler
         return interfaceType != null;
     }
 
-    private static Expression ConvertIndexForKey(Expression index, Type keyType, Type operandType)
+    private static Expression ConvertIndexForKey(Expression index, Type keyType, Type operandType, CelExpr? sourceExpr)
     {
         if (index.Type == keyType)
             return index;
@@ -2233,13 +2303,13 @@ public static class CelCompiler
         if (keyType == typeof(object))
             return Expression.Convert(index, typeof(object));
 
-        throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operandType, index.Type).Message);
+        throw NoMatchingOverload(sourceExpr, "_[_]", operandType, index.Type);
     }
 
-    private static void EnsureFeatureEnabled(CelBinderSet binders, CelFeatureFlags feature, string featureName)
+    private static void EnsureFeatureEnabled(CelBinderSet binders, CelFeatureFlags feature, string featureName, CelExpr? sourceExpr = null)
     {
         if ((binders.EnabledFeatures & feature) == 0)
-            throw CelCompilationException.FeatureDisabled(featureName);
+            throw FeatureDisabled(sourceExpr, featureName);
     }
 
     private static bool IsKnownFunctionOrigin(CelFunctionOrigin origin) => origin is

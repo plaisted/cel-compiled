@@ -1,6 +1,7 @@
 using System;
 
 using System.Linq;
+using Cel.Compiled;
 
 namespace Cel.Compiled.Compiler;
 
@@ -19,6 +20,9 @@ public class CelCompilationException : Exception
         IReadOnlyList<Type>? argumentTypes = null,
         string? expressionText = null,
         int? position = null,
+        CelSourceSpan? sourceSpan = null,
+        int? line = null,
+        int? column = null,
         Exception? innerException = null)
         : base(message, innerException)
     {
@@ -26,7 +30,19 @@ public class CelCompilationException : Exception
         FunctionName = functionName;
         ArgumentTypes = argumentTypes;
         ExpressionText = expressionText;
-        Position = position;
+        SourceSpan = sourceSpan ?? (position is int p ? new CelSourceSpan(p, p + 1) : null);
+        Position = position ?? SourceSpan?.Start;
+        if (expressionText != null && Position is int resolvedPosition)
+        {
+            var resolved = CelDiagnosticUtilities.GetLineColumn(expressionText, resolvedPosition);
+            Line = line ?? resolved.Line;
+            Column = column ?? resolved.Column;
+        }
+        else
+        {
+            Line = line;
+            Column = column;
+        }
     }
 
     /// <summary>
@@ -55,10 +71,25 @@ public class CelCompilationException : Exception
     public int? Position { get; }
 
     /// <summary>
+    /// Gets the source span associated with the failure when available.
+    /// </summary>
+    public CelSourceSpan? SourceSpan { get; }
+
+    /// <summary>
+    /// Gets the one-based source line associated with the failure when available.
+    /// </summary>
+    public int? Line { get; }
+
+    /// <summary>
+    /// Gets the one-based source column associated with the failure when available.
+    /// </summary>
+    public int? Column { get; }
+
+    /// <summary>
     /// Creates a parse error for a source expression.
     /// </summary>
-    public static CelCompilationException Parse(string expressionText, string message, int position, Exception? innerException = null) =>
-        new(message, "parse_error", expressionText: expressionText, position: position, innerException: innerException);
+    public static CelCompilationException Parse(string expressionText, string message, int position, int? endPosition = null, Exception? innerException = null) =>
+        new(message, "parse_error", expressionText: expressionText, position: position, sourceSpan: new CelSourceSpan(position, endPosition ?? position + 1), innerException: innerException);
 
     /// <summary>
     /// Creates a structured no-matching-overload error for public custom-function resolution failures.
@@ -85,4 +116,22 @@ public class CelCompilationException : Exception
     /// </summary>
     public static CelCompilationException FeatureDisabled(string featureName) =>
         new($"CEL feature '{featureName}' is disabled by the active compile options.", "feature_disabled");
+
+    internal static CelCompilationException WithSource(
+        string message,
+        string errorCode,
+        string? expressionText,
+        CelSourceSpan? sourceSpan,
+        string? functionName = null,
+        IReadOnlyList<Type>? argumentTypes = null,
+        Exception? innerException = null) =>
+        new(
+            message,
+            errorCode,
+            functionName,
+            argumentTypes,
+            expressionText,
+            sourceSpan?.Start,
+            sourceSpan,
+            innerException: innerException);
 }

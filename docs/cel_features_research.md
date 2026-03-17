@@ -133,7 +133,10 @@ These features matter most for policy engines, distributed filtering, and debugg
 
 These features are less about language parity and more about whether advanced users feel the library is mature.
 
-*   **`[~]` P1 / D2**: Human-readable parse / type / runtime errors with source locations.
+*   **`[~]` P1 / D2**: Human-readable parse / compile / runtime errors with source locations.
+    *   Implemented: structured public parse/compile diagnostics now include source spans, line/column data, and a formatter helper.
+    *   Implemented for selected runtime failures: missing-field and overload-style runtime errors on the supported attributed paths.
+    *   Still missing: comprehensive runtime attribution across all helper and binder failure paths.
 *   **`[ ]` P2 / D2**: AST validation hooks and built-in validators.
 *   **`[ ]` P2 / D2**: AST optimization hooks such as constant folding and variable inlining.
 *   **`[ ]` P2 / D2**: `cel.block` common subexpression elimination.

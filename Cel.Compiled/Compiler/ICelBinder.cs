@@ -1,5 +1,6 @@
 using System;
 using System.Linq.Expressions;
+using Cel.Compiled.Ast;
 
 namespace Cel.Compiled.Compiler;
 
@@ -14,15 +15,15 @@ internal interface ICelBinder
 
     Expression ResolveIdentifier(Expression contextExpression, string name);
 
-    Expression ResolveMember(Expression operandExpression, string memberName);
+    Expression ResolveMember(Expression operandExpression, string memberName, CelExpr? sourceExpr = null);
 
-    Expression ResolvePresence(Expression operandExpression, string memberName);
+    Expression ResolvePresence(Expression operandExpression, string memberName, CelExpr? sourceExpr = null);
 
-    Expression ResolveOptionalMember(Expression operandExpression, string memberName);
+    Expression ResolveOptionalMember(Expression operandExpression, string memberName, CelExpr? sourceExpr = null);
 
-    bool TryResolveIndex(Expression operandExpression, Expression indexExpression, out Expression boundExpression);
+    bool TryResolveIndex(Expression operandExpression, Expression indexExpression, out Expression boundExpression, CelExpr? sourceExpr = null);
 
-    bool TryResolveOptionalIndex(Expression operandExpression, Expression indexExpression, out Expression optionalExpression);
+    bool TryResolveOptionalIndex(Expression operandExpression, Expression indexExpression, out Expression optionalExpression, CelExpr? sourceExpr = null);
 
     bool TryResolveSize(Expression operandExpression, out Expression sizeExpression);
 

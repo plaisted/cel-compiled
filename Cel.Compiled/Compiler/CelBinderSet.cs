@@ -2,6 +2,7 @@ using System;
 using System.Linq.Expressions;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Cel.Compiled.Ast;
 
 namespace Cel.Compiled.Compiler;
 
@@ -43,22 +44,22 @@ internal sealed class CelBinderSet
         return _rootBinder.ResolveIdentifier(contextExpression, name);
     }
 
-    public Expression ResolveMember(Expression operandExpression, string memberName)
+    public Expression ResolveMember(Expression operandExpression, string memberName, CelExpr? sourceExpr = null)
     {
-        return FindBinder(operandExpression.Type).ResolveMember(operandExpression, memberName);
+        return FindBinder(operandExpression.Type).ResolveMember(operandExpression, memberName, sourceExpr);
     }
 
-    public Expression ResolvePresence(Expression operandExpression, string memberName)
+    public Expression ResolvePresence(Expression operandExpression, string memberName, CelExpr? sourceExpr = null)
     {
-        return FindBinder(operandExpression.Type).ResolvePresence(operandExpression, memberName);
+        return FindBinder(operandExpression.Type).ResolvePresence(operandExpression, memberName, sourceExpr);
     }
 
-    public Expression ResolveOptionalMember(Expression operandExpression, string memberName)
+    public Expression ResolveOptionalMember(Expression operandExpression, string memberName, CelExpr? sourceExpr = null)
     {
-        return FindBinder(operandExpression.Type).ResolveOptionalMember(operandExpression, memberName);
+        return FindBinder(operandExpression.Type).ResolveOptionalMember(operandExpression, memberName, sourceExpr);
     }
 
-    public bool TryResolveIndex(Expression operandExpression, Expression indexExpression, out Expression boundExpression)
+    public bool TryResolveIndex(Expression operandExpression, Expression indexExpression, out Expression boundExpression, CelExpr? sourceExpr = null)
     {
         var binder = TryFindBinder(operandExpression.Type);
         if (binder is null)
@@ -67,10 +68,10 @@ internal sealed class CelBinderSet
             return false;
         }
 
-        return binder.TryResolveIndex(operandExpression, indexExpression, out boundExpression);
+        return binder.TryResolveIndex(operandExpression, indexExpression, out boundExpression, sourceExpr);
     }
 
-    public bool TryResolveOptionalIndex(Expression operandExpression, Expression indexExpression, out Expression optionalExpression)
+    public bool TryResolveOptionalIndex(Expression operandExpression, Expression indexExpression, out Expression optionalExpression, CelExpr? sourceExpr = null)
     {
         var binder = TryFindBinder(operandExpression.Type);
         if (binder is null)
@@ -79,7 +80,7 @@ internal sealed class CelBinderSet
             return false;
         }
 
-        return binder.TryResolveOptionalIndex(operandExpression, indexExpression, out optionalExpression);
+        return binder.TryResolveOptionalIndex(operandExpression, indexExpression, out optionalExpression, sourceExpr);
     }
 
     public bool TryResolveSize(Expression operandExpression, out Expression sizeExpression)

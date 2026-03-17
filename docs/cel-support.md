@@ -238,6 +238,32 @@ var fn = CelExpression.Compile<JsonElement, string>("wrap(name)", options); // a
 
 Restrictions are enforced during compilation for both source-string compilation and direct AST compilation. Disabled features fail with a structured `CelCompilationException` whose `ErrorCode` is `feature_disabled`.
 
+## Diagnostics
+
+Public failures expose structured metadata through `CelCompilationException` and `CelRuntimeException`.
+
+- Parse and compile failures include stable `ErrorCode` values and, when source text is available, `ExpressionText`, `Position`, `SourceSpan`, `Line`, and `Column`.
+- Common runtime failures now carry the same source metadata for attributed paths such as missing JSON fields and runtime overload mismatches from string-style helpers.
+- Runtime categories that are not yet attributed still preserve stable `ErrorCode` values but may not include source spans.
+
+Use the structured fields for programmatic handling. If you want human-readable output for logs or UI, format the exception with `CelDiagnosticFormatter`.
+
+```csharp
+try
+{
+    var fn = CelExpression.Compile<JsonElement>("name.contains(1)");
+    using var doc = JsonDocument.Parse("""{"name":"abc"}""");
+    _ = fn(doc.RootElement);
+}
+catch (CelRuntimeException ex)
+{
+    Console.WriteLine(ex.ErrorCode);     // no_matching_overload
+    Console.WriteLine(ex.Line);          // 1
+    Console.WriteLine(ex.Column);        // 1
+    Console.WriteLine(CelDiagnosticFormatter.Format(ex));
+}
+```
+
 ### Registration Constraints
 
 - Methods must be `static` or closed delegates (no instance methods on open types)
