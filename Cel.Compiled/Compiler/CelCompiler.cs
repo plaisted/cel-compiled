@@ -2223,9 +2223,11 @@ public static class CelCompiler
                 typeof(ArgumentOutOfRangeException),
                 Expression.Throw(
                     Expression.New(
-                        typeof(CelRuntimeException).GetConstructor(new[] { typeof(string), typeof(string) })!,
+                        typeof(CelRuntimeException).GetConstructor(new[] { typeof(string), typeof(string), typeof(string), typeof(CelSourceSpan?) })!,
                         Expression.Constant("overflow"),
-                        Expression.Constant("timestamp result out of range")),
+                        Expression.Constant("timestamp result out of range"),
+                        Expression.Constant(null, typeof(string)),
+                        Expression.Constant(null, typeof(CelSourceSpan?))),
                     typeof(DateTimeOffset))));
     }
 
