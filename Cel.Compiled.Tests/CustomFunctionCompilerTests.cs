@@ -270,8 +270,9 @@ public class CustomFunctionCompilerTests
     [Fact]
     public void WithoutRegistryCustomFunctionThrows()
     {
-        Assert.Throws<NotSupportedException>(() =>
+        var ex = Assert.Throws<CelCompilationException>(() =>
             CelCompiler.Compile<JsonElement>("slug(name)"));
+        Assert.Equal("undeclared_reference", ex.ErrorCode);
     }
 
     // --- POCO context works with custom functions ---

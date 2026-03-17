@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Cel.Compiled;
 
 namespace Cel.Compiled.Compiler;
@@ -45,18 +46,18 @@ public class CelRuntimeException : Exception
 
     public static CelRuntimeException NoMatchingOverload(string function, params Type[] argumentTypes)
     {
-        var types = string.Join(", ", (object[])argumentTypes);
-        return new CelRuntimeException("no_matching_overload", $"No matching overload for function '{function}' with argument types ({types})");
+        var types = string.Join(", ", argumentTypes.Select(static t => t.Name));
+        return new CelRuntimeException("no_matching_overload", $"No matching overload for '{function}' with argument types ({types}).");
     }
 
     public static CelRuntimeException NoSuchField(string fieldName)
     {
-        return new CelRuntimeException("no_such_field", $"No such field '{fieldName}'");
+        return new CelRuntimeException("no_such_field", $"No such field: '{fieldName}'.");
     }
 
     public static CelRuntimeException IndexOutOfBounds(long index)
     {
-        return new CelRuntimeException("index_out_of_bounds", $"Index '{index}' is out of bounds.");
+        return new CelRuntimeException("index_out_of_bounds", $"Index {index} is out of range.");
     }
 
     internal static CelRuntimeException WithSource(CelRuntimeException exception, string? expressionText, CelSourceSpan? sourceSpan)
