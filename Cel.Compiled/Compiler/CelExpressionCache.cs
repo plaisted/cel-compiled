@@ -6,13 +6,13 @@ namespace Cel.Compiled.Compiler;
 
 internal static class CelExpressionCache
 {
-    private readonly record struct CacheKey(Type ContextType, Type ResultType, CelExpr Expr, CelBinderMode BinderMode, string? FunctionEnvironmentId, string? TypeRegistryId);
+    private readonly record struct CacheKey(Type ContextType, Type ResultType, CelExpr Expr, CelBinderMode BinderMode, CelFeatureFlags EnabledFeatures, string? FunctionEnvironmentId, string? TypeRegistryId);
 
     private static readonly ConcurrentDictionary<CacheKey, Delegate> s_cache = new();
 
     public static Func<TContext, object?> GetOrCompile<TContext>(CelExpr expr, CelCompileOptions options)
     {
-        var key = new CacheKey(typeof(TContext), typeof(object), expr, options.BinderMode, options.FunctionRegistry?.IdentityHash, options.TypeRegistry?.IdentityHash);
+        var key = new CacheKey(typeof(TContext), typeof(object), expr, options.BinderMode, options.EnabledFeatures, options.FunctionRegistry?.IdentityHash, options.TypeRegistry?.IdentityHash);
         return (Func<TContext, object?>)s_cache.GetOrAdd(
             key,
             static (cacheKey, state) => state.BuildObject<TContext>(cacheKey.Expr, state.Options),
@@ -21,7 +21,7 @@ internal static class CelExpressionCache
 
     public static Func<TContext, TResult> GetOrCompile<TContext, TResult>(CelExpr expr, CelCompileOptions options)
     {
-        var key = new CacheKey(typeof(TContext), typeof(TResult), expr, options.BinderMode, options.FunctionRegistry?.IdentityHash, options.TypeRegistry?.IdentityHash);
+        var key = new CacheKey(typeof(TContext), typeof(TResult), expr, options.BinderMode, options.EnabledFeatures, options.FunctionRegistry?.IdentityHash, options.TypeRegistry?.IdentityHash);
         return (Func<TContext, TResult>)s_cache.GetOrAdd(
             key,
             static (cacheKey, state) => state.BuildTyped<TContext, TResult>(cacheKey.Expr, state.Options),

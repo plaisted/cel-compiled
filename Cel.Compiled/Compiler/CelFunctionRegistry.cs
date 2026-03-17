@@ -45,7 +45,7 @@ public sealed class CelFunctionRegistry
 /// </summary>
 public sealed class CelFunctionRegistryBuilder
 {
-    private readonly List<(string FunctionName, CelFunctionKind Kind, MethodInfo Method, object? Target)> _pending = new();
+    private readonly List<(string FunctionName, CelFunctionKind Kind, MethodInfo Method, object? Target, CelFunctionOrigin Origin)> _pending = new();
     private bool _built;
 
     /// <summary>
@@ -126,7 +126,7 @@ public sealed class CelFunctionRegistryBuilder
         EnsureNotBuilt();
         ArgumentNullException.ThrowIfNull(method);
         ValidateMethodInfo(functionName, CelFunctionKind.Global, method);
-        _pending.Add((functionName, CelFunctionKind.Global, method, null));
+        _pending.Add((functionName, CelFunctionKind.Global, method, null, CelFunctionOrigin.Application));
         return this;
     }
 
@@ -140,7 +140,7 @@ public sealed class CelFunctionRegistryBuilder
         EnsureNotBuilt();
         ArgumentNullException.ThrowIfNull(handler);
         var (method, target) = ExtractDelegate(functionName, CelFunctionKind.Global, handler);
-        _pending.Add((functionName, CelFunctionKind.Global, method, target));
+        _pending.Add((functionName, CelFunctionKind.Global, method, target, CelFunctionOrigin.Application));
         return this;
     }
 
@@ -153,7 +153,7 @@ public sealed class CelFunctionRegistryBuilder
         EnsureNotBuilt();
         ArgumentNullException.ThrowIfNull(method);
         ValidateMethodInfo(functionName, CelFunctionKind.Receiver, method);
-        _pending.Add((functionName, CelFunctionKind.Receiver, method, null));
+        _pending.Add((functionName, CelFunctionKind.Receiver, method, null, CelFunctionOrigin.Application));
         return this;
     }
 
@@ -167,7 +167,7 @@ public sealed class CelFunctionRegistryBuilder
         EnsureNotBuilt();
         ArgumentNullException.ThrowIfNull(handler);
         var (method, target) = ExtractDelegate(functionName, CelFunctionKind.Receiver, handler);
-        _pending.Add((functionName, CelFunctionKind.Receiver, method, target));
+        _pending.Add((functionName, CelFunctionKind.Receiver, method, target, CelFunctionOrigin.Application));
         return this;
     }
 
@@ -181,11 +181,11 @@ public sealed class CelFunctionRegistryBuilder
         _built = true;
 
         var grouped = new Dictionary<string, List<CelFunctionDescriptor>>(StringComparer.Ordinal);
-        foreach (var (functionName, kind, method, target) in _pending)
+        foreach (var (functionName, kind, method, target, origin) in _pending)
         {
             var parameters = method.GetParameters();
             var parameterTypes = parameters.Select(p => p.ParameterType).ToArray();
-            var descriptor = new CelFunctionDescriptor(functionName, kind, parameterTypes, method.ReturnType, method, target);
+            var descriptor = new CelFunctionDescriptor(functionName, kind, parameterTypes, method.ReturnType, method, target, origin);
 
             if (!grouped.TryGetValue(functionName, out var list))
             {
@@ -198,6 +198,24 @@ public sealed class CelFunctionRegistryBuilder
 
         var identity = ComputeIdentityHash(grouped);
         return new CelFunctionRegistry(grouped, identity);
+    }
+
+    internal CelFunctionRegistryBuilder AddGlobalFunction(string functionName, MethodInfo method, CelFunctionOrigin origin)
+    {
+        EnsureNotBuilt();
+        ArgumentNullException.ThrowIfNull(method);
+        ValidateMethodInfo(functionName, CelFunctionKind.Global, method);
+        _pending.Add((functionName, CelFunctionKind.Global, method, null, origin));
+        return this;
+    }
+
+    internal CelFunctionRegistryBuilder AddReceiverFunction(string functionName, MethodInfo method, CelFunctionOrigin origin)
+    {
+        EnsureNotBuilt();
+        ArgumentNullException.ThrowIfNull(method);
+        ValidateMethodInfo(functionName, CelFunctionKind.Receiver, method);
+        _pending.Add((functionName, CelFunctionKind.Receiver, method, null, origin));
+        return this;
     }
 
     private static void ValidateMethodInfo(string functionName, CelFunctionKind kind, MethodInfo method)

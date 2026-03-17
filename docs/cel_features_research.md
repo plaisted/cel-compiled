@@ -112,9 +112,11 @@ These are increasingly visible in modern `cel-go` usage and should be treated as
 *   **`[ ]` P2 / D2**: Custom macro registration.
     *   cel-go allows defining new macros beyond the standard set (`has`, `all`, `exists`, etc.) via the parser extension API.
     *   `Cel.Compiled` has a fixed set of hardcoded macros with no public registration mechanism.
-*   **`[ ]` P2 / D2**: Feature flags and language subsetting.
-    *   cel-go allows selective enabling/disabling of language features and extensions (e.g., `cel.OptionalTypes()`, `cel.EnableMacroCallTracking()`) to tighten the environment for security-sensitive contexts.
-    *   `Cel.Compiled` currently enables all language features unconditionally; there is no mechanism to restrict the available syntax or functions per environment.
+*   **`[x]` P2 / D2**: Feature flags and language subsetting.
+    *   `Cel.Compiled` supports coarse-grained compile-time feature flags on `CelCompileOptions.EnabledFeatures`.
+    *   Implemented restriction categories: standard macros, optional syntax/helpers, and shipped string/list/math extension bundles.
+    *   Restrictions are enforced during compilation for both source-string and direct AST compilation paths.
+    *   Shipped extension bundles can be disabled without disabling application-defined custom functions registered through `CelFunctionRegistry`.
 
 ### Group 5: Partial Evaluation, Residualization, and Runtime Controls
 

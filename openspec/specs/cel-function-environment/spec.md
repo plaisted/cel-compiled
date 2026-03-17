@@ -1,5 +1,5 @@
 ### Requirement: Compiler accepts a custom CEL function environment
-The compiler SHALL allow callers to supply a function environment through compile options so additional global functions and receiver-style helpers can be used in CEL expressions, and the public API SHALL provide ergonomic registration paths for common typed delegate shapes. The public API SHALL also provide ergonomic registration paths for enabling curated built-in extension bundles such as the shipped string, list, and math extension libraries.
+The compiler SHALL allow callers to supply a function environment through compile options so additional global functions and receiver-style helpers can be used in CEL expressions, and the public API SHALL provide ergonomic registration paths for common typed delegate shapes. The public API SHALL also provide ergonomic registration paths for enabling curated built-in extension bundles such as the shipped string, list, and math extension libraries. Compile-time feature flags SHALL allow callers to disable the shipped extension-bundle surface for a restricted environment without removing support for application-defined custom functions entirely.
 
 #### Scenario: Compile expression with custom global function
 - **WHEN** a caller registers a custom function such as `slug(string) -> string` and compiles `slug(name)`
@@ -16,6 +16,10 @@ The compiler SHALL allow callers to supply a function environment through compil
 #### Scenario: Enable curated extension bundle
 - **WHEN** a caller enables a shipped extension bundle such as string, list, or math helpers
 - **THEN** the resulting function environment resolves those helpers without requiring the caller to register every individual function manually
+
+#### Scenario: Disable shipped extension bundle while keeping custom functions
+- **WHEN** a caller disables shipped extension helpers for the environment but still supplies an application-defined function registry
+- **THEN** expressions using disabled shipped helpers fail compilation while application-defined registered functions remain available
 
 ### Requirement: Custom function dispatch remains strict
 The compiler MUST resolve registered custom functions using strict overload matching consistent with the runtime's CEL dispatch behavior. Unsupported or ambiguous calls MUST fail compilation with a clear overload error.

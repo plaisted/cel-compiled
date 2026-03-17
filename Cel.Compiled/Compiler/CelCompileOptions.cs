@@ -1,3 +1,5 @@
+using System;
+
 namespace Cel.Compiled.Compiler;
 
 /// <summary>
@@ -23,6 +25,12 @@ public sealed class CelCompileOptions
     public CelBinderMode BinderMode { get; init; } = CelBinderMode.Auto;
 
     /// <summary>
+    /// Controls which major CEL language and shipped-environment features are enabled for this compilation.
+    /// Defaults preserve the current unrestricted environment.
+    /// </summary>
+    public CelFeatureFlags EnabledFeatures { get; init; } = CelFeatureFlags.All;
+
+    /// <summary>
     /// An optional frozen function registry containing custom function overloads.
     /// Must be created via <see cref="CelFunctionRegistryBuilder.Build"/>.
     /// </summary>
@@ -33,6 +41,18 @@ public sealed class CelCompileOptions
     /// Must be created via <see cref="CelTypeRegistryBuilder.Build"/>.
     /// </summary>
     public CelTypeRegistry? TypeRegistry { get; init; }
+}
+
+[Flags]
+public enum CelFeatureFlags
+{
+    None = 0,
+    Macros = 1 << 0,
+    OptionalSupport = 1 << 1,
+    StringExtensions = 1 << 2,
+    ListExtensions = 1 << 3,
+    MathExtensions = 1 << 4,
+    All = Macros | OptionalSupport | StringExtensions | ListExtensions | MathExtensions
 }
 
 /// <summary>

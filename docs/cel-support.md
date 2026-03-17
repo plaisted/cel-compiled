@@ -192,6 +192,52 @@ Available bundle helpers in the initial release:
 
 These helpers build on the same `CelFunctionRegistry` model as application-defined custom functions, so built-ins still retain precedence and the registry identity still participates in cache isolation.
 
+### Feature Flags And Restricted Profiles
+
+`Cel.Compiled` supports coarse-grained language/environment subsetting through `CelCompileOptions.EnabledFeatures`.
+
+Available flags:
+
+- `CelFeatureFlags.Macros`
+- `CelFeatureFlags.OptionalSupport`
+- `CelFeatureFlags.StringExtensions`
+- `CelFeatureFlags.ListExtensions`
+- `CelFeatureFlags.MathExtensions`
+- `CelFeatureFlags.All`
+
+By default, `EnabledFeatures` is `CelFeatureFlags.All`, so existing callers see no behavior change.
+
+Restrict comprehensions and optional syntax/helpers:
+
+```csharp
+var options = new CelCompileOptions
+{
+    EnabledFeatures = CelFeatureFlags.All
+        & ~CelFeatureFlags.Macros
+        & ~CelFeatureFlags.OptionalSupport
+};
+```
+
+Restrict shipped string helpers while keeping application-defined functions:
+
+```csharp
+var registry = new CelFunctionRegistryBuilder()
+    .AddStringExtensions()
+    .AddGlobalFunction("wrap", (Func<string, string>)(value => $"[{value}]"))
+    .Build();
+
+var options = new CelCompileOptions
+{
+    FunctionRegistry = registry,
+    EnabledFeatures = CelFeatureFlags.All & ~CelFeatureFlags.StringExtensions
+};
+
+var fn = CelExpression.Compile<JsonElement, string>("wrap(name)", options); // allowed
+// name.trim() would fail compilation with a feature-disabled error
+```
+
+Restrictions are enforced during compilation for both source-string compilation and direct AST compilation. Disabled features fail with a structured `CelCompilationException` whose `ErrorCode` is `feature_disabled`.
+
 ### Registration Constraints
 
 - Methods must be `static` or closed delegates (no instance methods on open types)

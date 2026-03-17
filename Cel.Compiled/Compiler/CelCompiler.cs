@@ -373,7 +373,7 @@ public static class CelCompiler
     internal static Func<TContext, TResult> CompileUncached<TContext, TResult>(CelExpr expr, CelCompileOptions options)
     {
         var contextParam = Expression.Parameter(typeof(TContext), "context");
-        var binders = CelBinderSet.Create(typeof(TContext), options.BinderMode, options.FunctionRegistry, options.TypeRegistry);
+        var binders = CelBinderSet.Create(typeof(TContext), options.BinderMode, options.FunctionRegistry, options.TypeRegistry, options.EnabledFeatures);
         var bodyExpr = CompileNode(expr, contextParam, binders, null);
 
         if (bodyExpr.Type != typeof(TResult))
@@ -524,7 +524,10 @@ public static class CelCompiler
     private static Expression CompileSelect(CelSelect select, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
     {
         if (select.IsOptional)
+        {
+            EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
             return CompileOptionalSelect(select, contextExpr, binders, scope).Expression;
+        }
 
         var operandExpr = CompileNode(select.Operand, contextExpr, binders, scope);
         return binders.ResolveMember(operandExpr, select.Field);
@@ -560,16 +563,20 @@ public static class CelCompiler
         switch (expr)
         {
             case CelSelect select when select.IsOptional:
+                EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
                 compiledOptional = CompileOptionalSelect(select, contextExpr, binders, scope);
                 return true;
             case CelIndex index when index.IsOptional:
+                EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
                 compiledOptional = CompileOptionalIndex(index, contextExpr, binders, scope);
                 return true;
             case CelCall call when IsOptionalOfCall(call):
+                EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
                 var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
                 compiledOptional = new CompiledOptional(Expression.Call(s_optionalOf, BoxIfNeeded(arg)), arg.Type);
                 return true;
             case CelCall call when IsOptionalNoneCall(call):
+                EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
                 compiledOptional = new CompiledOptional(Expression.Call(s_optionalNone), typeof(object));
                 return true;
             default:
@@ -582,6 +589,9 @@ public static class CelCompiler
     {
         if (call.Target != null && call.Args.Count == 2 && call.Args[0] is CelIdent iterator)
         {
+            if (IsMacroFunction(call.Function))
+                EnsureFeatureEnabled(binders, CelFeatureFlags.Macros, "standard macros");
+
             if (call.Function == "all")
                 return CompileQuantifierMacro(call.Target, iterator.Name, call.Args[1], contextExpr, binders, scope, MacroKind.All);
 
@@ -600,6 +610,7 @@ public static class CelCompiler
 
         if (call.Target != null && call.Function == "map" && call.Args.Count == 3 && call.Args[0] is CelIdent filterIterator)
         {
+            EnsureFeatureEnabled(binders, CelFeatureFlags.Macros, "standard macros");
             return CompileMapMacro(call.Target, filterIterator.Name, call.Args[1], call.Args[2], contextExpr, binders, scope);
         }
 
@@ -798,18 +809,24 @@ public static class CelCompiler
 
         if (IsOptionalOfCall(call))
         {
+            EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
             var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
             return Expression.Call(s_optionalOf, BoxIfNeeded(arg));
         }
 
         if (IsOptionalNoneCall(call))
+        {
+            EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
             return Expression.Call(s_optionalNone);
+        }
 
         if (call.Target != null && call.Target is not CelIdent { Name: "optional" })
         {
             var target = CompileNode(call.Target, contextExpr, binders, scope);
             if (target.Type == typeof(CelOptional))
             {
+                EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
+
                 if (call.Function == "hasValue" && call.Args.Count == 0)
                     return Expression.Call(s_optionalHasValue, target);
 
@@ -886,6 +903,8 @@ public static class CelCompiler
 
     private static bool IsUnaryOperator(string function) => function is "!_" or "-_";
 
+    private static bool IsMacroFunction(string function) => function is "all" or "exists" or "exists_one" or "map" or "filter";
+
     private static bool IsOptionalOfCall(CelCall call) =>
         call.Target is CelIdent { Name: "optional" } && call.Function == "of" && call.Args.Count == 1;
 
@@ -894,6 +913,8 @@ public static class CelCompiler
 
     private static Expression EnsureOptionalArgument(CelExpr expr, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
     {
+        EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
+
         if (TryCompileOptionalValue(expr, contextExpr, binders, scope, out var optional))
             return optional.Expression;
 
@@ -921,6 +942,7 @@ public static class CelCompiler
                 var nsOverloads = registry.GetOverloads(qualifiedName, CelFunctionKind.Global);
                 if (nsOverloads.Count > 0)
                 {
+                    nsOverloads = FilterFeatureEnabledOverloads(nsOverloads, binders);
                     var nsArgs = call.Args.Select(a => CompileNode(a, contextExpr, binders, scope)).ToArray();
                     return ResolveAndEmitCustomCall(qualifiedName, nsOverloads, nsArgs, binders);
                 }
@@ -930,6 +952,8 @@ public static class CelCompiler
             var overloads = registry.GetOverloads(call.Function, CelFunctionKind.Receiver);
             if (overloads.Count == 0)
                 return null;
+
+            overloads = FilterFeatureEnabledOverloads(overloads, binders);
 
             var target = CompileNode(call.Target, contextExpr, binders, scope);
             var args = call.Args.Select(a => CompileNode(a, contextExpr, binders, scope)).ToArray();
@@ -948,9 +972,36 @@ public static class CelCompiler
             if (overloads.Count == 0)
                 return null;
 
+            overloads = FilterFeatureEnabledOverloads(overloads, binders);
+
             var args = call.Args.Select(a => CompileNode(a, contextExpr, binders, scope)).ToArray();
             return ResolveAndEmitCustomCall(call.Function, overloads, args, binders);
         }
+    }
+
+    private static IReadOnlyList<CelFunctionDescriptor> FilterFeatureEnabledOverloads(
+        IReadOnlyList<CelFunctionDescriptor> overloads,
+        CelBinderSet binders)
+    {
+        foreach (var overload in overloads)
+        {
+            if (!IsKnownFunctionOrigin(overload.Origin))
+            {
+                throw new InvalidOperationException(
+                    $"Unrecognized CEL function origin '{overload.Origin}' for function '{overload.FunctionName}'.");
+            }
+        }
+
+        var enabled = overloads.Where(descriptor => IsEnabled(descriptor.Origin, binders.EnabledFeatures)).ToArray();
+        if (enabled.Length > 0)
+            return enabled;
+
+        var disabledBundle = overloads.Select(descriptor => GetDisabledFeatureName(descriptor.Origin, binders.EnabledFeatures))
+            .FirstOrDefault(static name => name is not null);
+        if (disabledBundle != null)
+            throw CelCompilationException.FeatureDisabled(disabledBundle);
+
+        return enabled;
     }
 
     /// <summary>
@@ -1191,7 +1242,10 @@ public static class CelCompiler
     private static Expression CompileIndex(CelIndex index, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
     {
         if (index.IsOptional)
+        {
+            EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support");
             return CompileOptionalIndex(index, contextExpr, binders, scope).Expression;
+        }
 
         var operand = CompileNode(index.Operand, contextExpr, binders, scope);
         var indexExpr = CompileNode(index.Index, contextExpr, binders, scope);
@@ -2181,6 +2235,35 @@ public static class CelCompiler
 
         throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operandType, index.Type).Message);
     }
+
+    private static void EnsureFeatureEnabled(CelBinderSet binders, CelFeatureFlags feature, string featureName)
+    {
+        if ((binders.EnabledFeatures & feature) == 0)
+            throw CelCompilationException.FeatureDisabled(featureName);
+    }
+
+    private static bool IsKnownFunctionOrigin(CelFunctionOrigin origin) => origin is
+        CelFunctionOrigin.Application or
+        CelFunctionOrigin.StringExtension or
+        CelFunctionOrigin.ListExtension or
+        CelFunctionOrigin.MathExtension;
+
+    private static bool IsEnabled(CelFunctionOrigin origin, CelFeatureFlags enabledFeatures) => origin switch
+    {
+        CelFunctionOrigin.Application => true,
+        CelFunctionOrigin.StringExtension => (enabledFeatures & CelFeatureFlags.StringExtensions) != 0,
+        CelFunctionOrigin.ListExtension => (enabledFeatures & CelFeatureFlags.ListExtensions) != 0,
+        CelFunctionOrigin.MathExtension => (enabledFeatures & CelFeatureFlags.MathExtensions) != 0,
+        _ => true
+    };
+
+    private static string? GetDisabledFeatureName(CelFunctionOrigin origin, CelFeatureFlags enabledFeatures) => origin switch
+    {
+        CelFunctionOrigin.StringExtension when (enabledFeatures & CelFeatureFlags.StringExtensions) == 0 => "string extension bundle",
+        CelFunctionOrigin.ListExtension when (enabledFeatures & CelFeatureFlags.ListExtensions) == 0 => "list extension bundle",
+        CelFunctionOrigin.MathExtension when (enabledFeatures & CelFeatureFlags.MathExtensions) == 0 => "math extension bundle",
+        _ => null
+    };
 
     private static bool TryCompileListConcatenation(Expression left, Expression right, out Expression concatExpr)
     {
