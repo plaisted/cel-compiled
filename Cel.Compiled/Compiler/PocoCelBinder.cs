@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
+using Cel.Compiled;
+using Cel.Compiled.Ast;
 
 namespace Cel.Compiled.Compiler;
 
@@ -25,20 +27,20 @@ internal sealed class PocoCelBinder : ICelBinder
         return ResolveMember(contextExpression, name);
     }
 
-    public Expression ResolveMember(Expression operandExpression, string memberName)
+    public Expression ResolveMember(Expression operandExpression, string memberName, CelExpr? sourceExpr = null)
     {
         var plan = GetPlan(operandExpression.Type);
         if (!plan.TryGetMember(memberName, out var member))
-            throw new CelCompilationException($"Member '{memberName}' was not found on type '{operandExpression.Type.Name}'.");
+            throw MemberNotFound(sourceExpr, operandExpression.Type, memberName);
 
         return member.Bind(operandExpression);
     }
 
-    public Expression ResolvePresence(Expression operandExpression, string memberName)
+    public Expression ResolvePresence(Expression operandExpression, string memberName, CelExpr? sourceExpr = null)
     {
         var plan = GetPlan(operandExpression.Type);
         if (!plan.TryGetMember(memberName, out var member))
-            throw new CelCompilationException($"Member '{memberName}' was not found on type '{operandExpression.Type.Name}'.");
+            throw MemberNotFound(sourceExpr, operandExpression.Type, memberName);
 
         if (member.IsAlwaysPresent)
             return Expression.Constant(true);
@@ -47,19 +49,19 @@ internal sealed class PocoCelBinder : ICelBinder
         return Expression.NotEqual(access, Expression.Constant(null, access.Type));
     }
 
-    public Expression ResolveOptionalMember(Expression operandExpression, string memberName)
+    public Expression ResolveOptionalMember(Expression operandExpression, string memberName, CelExpr? sourceExpr = null)
     {
         var access = ResolveMember(operandExpression, memberName);
         return Expression.Call(s_optionalOf, BoxIfNeeded(access));
     }
 
-    public bool TryResolveIndex(Expression operandExpression, Expression indexExpression, out Expression boundExpression)
+    public bool TryResolveIndex(Expression operandExpression, Expression indexExpression, out Expression boundExpression, CelExpr? sourceExpr = null)
     {
         boundExpression = null!;
         return false;
     }
 
-    public bool TryResolveOptionalIndex(Expression operandExpression, Expression indexExpression, out Expression optionalExpression)
+    public bool TryResolveOptionalIndex(Expression operandExpression, Expression indexExpression, out Expression optionalExpression, CelExpr? sourceExpr = null)
     {
         optionalExpression = null!;
         return false;
@@ -80,6 +82,15 @@ internal sealed class PocoCelBinder : ICelBinder
     private static TypeAccessorPlan GetPlan(Type type)
     {
         return s_accessorPlans.GetOrAdd(type, static t => TypeAccessorPlan.Create(t));
+    }
+
+    private static CelCompilationException MemberNotFound(CelExpr? sourceExpr, Type operandType, string memberName)
+    {
+        var message = $"Member '{memberName}' was not found on type '{operandType.Name}'.";
+        if (CelDiagnosticUtilities.TryGetSourceInfo(sourceExpr, out var expressionText, out var span))
+            return CelCompilationException.WithSource(message, "compilation_error", expressionText, span);
+
+        return new CelCompilationException(message);
     }
 
     private static Expression BoxIfNeeded(Expression expression) =>

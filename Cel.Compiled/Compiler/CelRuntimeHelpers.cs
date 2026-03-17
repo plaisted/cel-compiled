@@ -7,11 +7,26 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Cel.Compiled;
 
 namespace Cel.Compiled.Compiler;
 
 internal static class CelRuntimeHelpers
 {
+    private static CelRuntimeException WithSource(CelRuntimeException exception, string? expressionText, int start, int end)
+    {
+        if (string.IsNullOrEmpty(expressionText) || start < 0 || end < start)
+            return exception;
+
+        return CelRuntimeException.WithSource(exception, expressionText, new CelSourceSpan(start, end));
+    }
+
+    private static CelRuntimeException NoMatchingOverloadWithSource(string function, string? expressionText, int start, int end, params Type[] argumentTypes) =>
+        WithSource(CelRuntimeException.NoMatchingOverload(function, argumentTypes), expressionText, start, end);
+
+    private static CelRuntimeException NoSuchFieldWithSource(string fieldName, string? expressionText, int start, int end) =>
+        WithSource(CelRuntimeException.NoSuchField(fieldName), expressionText, start, end);
+
     public static CelOptional OptionalOf(object? value) => CelOptional.Of(value);
 
     public static CelOptional OptionalNone() => CelOptional.None;
@@ -595,6 +610,32 @@ internal static class CelRuntimeHelpers
         return dictionary[key];
     }
 
+    public static TValue GetDictionaryValue<TKey, TValue>(IDictionary<TKey, TValue> dictionary, TKey key, string? expressionText, int start, int end)
+        where TKey : notnull
+    {
+        if (!dictionary.TryGetValue(key, out var value))
+            throw NoSuchFieldWithSource(key.ToString() ?? string.Empty, expressionText, start, end);
+
+        return value;
+    }
+
+    public static TValue GetReadOnlyDictionaryValue<TKey, TValue>(IReadOnlyDictionary<TKey, TValue> dictionary, TKey key, string? expressionText, int start, int end)
+        where TKey : notnull
+    {
+        if (!dictionary.TryGetValue(key, out var value))
+            throw NoSuchFieldWithSource(key.ToString() ?? string.Empty, expressionText, start, end);
+
+        return value;
+    }
+
+    public static object? GetDictionaryValue(IDictionary dictionary, object key, string? expressionText, int start, int end)
+    {
+        if (!dictionary.Contains(key))
+            throw NoSuchFieldWithSource(key.ToString() ?? string.Empty, expressionText, start, end);
+
+        return dictionary[key];
+    }
+
     public static bool ContainsDictionaryKey(IDictionary dictionary, object? key)
     {
         return key != null && dictionary.Contains(key);
@@ -1050,11 +1091,25 @@ internal static class CelRuntimeHelpers
         throw CelRuntimeException.NoMatchingOverload("contains", target?.GetType() ?? typeof(object), substring?.GetType() ?? typeof(object));
     }
 
+    public static bool CelContains(object? target, object? substring, string? expressionText, int start, int end)
+    {
+        if (TryGetString(target, out var s) && TryGetString(substring, out var sub))
+            return s.Contains(sub, StringComparison.Ordinal);
+        throw NoMatchingOverloadWithSource("contains", expressionText, start, end, target?.GetType() ?? typeof(object), substring?.GetType() ?? typeof(object));
+    }
+
     public static bool CelStartsWith(object? target, object? prefix)
     {
         if (TryGetString(target, out var s) && TryGetString(prefix, out var p))
             return s.StartsWith(p, StringComparison.Ordinal);
         throw CelRuntimeException.NoMatchingOverload("startsWith", target?.GetType() ?? typeof(object), prefix?.GetType() ?? typeof(object));
+    }
+
+    public static bool CelStartsWith(object? target, object? prefix, string? expressionText, int start, int end)
+    {
+        if (TryGetString(target, out var s) && TryGetString(prefix, out var p))
+            return s.StartsWith(p, StringComparison.Ordinal);
+        throw NoMatchingOverloadWithSource("startsWith", expressionText, start, end, target?.GetType() ?? typeof(object), prefix?.GetType() ?? typeof(object));
     }
 
     public static bool CelEndsWith(object? target, object? suffix)
@@ -1064,11 +1119,25 @@ internal static class CelRuntimeHelpers
         throw CelRuntimeException.NoMatchingOverload("endsWith", target?.GetType() ?? typeof(object), suffix?.GetType() ?? typeof(object));
     }
 
+    public static bool CelEndsWith(object? target, object? suffix, string? expressionText, int start, int end)
+    {
+        if (TryGetString(target, out var s) && TryGetString(suffix, out var suf))
+            return s.EndsWith(suf, StringComparison.Ordinal);
+        throw NoMatchingOverloadWithSource("endsWith", expressionText, start, end, target?.GetType() ?? typeof(object), suffix?.GetType() ?? typeof(object));
+    }
+
     public static bool CelMatches(object? target, object? pattern)
     {
         if (TryGetString(target, out var s) && TryGetString(pattern, out var p))
             return Regex.IsMatch(s, p, RegexOptions.None, TimeSpan.FromSeconds(1));
         throw CelRuntimeException.NoMatchingOverload("matches", target?.GetType() ?? typeof(object), pattern?.GetType() ?? typeof(object));
+    }
+
+    public static bool CelMatches(object? target, object? pattern, string? expressionText, int start, int end)
+    {
+        if (TryGetString(target, out var s) && TryGetString(pattern, out var p))
+            return Regex.IsMatch(s, p, RegexOptions.None, TimeSpan.FromSeconds(1));
+        throw NoMatchingOverloadWithSource("matches", expressionText, start, end, target?.GetType() ?? typeof(object), pattern?.GetType() ?? typeof(object));
     }
 
     private static bool TryGetString(object? value, out string result)
@@ -1116,6 +1185,17 @@ internal static class CelRuntimeHelpers
         return property;
     }
 
+    public static JsonNode? GetJsonNodeProperty(JsonNode? node, string propertyName, string? expressionText, int start, int end)
+    {
+        if (node is not JsonObject obj)
+            throw NoMatchingOverloadWithSource("_[_]", expressionText, start, end, typeof(JsonNode), typeof(string));
+
+        if (!obj.TryGetPropertyValue(propertyName, out var property))
+            throw NoSuchFieldWithSource(propertyName, expressionText, start, end);
+
+        return property;
+    }
+
     public static bool HasJsonNodeProperty(JsonNode? node, string propertyName)
     {
         return node is JsonObject obj && obj.ContainsKey(propertyName);
@@ -1125,6 +1205,17 @@ internal static class CelRuntimeHelpers
     {
         if (node is not JsonArray array)
             throw CelRuntimeException.NoMatchingOverload("_[_]", typeof(JsonNode), typeof(long));
+
+        if ((ulong)index >= (ulong)array.Count)
+            throw CelRuntimeException.IndexOutOfBounds(index);
+
+        return array[(int)index];
+    }
+
+    public static JsonNode? GetJsonNodeArrayElement(JsonNode? node, long index, string? expressionText, int start, int end)
+    {
+        if (node is not JsonArray array)
+            throw NoMatchingOverloadWithSource("_[_]", expressionText, start, end, typeof(JsonNode), typeof(long));
 
         if ((ulong)index >= (ulong)array.Count)
             throw CelRuntimeException.IndexOutOfBounds(index);
@@ -1188,6 +1279,17 @@ internal static class CelRuntimeHelpers
         return element[(int)index];
     }
 
+    public static JsonElement GetJsonElementArrayElement(JsonElement element, long index, string? expressionText, int start, int end)
+    {
+        if (element.ValueKind != JsonValueKind.Array)
+            throw NoMatchingOverloadWithSource("_[_]", expressionText, start, end, typeof(JsonElement), typeof(long));
+
+        if ((ulong)index >= (ulong)element.GetArrayLength())
+            throw CelRuntimeException.IndexOutOfBounds(index);
+
+        return element[(int)index];
+    }
+
     public static JsonElement GetJsonElementProperty(JsonElement element, string propertyName)
     {
         if (element.ValueKind != JsonValueKind.Object)
@@ -1195,6 +1297,17 @@ internal static class CelRuntimeHelpers
 
         if (!element.TryGetProperty(propertyName, out var property))
             throw CelRuntimeException.NoSuchField(propertyName);
+
+        return property;
+    }
+
+    public static JsonElement GetJsonElementProperty(JsonElement element, string propertyName, string? expressionText, int start, int end)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+            throw NoMatchingOverloadWithSource("_[_]", expressionText, start, end, typeof(JsonElement), typeof(string));
+
+        if (!element.TryGetProperty(propertyName, out var property))
+            throw NoSuchFieldWithSource(propertyName, expressionText, start, end);
 
         return property;
     }

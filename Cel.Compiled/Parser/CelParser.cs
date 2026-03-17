@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using Cel.Compiled.Ast;
+using Cel.Compiled.Compiler;
 
 namespace Cel.Compiled.Parser;
 
@@ -17,7 +18,7 @@ internal enum CelTokenType
     EOF
 }
 
-internal record CelToken(CelTokenType Type, object? Value, int Position);
+internal record CelToken(CelTokenType Type, object? Value, int Position, int EndPosition);
 
 internal class CelLexer
 {
@@ -127,7 +128,7 @@ internal class CelLexer
                 tokens.Add(ReadOperatorOrPunctuator(start));
             }
         }
-        tokens.Add(new CelToken(CelTokenType.EOF, null, _pos));
+        tokens.Add(new CelToken(CelTokenType.EOF, null, _pos, _pos));
         return tokens;
     }
 
@@ -165,7 +166,7 @@ internal class CelLexer
             throw new CelParseException("Unterminated triple-quoted string literal", start);
         }
         _pos += 3; // skip closing quotes
-        return new CelToken(CelTokenType.String, sb.ToString(), start);
+        return new CelToken(CelTokenType.String, sb.ToString(), start, _pos);
     }
 
     private CelToken ReadRawString(int start, char quote)
@@ -182,7 +183,7 @@ internal class CelLexer
             throw new CelParseException("Unterminated raw string literal", start);
         }
         _pos++; // skip closing quote
-        return new CelToken(CelTokenType.String, sb.ToString(), start);
+        return new CelToken(CelTokenType.String, sb.ToString(), start, _pos);
     }
 
     private CelToken ReadTripleQuotedRawString(int start, char quote)
@@ -199,7 +200,7 @@ internal class CelLexer
             throw new CelParseException("Unterminated triple-quoted raw string literal", start);
         }
         _pos += 3; // skip closing triple quotes
-        return new CelToken(CelTokenType.String, sb.ToString(), start);
+        return new CelToken(CelTokenType.String, sb.ToString(), start, _pos);
     }
 
     private CelToken ReadRawBytes(int start, char quote)
@@ -218,7 +219,7 @@ internal class CelLexer
             throw new CelParseException("Unterminated raw bytes literal", start);
         }
         _pos++; // skip closing quote
-        return new CelToken(CelTokenType.Bytes, bytes.ToArray(), start);
+        return new CelToken(CelTokenType.Bytes, bytes.ToArray(), start, _pos);
     }
 
     private CelToken ReadTripleQuotedRawBytes(int start, char quote)
@@ -236,7 +237,7 @@ internal class CelLexer
             throw new CelParseException("Unterminated triple-quoted raw bytes literal", start);
         }
         _pos += 3; // skip closing triple quotes
-        return new CelToken(CelTokenType.Bytes, bytes.ToArray(), start);
+        return new CelToken(CelTokenType.Bytes, bytes.ToArray(), start, _pos);
     }
 
     private CelToken ReadTripleQuotedBytes(int start, char quote)
@@ -297,7 +298,7 @@ internal class CelLexer
             throw new CelParseException("Unterminated triple-quoted bytes literal", start);
         }
         _pos += 3; // skip closing triple quotes
-        return new CelToken(CelTokenType.Bytes, bytes.ToArray(), start);
+        return new CelToken(CelTokenType.Bytes, bytes.ToArray(), start, _pos);
     }
 
     private CelToken ReadIdentOrKeyword(int start)
@@ -309,14 +310,14 @@ internal class CelLexer
         string text = _input[start.._pos];
         return text switch
         {
-            "true" => new CelToken(CelTokenType.Bool, true, start),
-            "false" => new CelToken(CelTokenType.Bool, false, start),
-            "null" => new CelToken(CelTokenType.Null, null, start),
-            "in" => new CelToken(CelTokenType.In, null, start),
+            "true" => new CelToken(CelTokenType.Bool, true, start, _pos),
+            "false" => new CelToken(CelTokenType.Bool, false, start, _pos),
+            "null" => new CelToken(CelTokenType.Null, null, start, _pos),
+            "in" => new CelToken(CelTokenType.In, null, start, _pos),
             "as" or "break" or "const" or "continue" or "else" or "for" or "function" or "if" or
             "import" or "let" or "loop" or "package" or "namespace" or "return" or "var" or "void" or "while"
-                => new CelToken(CelTokenType.Reserved, text, start),
-            _ => new CelToken(CelTokenType.Ident, text, start)
+                => new CelToken(CelTokenType.Reserved, text, start, _pos),
+            _ => new CelToken(CelTokenType.Ident, text, start, _pos)
         };
     }
 
@@ -341,9 +342,9 @@ internal class CelLexer
             if (_pos < _input.Length && (_input[_pos] == 'u' || _input[_pos] == 'U'))
             {
                 _pos++;
-                return new CelToken(CelTokenType.UInt, ulong.Parse(hexText, NumberStyles.HexNumber, CultureInfo.InvariantCulture), start);
+                return new CelToken(CelTokenType.UInt, ulong.Parse(hexText, NumberStyles.HexNumber, CultureInfo.InvariantCulture), start, _pos);
             }
-            return new CelToken(CelTokenType.Int, long.Parse(hexText, NumberStyles.HexNumber, CultureInfo.InvariantCulture), start);
+            return new CelToken(CelTokenType.Int, long.Parse(hexText, NumberStyles.HexNumber, CultureInfo.InvariantCulture), start, _pos);
         }
 
         bool isDouble = false;
@@ -390,7 +391,7 @@ internal class CelLexer
         {
              // Fallback for when dot is not followed by a digit (already checked in Tokenize but for robustness)
              _pos = start + 1;
-             return new CelToken(CelTokenType.Dot, null, start);
+             return new CelToken(CelTokenType.Dot, null, start, _pos);
         }
 
         if (_pos < _input.Length && (_input[_pos] == 'u' || _input[_pos] == 'U'))
@@ -400,14 +401,14 @@ internal class CelLexer
             {
                 throw new CelParseException("Suffix 'u' or 'U' is not allowed on double literals", start);
             }
-            return new CelToken(CelTokenType.UInt, ulong.Parse(text, CultureInfo.InvariantCulture), start);
+            return new CelToken(CelTokenType.UInt, ulong.Parse(text, CultureInfo.InvariantCulture), start, _pos);
         }
 
         if (isDouble)
         {
-            return new CelToken(CelTokenType.Double, double.Parse(text, CultureInfo.InvariantCulture), start);
+            return new CelToken(CelTokenType.Double, double.Parse(text, CultureInfo.InvariantCulture), start, _pos);
         }
-        return new CelToken(CelTokenType.Int, long.Parse(text, CultureInfo.InvariantCulture), start);
+        return new CelToken(CelTokenType.Int, long.Parse(text, CultureInfo.InvariantCulture), start, _pos);
     }
 
     private CelToken ReadString(int start, char quote)
@@ -444,7 +445,7 @@ internal class CelLexer
             throw new CelParseException("Unterminated string literal", start);
         }
         _pos++; // skip closing quote
-        return new CelToken(CelTokenType.String, sb.ToString(), start);
+        return new CelToken(CelTokenType.String, sb.ToString(), start, _pos);
     }
 
     private CelToken ReadBytes(int start, char quote)
@@ -519,7 +520,7 @@ internal class CelLexer
             throw new CelParseException("Unterminated bytes literal", start);
         }
         _pos++; // skip closing quote
-        return new CelToken(CelTokenType.Bytes, bytes.ToArray(), start);
+        return new CelToken(CelTokenType.Bytes, bytes.ToArray(), start, _pos);
     }
 
     private static bool IsHexDigit(char c) => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
@@ -530,25 +531,25 @@ internal class CelLexer
         char c = _input[_pos++];
         return c switch
         {
-            '.' => new CelToken(CelTokenType.Dot, null, start),
-            '(' => new CelToken(CelTokenType.LParen, null, start),
-            ')' => new CelToken(CelTokenType.RParen, null, start),
-            '[' => new CelToken(CelTokenType.LBracket, null, start),
-            ']' => new CelToken(CelTokenType.RBracket, null, start),
-            '{' => new CelToken(CelTokenType.LBrace, null, start),
-            '}' => new CelToken(CelTokenType.RBrace, null, start),
-            ',' => new CelToken(CelTokenType.Comma, null, start),
-            ':' => new CelToken(CelTokenType.Colon, null, start),
-            '?' => new CelToken(CelTokenType.Question, null, start),
-            '+' => new CelToken(CelTokenType.Plus, null, start),
-            '-' => new CelToken(CelTokenType.Minus, null, start),
-            '*' => new CelToken(CelTokenType.Mul, null, start),
-            '/' => new CelToken(CelTokenType.Div, null, start),
-            '%' => new CelToken(CelTokenType.Mod, null, start),
-            '!' => TryConsume('=') ? ConsumeAndReturn(CelTokenType.NotEqual, start) : new CelToken(CelTokenType.Not, null, start),
+            '.' => new CelToken(CelTokenType.Dot, null, start, _pos),
+            '(' => new CelToken(CelTokenType.LParen, null, start, _pos),
+            ')' => new CelToken(CelTokenType.RParen, null, start, _pos),
+            '[' => new CelToken(CelTokenType.LBracket, null, start, _pos),
+            ']' => new CelToken(CelTokenType.RBracket, null, start, _pos),
+            '{' => new CelToken(CelTokenType.LBrace, null, start, _pos),
+            '}' => new CelToken(CelTokenType.RBrace, null, start, _pos),
+            ',' => new CelToken(CelTokenType.Comma, null, start, _pos),
+            ':' => new CelToken(CelTokenType.Colon, null, start, _pos),
+            '?' => new CelToken(CelTokenType.Question, null, start, _pos),
+            '+' => new CelToken(CelTokenType.Plus, null, start, _pos),
+            '-' => new CelToken(CelTokenType.Minus, null, start, _pos),
+            '*' => new CelToken(CelTokenType.Mul, null, start, _pos),
+            '/' => new CelToken(CelTokenType.Div, null, start, _pos),
+            '%' => new CelToken(CelTokenType.Mod, null, start, _pos),
+            '!' => TryConsume('=') ? ConsumeAndReturn(CelTokenType.NotEqual, start) : new CelToken(CelTokenType.Not, null, start, _pos),
             '=' => TryConsume('=') ? ConsumeAndReturn(CelTokenType.Equal, start) : throw new CelParseException("Unexpected character '='", start),
-            '<' => TryConsume('=') ? ConsumeAndReturn(CelTokenType.LessEqual, start) : new CelToken(CelTokenType.Less, null, start),
-            '>' => TryConsume('=') ? ConsumeAndReturn(CelTokenType.GreaterEqual, start) : new CelToken(CelTokenType.Greater, null, start),
+            '<' => TryConsume('=') ? ConsumeAndReturn(CelTokenType.LessEqual, start) : new CelToken(CelTokenType.Less, null, start, _pos),
+            '>' => TryConsume('=') ? ConsumeAndReturn(CelTokenType.GreaterEqual, start) : new CelToken(CelTokenType.Greater, null, start, _pos),
             '&' => TryConsume('&') ? ConsumeAndReturn(CelTokenType.And, start) : throw new CelParseException("Unexpected character '&'", start),
             '|' => TryConsume('|') ? ConsumeAndReturn(CelTokenType.Or, start) : throw new CelParseException("Unexpected character '|'", start),
             _ => throw new CelParseException($"Unexpected character '{c}'", start)
@@ -565,17 +566,19 @@ internal class CelLexer
         return false;
     }
 
-    private CelToken ConsumeAndReturn(CelTokenType type, int start) => new CelToken(type, null, start);
+    private CelToken ConsumeAndReturn(CelTokenType type, int start) => new CelToken(type, null, start, _pos);
 }
 
 internal class CelParser
 {
     private readonly List<CelToken> _tokens;
+    private readonly CelSourceMap _sourceMap;
     private int _pos;
 
-    private CelParser(List<CelToken> tokens)
+    private CelParser(List<CelToken> tokens, string sourceText)
     {
         _tokens = tokens;
+        _sourceMap = new CelSourceMap(sourceText);
         _pos = 0;
     }
 
@@ -583,9 +586,10 @@ internal class CelParser
     {
         var lexer = new CelLexer(input);
         var tokens = lexer.Tokenize();
-        var parser = new CelParser(tokens);
+        var parser = new CelParser(tokens, input);
         var expr = parser.ParseExpression();
         parser.Expect(CelTokenType.EOF);
+        CelSourceMapRegistry.Attach(expr, parser._sourceMap);
         return expr;
     }
 
@@ -597,9 +601,9 @@ internal class CelParser
         if (Match(CelTokenType.Question))
         {
             var left = ParseTernary();
-            Expect(CelTokenType.Colon);
+            var colon = Expect(CelTokenType.Colon);
             var right = ParseTernary();
-            return new CelCall("_?_:_", null, new[] { cond, left, right });
+            return Track(new CelCall("_?_:_", null, new[] { cond, left, right }), GetStart(cond), GetEnd(right));
         }
         return cond;
     }
@@ -610,7 +614,7 @@ internal class CelParser
         while (Match(CelTokenType.Or))
         {
             var right = ParseAnd();
-            left = new CelCall("_||_", null, new[] { left, right });
+            left = Track(new CelCall("_||_", null, new[] { left, right }), GetStart(left), GetEnd(right));
         }
         return left;
     }
@@ -621,7 +625,7 @@ internal class CelParser
         while (Match(CelTokenType.And))
         {
             var right = ParseEquality();
-            left = new CelCall("_&&_", null, new[] { left, right });
+            left = Track(new CelCall("_&&_", null, new[] { left, right }), GetStart(left), GetEnd(right));
         }
         return left;
     }
@@ -632,9 +636,15 @@ internal class CelParser
         while (true)
         {
             if (Match(CelTokenType.Equal))
-                left = new CelCall("_==_", null, new[] { left, ParseRelational() });
+            {
+                var right = ParseRelational();
+                left = Track(new CelCall("_==_", null, new[] { left, right }), GetStart(left), GetEnd(right));
+            }
             else if (Match(CelTokenType.NotEqual))
-                left = new CelCall("_!=_", null, new[] { left, ParseRelational() });
+            {
+                var right = ParseRelational();
+                left = Track(new CelCall("_!=_", null, new[] { left, right }), GetStart(left), GetEnd(right));
+            }
             else break;
         }
         return left;
@@ -646,15 +656,30 @@ internal class CelParser
         while (true)
         {
             if (Match(CelTokenType.Less))
-                left = new CelCall("_<_", null, new[] { left, ParseAdditive() });
+            {
+                var right = ParseAdditive();
+                left = Track(new CelCall("_<_", null, new[] { left, right }), GetStart(left), GetEnd(right));
+            }
             else if (Match(CelTokenType.LessEqual))
-                left = new CelCall("_<=_", null, new[] { left, ParseAdditive() });
+            {
+                var right = ParseAdditive();
+                left = Track(new CelCall("_<=_", null, new[] { left, right }), GetStart(left), GetEnd(right));
+            }
             else if (Match(CelTokenType.Greater))
-                left = new CelCall("_>_", null, new[] { left, ParseAdditive() });
+            {
+                var right = ParseAdditive();
+                left = Track(new CelCall("_>_", null, new[] { left, right }), GetStart(left), GetEnd(right));
+            }
             else if (Match(CelTokenType.GreaterEqual))
-                left = new CelCall("_>=_", null, new[] { left, ParseAdditive() });
+            {
+                var right = ParseAdditive();
+                left = Track(new CelCall("_>=_", null, new[] { left, right }), GetStart(left), GetEnd(right));
+            }
             else if (Match(CelTokenType.In))
-                left = new CelCall("@in", null, new[] { left, ParseAdditive() });
+            {
+                var right = ParseAdditive();
+                left = Track(new CelCall("@in", null, new[] { left, right }), GetStart(left), GetEnd(right));
+            }
             else break;
         }
         return left;
@@ -666,9 +691,15 @@ internal class CelParser
         while (true)
         {
             if (Match(CelTokenType.Plus))
-                left = new CelCall("_+_", null, new[] { left, ParseMultiplicative() });
+            {
+                var right = ParseMultiplicative();
+                left = Track(new CelCall("_+_", null, new[] { left, right }), GetStart(left), GetEnd(right));
+            }
             else if (Match(CelTokenType.Minus))
-                left = new CelCall("_-_", null, new[] { left, ParseMultiplicative() });
+            {
+                var right = ParseMultiplicative();
+                left = Track(new CelCall("_-_", null, new[] { left, right }), GetStart(left), GetEnd(right));
+            }
             else break;
         }
         return left;
@@ -680,11 +711,20 @@ internal class CelParser
         while (true)
         {
             if (Match(CelTokenType.Mul))
-                left = new CelCall("_*_", null, new[] { left, ParseUnary() });
+            {
+                var right = ParseUnary();
+                left = Track(new CelCall("_*_", null, new[] { left, right }), GetStart(left), GetEnd(right));
+            }
             else if (Match(CelTokenType.Div))
-                left = new CelCall("_/_", null, new[] { left, ParseUnary() });
+            {
+                var right = ParseUnary();
+                left = Track(new CelCall("_/_", null, new[] { left, right }), GetStart(left), GetEnd(right));
+            }
             else if (Match(CelTokenType.Mod))
-                left = new CelCall("_%_", null, new[] { left, ParseUnary() });
+            {
+                var right = ParseUnary();
+                left = Track(new CelCall("_%_", null, new[] { left, right }), GetStart(left), GetEnd(right));
+            }
             else break;
         }
         return left;
@@ -692,10 +732,18 @@ internal class CelParser
 
     private CelExpr ParseUnary()
     {
-        if (Match(CelTokenType.Not))
-            return new CelCall("!_", null, new[] { ParseUnary() });
-        if (Match(CelTokenType.Minus))
-            return new CelCall("-_", null, new[] { ParseUnary() });
+        if (Peek().Type == CelTokenType.Not)
+        {
+            var opToken = Consume();
+            var operand = ParseUnary();
+            return Track(new CelCall("!_", null, new[] { operand }), opToken.Position, GetEnd(operand));
+        }
+        if (Peek().Type == CelTokenType.Minus)
+        {
+            var opToken = Consume();
+            var operand = ParseUnary();
+            return Track(new CelCall("-_", null, new[] { operand }), opToken.Position, GetEnd(operand));
+        }
         return ParsePrimary();
     }
 
@@ -705,31 +753,31 @@ internal class CelParser
         var token = Consume();
         switch (token.Type)
         {
-            case CelTokenType.Bool: expr = new CelConstant((bool)token.Value!); break;
-            case CelTokenType.Int: expr = new CelConstant((long)token.Value!); break;
-            case CelTokenType.UInt: expr = new CelConstant((ulong)token.Value!); break;
-            case CelTokenType.Double: expr = new CelConstant((double)token.Value!); break;
-            case CelTokenType.String: expr = new CelConstant((string)token.Value!); break;
-            case CelTokenType.Bytes: expr = new CelConstant((byte[])token.Value!); break;
-            case CelTokenType.Null: expr = new CelConstant(CelValue.Null); break;
+            case CelTokenType.Bool: expr = Track(new CelConstant((bool)token.Value!), token.Position, token.EndPosition); break;
+            case CelTokenType.Int: expr = Track(new CelConstant((long)token.Value!), token.Position, token.EndPosition); break;
+            case CelTokenType.UInt: expr = Track(new CelConstant((ulong)token.Value!), token.Position, token.EndPosition); break;
+            case CelTokenType.Double: expr = Track(new CelConstant((double)token.Value!), token.Position, token.EndPosition); break;
+            case CelTokenType.String: expr = Track(new CelConstant((string)token.Value!), token.Position, token.EndPosition); break;
+            case CelTokenType.Bytes: expr = Track(new CelConstant((byte[])token.Value!), token.Position, token.EndPosition); break;
+            case CelTokenType.Null: expr = Track(new CelConstant(CelValue.Null), token.Position, token.EndPosition); break;
             case CelTokenType.LBracket:
-                expr = ParseList();
+                expr = ParseList(token);
                 break;
             case CelTokenType.LBrace:
-                expr = ParseMap();
+                expr = ParseMap(token);
                 break;
             case CelTokenType.Reserved:
-                throw new CelParseException($"Reserved word '{token.Value}' cannot be used as an identifier", token.Position);
+                throw new CelParseException($"Reserved word '{token.Value}' cannot be used as an identifier", token.Position, token.EndPosition);
             case CelTokenType.Ident:
                 string name = (string)token.Value!;
                 if (Match(CelTokenType.LParen))
                 {
-                    var args = ParseArgs();
-                    expr = new CelCall(name, null, args);
+                    var (args, endToken) = ParseArgs();
+                    expr = Track(new CelCall(name, null, args), token.Position, endToken.EndPosition);
                 }
                 else
                 {
-                    expr = new CelIdent(name);
+                    expr = Track(new CelIdent(name), token.Position, token.EndPosition);
                 }
                 break;
             case CelTokenType.LParen:
@@ -737,7 +785,7 @@ internal class CelParser
                 Expect(CelTokenType.RParen);
                 break;
             default:
-                throw new CelParseException($"Unexpected token {token.Type}", token.Position);
+                throw new CelParseException($"Unexpected token {token.Type}", token.Position, token.EndPosition);
         }
 
         while (true)
@@ -750,22 +798,22 @@ internal class CelParser
                 if (Match(CelTokenType.LParen))
                 {
                     if (isOptional)
-                        throw new CelParseException("Optional-safe syntax is not supported for method calls.", fieldToken.Position);
+                        throw new CelParseException("Optional-safe syntax is not supported for method calls.", fieldToken.Position, fieldToken.EndPosition);
 
-                    var args = ParseArgs();
-                    expr = new CelCall(fieldName, expr, args);
+                    var (args, endToken) = ParseArgs();
+                    expr = Track(new CelCall(fieldName, expr, args), GetStart(expr), endToken.EndPosition);
                 }
                 else
                 {
-                    expr = new CelSelect(expr, fieldName, isOptional);
+                    expr = Track(new CelSelect(expr, fieldName, isOptional), GetStart(expr), fieldToken.EndPosition);
                 }
             }
             else if (Match(CelTokenType.LBracket))
             {
                 var isOptional = Match(CelTokenType.Question);
                 var indexExpr = ParseExpression();
-                Expect(CelTokenType.RBracket);
-                expr = new CelIndex(expr, indexExpr, isOptional);
+                var closeBracket = Expect(CelTokenType.RBracket);
+                expr = Track(new CelIndex(expr, indexExpr, isOptional), GetStart(expr), closeBracket.EndPosition);
             }
             else break;
         }
@@ -773,7 +821,7 @@ internal class CelParser
         return expr;
     }
 
-    private CelExpr ParseList()
+    private CelExpr ParseList(CelToken openToken)
     {
         var elements = new List<CelExpr>();
         if (Peek().Type != CelTokenType.RBracket)
@@ -785,11 +833,11 @@ internal class CelParser
                 if (Peek().Type == CelTokenType.RBracket) break; // handle trailing comma
             }
         }
-        Expect(CelTokenType.RBracket);
-        return new CelList(elements);
+        var close = Expect(CelTokenType.RBracket);
+        return Track(new CelList(elements), openToken.Position, close.EndPosition);
     }
 
-    private CelExpr ParseMap()
+    private CelExpr ParseMap(CelToken openToken)
     {
         var entries = new List<CelMapEntry>();
         if (Peek().Type != CelTokenType.RBrace)
@@ -804,11 +852,11 @@ internal class CelParser
                 if (Peek().Type == CelTokenType.RBrace) break; // handle trailing comma
             }
         }
-        Expect(CelTokenType.RBrace);
-        return new CelMap(entries);
+        var close = Expect(CelTokenType.RBrace);
+        return Track(new CelMap(entries), openToken.Position, close.EndPosition);
     }
 
-    private List<CelExpr> ParseArgs()
+    private (List<CelExpr> Args, CelToken CloseToken) ParseArgs()
     {
         var args = new List<CelExpr>();
         if (Peek().Type != CelTokenType.RParen)
@@ -819,8 +867,8 @@ internal class CelParser
                 if (!Match(CelTokenType.Comma)) break;
             }
         }
-        Expect(CelTokenType.RParen);
-        return args;
+        var close = Expect(CelTokenType.RParen);
+        return (args, close);
     }
 
     private bool Match(CelTokenType type)
@@ -837,11 +885,22 @@ internal class CelParser
     {
         var token = Consume();
         if (token.Type != type)
-            throw new CelParseException($"Expected {type} but got {token.Type}", token.Position);
+            throw new CelParseException($"Expected {type} but got {token.Type}", token.Position, token.EndPosition);
         return token;
     }
 
     private CelToken Consume() => _tokens[_pos++];
 
     private CelToken Peek() => _tokens[_pos];
+
+    private T Track<T>(T expr, int start, int end)
+        where T : CelExpr
+    {
+        _sourceMap.Register(expr, start, end);
+        return expr;
+    }
+
+    private int GetStart(CelExpr expr) => _sourceMap.TryGetSpan(expr, out var span) ? span.Start : 0;
+
+    private int GetEnd(CelExpr expr) => _sourceMap.TryGetSpan(expr, out var span) ? span.End : 0;
 }

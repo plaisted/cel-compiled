@@ -2,6 +2,7 @@ using System;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json.Nodes;
+using Cel.Compiled.Ast;
 
 namespace Cel.Compiled.Compiler;
 
@@ -9,6 +10,9 @@ internal sealed class JsonNodeCelBinder : ICelBinder
 {
     private static readonly MethodInfo s_getJsonNodeProperty =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetJsonNodeProperty), new[] { typeof(JsonNode), typeof(string) })!;
+
+    private static readonly MethodInfo s_getJsonNodePropertyWithSource =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetJsonNodeProperty), new[] { typeof(JsonNode), typeof(string), typeof(string), typeof(int), typeof(int) })!;
 
     private static readonly MethodInfo s_hasJsonNodeProperty =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.HasJsonNodeProperty), new[] { typeof(JsonNode), typeof(string) })!;
@@ -18,6 +22,9 @@ internal sealed class JsonNodeCelBinder : ICelBinder
 
     private static readonly MethodInfo s_getJsonNodeArrayElement =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetJsonNodeArrayElement), new[] { typeof(JsonNode), typeof(long) })!;
+
+    private static readonly MethodInfo s_getJsonNodeArrayElementWithSource =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetJsonNodeArrayElement), new[] { typeof(JsonNode), typeof(long), typeof(string), typeof(int), typeof(int) })!;
 
     private static readonly MethodInfo s_getOptionalJsonNodeArrayElement =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetOptionalJsonNodeArrayElement), new[] { typeof(JsonNode), typeof(long) })!;
@@ -47,41 +54,61 @@ internal sealed class JsonNodeCelBinder : ICelBinder
         return ResolveMember(contextExpression, name);
     }
 
-    public Expression ResolveMember(Expression operandExpression, string memberName)
+    public Expression ResolveMember(Expression operandExpression, string memberName, CelExpr? sourceExpr = null)
     {
-        return Expression.Call(s_getJsonNodeProperty, Normalize(operandExpression), Expression.Constant(memberName));
+        var source = CelDiagnosticUtilities.GetSourceContextConstants(sourceExpr);
+        return Expression.Call(
+            s_getJsonNodePropertyWithSource,
+            Normalize(operandExpression),
+            Expression.Constant(memberName),
+            source.ExpressionText,
+            source.Start,
+            source.End);
     }
 
-    public Expression ResolvePresence(Expression operandExpression, string memberName)
+    public Expression ResolvePresence(Expression operandExpression, string memberName, CelExpr? sourceExpr = null)
     {
         return Expression.Call(s_hasJsonNodeProperty, Normalize(operandExpression), Expression.Constant(memberName));
     }
 
-    public Expression ResolveOptionalMember(Expression operandExpression, string memberName)
+    public Expression ResolveOptionalMember(Expression operandExpression, string memberName, CelExpr? sourceExpr = null)
     {
         return Expression.Call(s_getOptionalJsonNodeProperty, Normalize(operandExpression), Expression.Constant(memberName));
     }
 
-    public bool TryResolveIndex(Expression operandExpression, Expression indexExpression, out Expression boundExpression)
+    public bool TryResolveIndex(Expression operandExpression, Expression indexExpression, out Expression boundExpression, CelExpr? sourceExpr = null)
     {
         var node = Normalize(operandExpression);
+        var source = CelDiagnosticUtilities.GetSourceContextConstants(sourceExpr);
 
         if (indexExpression.Type == typeof(long))
         {
-            boundExpression = Expression.Call(s_getJsonNodeArrayElement, node, indexExpression);
+            boundExpression = Expression.Call(
+                s_getJsonNodeArrayElementWithSource,
+                node,
+                indexExpression,
+                source.ExpressionText,
+                source.Start,
+                source.End);
             return true;
         }
 
         if (indexExpression.Type == typeof(string))
         {
-            boundExpression = Expression.Call(s_getJsonNodeProperty, node, indexExpression);
+            boundExpression = Expression.Call(
+                s_getJsonNodePropertyWithSource,
+                node,
+                indexExpression,
+                source.ExpressionText,
+                source.Start,
+                source.End);
             return true;
         }
 
         throw new CelCompilationException(CelRuntimeException.NoMatchingOverload("_[_]", operandExpression.Type, indexExpression.Type).Message);
     }
 
-    public bool TryResolveOptionalIndex(Expression operandExpression, Expression indexExpression, out Expression optionalExpression)
+    public bool TryResolveOptionalIndex(Expression operandExpression, Expression indexExpression, out Expression optionalExpression, CelExpr? sourceExpr = null)
     {
         var node = Normalize(operandExpression);
 
