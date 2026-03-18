@@ -32,49 +32,21 @@ value?.startsWith("corp-") ?? false
 
 This is not technically correct CEL, so it should remain feature-flagged and clearly documented as a convenience dialect. But for general .NET adoption, it is likely more valuable than closing long-tail extension gaps first.
 
-### Set Extensions — P1 / D1
+### ~~Set Extensions — P1 / D1~~ Done
 
-`sets.contains`, `sets.equivalent`, `sets.intersects`
+`sets.contains`, `sets.equivalent`, `sets.intersects` — implemented as an opt-in set extension bundle with `CelFeatureFlags.SetExtensions` gating. Included in `AddStandardExtensions()`.
 
-Set operations are the bread and butter of RBAC and policy evaluation. Almost every policy engine use case — Kubernetes admission, API gateway rules, authorization checks — needs set membership and comparison.
+### ~~Complete String Extensions — P1 / D1~~ Done
 
-```cel
-sets.contains(user.roles, ["admin", "editor"])
-sets.intersects(user.permissions, resource.required_permissions)
-sets.equivalent(actual_tags, expected_tags)
-```
+`reverse`, `quote`, `format` — added to the string extension bundle, completing `cel-go` string extension parity.
 
-### Complete String Extensions — P1 / D1
+### ~~Base64 Helpers — P2 / D1~~ Done
 
-`reverse`, `quote`, `format`
+`base64.encode`, `base64.decode` — implemented as an opt-in base64 extension bundle with `CelFeatureFlags.Base64Extensions` gating. Included in `AddStandardExtensions()`.
 
-The library already ships `replace`, `split`, `join`, `substring`, `charAt`, `indexOf`, `lastIndexOf`, `trim`, `lowerAscii`, and `upperAscii`. Completing the remaining three removes a "partial" marker from the feature matrix.
+### ~~Regex Extraction and Replacement — P2 / D1~~ Done
 
-*   **`format`** is the most impactful — CEL's string interpolation/formatting function, used for constructing error messages, audit logs, and dynamic strings. It has a specific format spec (`%s`, `%d`, `%f`, `%e`, `%x`, `%o`, `%b`).
-*   **`quote`** wraps a string in quotes with escaping.
-*   **`reverse`** reverses a string.
-
-### Base64 Helpers — P2 / D1
-
-`base64.encode`, `base64.decode`
-
-Common in webhook verification, JWT inspection, and API integration scenarios. Trivial to implement with `Convert.ToBase64String` / `Convert.FromBase64String`.
-
-```cel
-base64.decode(request.body.encoded_data).size() < 1024
-base64.encode(bytes("hello")) == "aGVsbG8="
-```
-
-### Regex Extraction and Replacement — P2 / D1
-
-`regex.extract`, `regex.extractAll`, `regex.replace`
-
-The library already uses .NET's `Regex` engine for the standard `matches` function. Adding extraction and replacement is a natural extension. The existing documented divergence from RE2 applies here as well.
-
-```cel
-regex.extract(user.email, "@(.+)$")
-regex.replace(input.name, "[^a-zA-Z0-9]", "_")
-```
+`regex.extract`, `regex.extractAll`, `regex.replace` — added to the regex extension bundle, completing `cel-go` regex extension parity.
 
 ---
 

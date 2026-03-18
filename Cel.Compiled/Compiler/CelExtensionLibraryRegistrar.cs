@@ -20,7 +20,10 @@ internal static class CelExtensionLibraryRegistrar
             .AddReceiverFunction("lastIndexOf", GetMethod(nameof(CelExtensionFunctions.LastIndexOf), typeof(string), typeof(string)), CelFunctionOrigin.StringExtension)
             .AddReceiverFunction("trim", GetMethod(nameof(CelExtensionFunctions.Trim), typeof(string)), CelFunctionOrigin.StringExtension)
             .AddReceiverFunction("lowerAscii", GetMethod(nameof(CelExtensionFunctions.LowerAscii), typeof(string)), CelFunctionOrigin.StringExtension)
-            .AddReceiverFunction("upperAscii", GetMethod(nameof(CelExtensionFunctions.UpperAscii), typeof(string)), CelFunctionOrigin.StringExtension);
+            .AddReceiverFunction("upperAscii", GetMethod(nameof(CelExtensionFunctions.UpperAscii), typeof(string)), CelFunctionOrigin.StringExtension)
+            .AddReceiverFunction("reverse", GetMethod(nameof(CelExtensionFunctions.ReverseString), typeof(string)), CelFunctionOrigin.StringExtension)
+            .AddReceiverFunction("quote", GetMethod(nameof(CelExtensionFunctions.Quote), typeof(string)), CelFunctionOrigin.StringExtension)
+            .AddReceiverFunction("format", GetMethod(nameof(CelExtensionFunctions.Format), typeof(string), typeof(object)), CelFunctionOrigin.StringExtension);
     }
 
     public static void AddListExtensions(CelFunctionRegistryBuilder builder)
@@ -85,6 +88,29 @@ internal static class CelExtensionLibraryRegistrar
             .AddGlobalFunction("math.isInf", isInf, CelFunctionOrigin.MathExtension)
             .AddGlobalFunction("math.isNaN", isNaN, CelFunctionOrigin.MathExtension)
             .AddGlobalFunction("math.isFinite", isFinite, CelFunctionOrigin.MathExtension);
+    }
+
+    public static void AddSetExtensions(CelFunctionRegistryBuilder builder)
+    {
+        builder
+            .AddGlobalFunction("sets.contains", GetMethod(nameof(CelExtensionFunctions.SetsContains), typeof(object), typeof(object)), CelFunctionOrigin.SetExtension)
+            .AddGlobalFunction("sets.equivalent", GetMethod(nameof(CelExtensionFunctions.SetsEquivalent), typeof(object), typeof(object)), CelFunctionOrigin.SetExtension)
+            .AddGlobalFunction("sets.intersects", GetMethod(nameof(CelExtensionFunctions.SetsIntersects), typeof(object), typeof(object)), CelFunctionOrigin.SetExtension);
+    }
+
+    public static void AddBase64Extensions(CelFunctionRegistryBuilder builder)
+    {
+        builder
+            .AddGlobalFunction("base64.encode", GetMethod(nameof(CelExtensionFunctions.Base64Encode), typeof(byte[])), CelFunctionOrigin.Base64Extension)
+            .AddGlobalFunction("base64.decode", GetMethod(nameof(CelExtensionFunctions.Base64Decode), typeof(string)), CelFunctionOrigin.Base64Extension);
+    }
+
+    public static void AddRegexExtensions(CelFunctionRegistryBuilder builder)
+    {
+        builder
+            .AddGlobalFunction("regex.extract", GetMethod(nameof(CelExtensionFunctions.RegexExtract), typeof(string), typeof(string)), CelFunctionOrigin.RegexExtension)
+            .AddGlobalFunction("regex.extractAll", GetMethod(nameof(CelExtensionFunctions.RegexExtractAll), typeof(string), typeof(string)), CelFunctionOrigin.RegexExtension)
+            .AddGlobalFunction("regex.replace", GetMethod(nameof(CelExtensionFunctions.RegexReplace), typeof(string), typeof(string), typeof(string)), CelFunctionOrigin.RegexExtension);
     }
 
     private static MethodInfo GetMethod(string name, params Type[] parameterTypes) =>

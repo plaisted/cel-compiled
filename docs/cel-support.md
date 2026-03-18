@@ -183,12 +183,15 @@ var registry = new CelFunctionRegistryBuilder()
 var options = new CelCompileOptions { FunctionRegistry = registry };
 ```
 
-Available bundle helpers in the initial release:
+Available bundle helpers:
 
-- `AddStringExtensions()`: `replace`, `split`, `join`, `substring`, `charAt`, `indexOf`, `lastIndexOf`, `trim`, `lowerAscii`, `upperAscii`
+- `AddStringExtensions()`: `replace`, `split`, `join`, `substring`, `charAt`, `indexOf`, `lastIndexOf`, `trim`, `lowerAscii`, `upperAscii`, `reverse`, `quote`, `format`
 - `AddListExtensions()`: `flatten`, `slice`, `reverse`, `first`, `last`, `distinct`, `sort`, `sortBy`, `range`
 - `AddMathExtensions()`: `greatest`, `least`, `abs`, `sign`, `ceil`, `floor`, `round`, `trunc`, `sqrt`, `isInf`, `isNaN`, `isFinite`
-- `AddStandardExtensions()`: combines the string, list, and math bundles
+- `AddSetExtensions()`: `sets.contains`, `sets.equivalent`, `sets.intersects`
+- `AddBase64Extensions()`: `base64.encode`, `base64.decode`
+- `AddRegexExtensions()`: `regex.extract`, `regex.extractAll`, `regex.replace`
+- `AddStandardExtensions()`: combines all the above bundles
 
 These helpers build on the same `CelFunctionRegistry` model as application-defined custom functions, so built-ins still retain precedence and the registry identity still participates in cache isolation.
 
@@ -203,6 +206,9 @@ Available flags:
 - `CelFeatureFlags.StringExtensions`
 - `CelFeatureFlags.ListExtensions`
 - `CelFeatureFlags.MathExtensions`
+- `CelFeatureFlags.SetExtensions`
+- `CelFeatureFlags.Base64Extensions`
+- `CelFeatureFlags.RegexExtensions`
 - `CelFeatureFlags.All`
 
 By default, `EnabledFeatures` is `CelFeatureFlags.All`, so existing callers see no behavior change.

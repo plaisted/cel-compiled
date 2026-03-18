@@ -15,6 +15,12 @@ public class ExtensionLibraryTests
     private static CelCompileOptions MathOptions =>
         new() { FunctionRegistry = new CelFunctionRegistryBuilder().AddMathExtensions().Build(), EnableCaching = false };
 
+    private static CelCompileOptions Base64Options =>
+        new() { FunctionRegistry = new CelFunctionRegistryBuilder().AddBase64Extensions().Build(), EnableCaching = false };
+
+    private static CelCompileOptions RegexOptions =>
+        new() { FunctionRegistry = new CelFunctionRegistryBuilder().AddRegexExtensions().Build(), EnableCaching = false };
+
     private static CelCompileOptions StandardOptions =>
         new() { FunctionRegistry = new CelFunctionRegistryBuilder().AddStandardExtensions().Build(), EnableCaching = false };
 
@@ -90,6 +96,52 @@ public class ExtensionLibraryTests
         {
             CultureInfo.CurrentCulture = prior;
         }
+    }
+
+    [Fact]
+    public void StringExtensions_Reverse()
+    {
+        Assert.Equal("fedcba", CelCompiler.Compile<object, string>("'abcdef'.reverse()", StringOptions)(new object()));
+        Assert.Equal("", CelCompiler.Compile<object, string>("''.reverse()", StringOptions)(new object()));
+    }
+
+    [Fact]
+    public void StringExtensions_Quote()
+    {
+        Assert.Equal("\"hello\"", CelCompiler.Compile<object, string>("'hello'.quote()", StringOptions)(new object()));
+        Assert.Equal("\"line\\none\"", CelCompiler.Compile<object, string>("'line\none'.quote()", StringOptions)(new object()));
+        Assert.Equal("\"say \\\"hi\\\"\"", CelCompiler.Compile<object, string>("'say \"hi\"'.quote()", StringOptions)(new object()));
+    }
+
+    [Fact]
+    public void StringExtensions_FormatBasic()
+    {
+        var fn = CelCompiler.Compile<object, string>("'Hello %s, you are %d years old'.format(['Alice', 30])", StandardOptions);
+        Assert.Equal("Hello Alice, you are 30 years old", fn(new object()));
+    }
+
+    [Fact]
+    public void StringExtensions_FormatNumericVerbs()
+    {
+        Assert.Equal("hex: ff, oct: 10, bin: 101",
+            CelCompiler.Compile<object, string>("'hex: %x, oct: %o, bin: %b'.format([255, 8, 5])", StandardOptions)(new object()));
+    }
+
+    [Fact]
+    public void StringExtensions_FormatLiteralPercent()
+    {
+        Assert.Equal("100%",
+            CelCompiler.Compile<object, string>("'100%%'.format([])", StandardOptions)(new object()));
+    }
+
+    [Fact]
+    public void StringExtensions_FormatFloatVerbs()
+    {
+        var result = CelCompiler.Compile<object, string>("'val: %f'.format([3.14])", StandardOptions)(new object());
+        Assert.StartsWith("val: 3.14", result);
+
+        var sci = CelCompiler.Compile<object, string>("'val: %e'.format([1000.0])", StandardOptions)(new object());
+        Assert.Contains("E+", sci, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -195,5 +247,214 @@ public class ExtensionLibraryTests
     public sealed class SortItem
     {
         public long Score { get; init; }
+    }
+
+    // --- Set Extensions ---
+
+    private static CelCompileOptions SetOptions =>
+        new() { FunctionRegistry = new CelFunctionRegistryBuilder().AddSetExtensions().Build(), EnableCaching = false };
+
+    [Fact]
+    public void SetsContains_AllPresent()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.contains([1, 2, 3, 4], [2, 3])", StandardOptions);
+        Assert.True(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsContains_MissingElement()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.contains([1, 2, 3], [2, 5])", StandardOptions);
+        Assert.False(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsContains_EmptySublist()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.contains([1, 2], [])", StandardOptions);
+        Assert.True(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsContains_HeterogeneousNumericEquality()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.contains([1, 2, 3], [1.0, 2.0])", StandardOptions);
+        Assert.True(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsEquivalent_SameElementsDifferentOrder()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.equivalent([3, 2, 1], [1, 2, 3])", StandardOptions);
+        Assert.True(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsEquivalent_DifferentElements()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.equivalent([1, 2], [1, 3])", StandardOptions);
+        Assert.False(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsEquivalent_DuplicatesIgnored()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.equivalent([1, 1, 2], [2, 1])", StandardOptions);
+        Assert.True(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsIntersects_SharedElement()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.intersects([1, 2], [2, 3])", StandardOptions);
+        Assert.True(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsIntersects_NoSharedElements()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.intersects([1, 2], [3, 4])", StandardOptions);
+        Assert.False(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsIntersects_EmptyList()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.intersects([1, 2], [])", StandardOptions);
+        Assert.False(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsContains_JsonInput()
+    {
+        var fn = CelCompiler.Compile<JsonElement, bool>("""sets.contains(roles, ["admin"])""", StandardOptions);
+        using var doc = JsonDocument.Parse("""{"roles":["admin","editor"]}""");
+        Assert.True(fn(doc.RootElement));
+    }
+
+    [Fact]
+    public void SetsIntersects_JsonInput()
+    {
+        var fn = CelCompiler.Compile<JsonElement, bool>("""sets.intersects(perms, ["write"])""", StandardOptions);
+        using var doc = JsonDocument.Parse("""{"perms":["read","write"]}""");
+        Assert.True(fn(doc.RootElement));
+    }
+
+    [Fact]
+    public void SetExtensions_AreOptIn()
+    {
+        Assert.ThrowsAny<CelCompilationException>(() =>
+            CelCompiler.Compile<object, bool>("sets.contains([1], [1])"));
+
+        var fn = CelCompiler.Compile<object, bool>("sets.contains([1], [1])", SetOptions);
+        Assert.True(fn(new object()));
+    }
+
+    [Fact]
+    public void SetExtensions_IncludedInStandard()
+    {
+        var fn = CelCompiler.Compile<object, bool>("sets.contains([1, 2], [1])", StandardOptions);
+        Assert.True(fn(new object()));
+    }
+
+    [Fact]
+    public void SetsContains_PocoListInput()
+    {
+        var fn = CelCompiler.Compile<RolesContext, bool>("""sets.contains(Roles, ["admin"])""", StandardOptions);
+        Assert.True(fn(new RolesContext { Roles = ["admin", "editor"] }));
+        Assert.False(fn(new RolesContext { Roles = ["viewer"] }));
+    }
+
+    public sealed class RolesContext
+    {
+        public string[] Roles { get; init; } = [];
+    }
+
+    // --- Base64 Extensions ---
+
+    [Fact]
+    public void Base64_EncodeDecode()
+    {
+        var fn = CelCompiler.Compile<object, string>("base64.encode(base64.decode('SGVsbG8='))", Base64Options);
+        Assert.Equal("SGVsbG8=", fn(new object()));
+    }
+
+    [Fact]
+    public void Base64_DecodeInvalid_Throws()
+    {
+        var fn = CelCompiler.Compile<object, byte[]>("base64.decode('!!!')", Base64Options);
+        var ex = Assert.Throws<CelRuntimeException>(() => fn(new object()));
+        Assert.Equal("invalid_argument", ex.ErrorCode);
+    }
+
+    [Fact]
+    public void Base64_AreOptIn()
+    {
+        Assert.ThrowsAny<CelCompilationException>(() =>
+            CelCompiler.Compile<object, string>("base64.encode(bytes('a'))"));
+
+        var fn = CelCompiler.Compile<object, string>("base64.encode(bytes('a'))", Base64Options);
+        Assert.Equal("YQ==", fn(new object()));
+    }
+
+    // --- Regex Extensions ---
+
+    [Fact]
+    public void Regex_Extract_NoGroups()
+    {
+        var fn = CelCompiler.Compile<object, CelOptional>("regex.extract('hello 123', '[0-9]+')", RegexOptions);
+        var result = fn(new object());
+        Assert.True(result.HasValue);
+        Assert.Equal("123", result.Value);
+    }
+
+    [Fact]
+    public void Regex_Extract_WithGroups()
+    {
+        var fn = CelCompiler.Compile<object, CelOptional>("regex.extract('hello 123', 'hello ([0-9]+)')", RegexOptions);
+        var result = fn(new object());
+        Assert.True(result.HasValue);
+        Assert.Equal("123", result.Value);
+    }
+
+    [Fact]
+    public void Regex_Extract_NoMatch()
+    {
+        var fn = CelCompiler.Compile<object, CelOptional>("regex.extract('hello', '[0-9]+')", RegexOptions);
+        var result = fn(new object());
+        Assert.False(result.HasValue);
+    }
+
+    [Fact]
+    public void Regex_ExtractAll()
+    {
+        var fn = CelCompiler.Compile<object, object>("regex.extractAll('1, 2, 3', '[0-9]+')", RegexOptions);
+        var result = Assert.IsType<string[]>(fn(new object()));
+        Assert.Equal(["1", "2", "3"], result);
+    }
+
+    [Fact]
+    public void Regex_Replace()
+    {
+        var fn = CelCompiler.Compile<object, string>("regex.replace('hello 123', '[0-9]+', 'world')", RegexOptions);
+        Assert.Equal("hello world", fn(new object()));
+    }
+
+    [Fact]
+    public void Regex_InvalidPattern_Throws()
+    {
+        var fn = CelCompiler.Compile<object, CelOptional>("regex.extract('hello', '[')", RegexOptions);
+        var ex = Assert.Throws<CelRuntimeException>(() => fn(new object()));
+        Assert.Equal("invalid_argument", ex.ErrorCode);
+    }
+
+    [Fact]
+    public void Regex_AreOptIn()
+    {
+        Assert.ThrowsAny<CelCompilationException>(() =>
+            CelCompiler.Compile<object, CelOptional>("regex.extract('a', 'a')"));
+
+        var fn = CelCompiler.Compile<object, CelOptional>("regex.extract('a', 'a')", RegexOptions);
+        Assert.True(fn(new object()).HasValue);
     }
 }

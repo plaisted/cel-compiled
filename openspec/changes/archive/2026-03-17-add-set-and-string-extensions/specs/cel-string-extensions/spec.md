@@ -1,15 +1,4 @@
-## ADDED Requirements
-
-### Requirement: Callers can enable string extension helpers explicitly
-The library SHALL provide an opt-in way to enable curated string extension helpers without changing the default CEL environment.
-
-#### Scenario: Enable string extension bundle
-- **WHEN** a caller enables the string extension bundle in compile options or the function registry builder
-- **THEN** CEL expressions can resolve the supported string extension helpers in that compilation environment
-
-#### Scenario: Default environment stays unchanged
-- **WHEN** a caller compiles an expression without enabling the string extension bundle
-- **THEN** string extension helper calls such as `name.trim()` fail as unavailable functions rather than appearing automatically
+## MODIFIED Requirements
 
 ### Requirement: String extension helpers support common `cel-go`-style operations
 The library SHALL support the curated string helper set for common trimming, searching, slicing, replacement, joining, ASCII casing, reversing, quoting, and formatting operations.
@@ -45,10 +34,3 @@ The library SHALL support the curated string helper set for common trimming, sea
 #### Scenario: Format literal percent
 - **WHEN** a caller compiles and executes `"100%%".format([])`
 - **THEN** the result is `"100%"`
-
-### Requirement: String extension behavior is culture-invariant and documented
-The library MUST execute string extension helpers using deterministic, culture-invariant behavior and SHALL document any intentional differences from `cel-go`.
-
-#### Scenario: ASCII case helpers ignore current culture
-- **WHEN** a caller executes `lowerAscii()` or `upperAscii()` under different process cultures
-- **THEN** the result remains stable for the same input string

@@ -879,6 +879,15 @@ public static class CelCompiler
             return Expression.Call(s_optionalNone);
         }
 
+        // Namespace-style custom function: ident.function(args...) → try "ident.function" as a qualified global function
+        // before attempting to compile the target as an expression (which may fail for unknown identifiers like "sets" or "math").
+        if (call.Target is CelIdent nsIdent && binders.FunctionRegistry != null)
+        {
+            var qualifiedResult = TryCompileNamespacedFunction(call, nsIdent, contextExpr, binders, scope);
+            if (qualifiedResult != null)
+                return qualifiedResult;
+        }
+
         if (call.Target != null && call.Target is not CelIdent { Name: "optional" })
         {
             var target = CompileNode(call.Target, contextExpr, binders, scope);
@@ -1003,6 +1012,24 @@ public static class CelCompiler
             throw CompilationError(expr, "Optional receiver function 'or' requires a CEL optional argument.");
 
         return compiled;
+    }
+
+    private static Expression? TryCompileNamespacedFunction(
+        CelCall call,
+        CelIdent nsIdent,
+        Expression contextExpr,
+        CelBinderSet binders,
+        IReadOnlyDictionary<string, Expression>? scope)
+    {
+        var registry = binders.FunctionRegistry!;
+        var qualifiedName = $"{nsIdent.Name}.{call.Function}";
+        var overloads = registry.GetOverloads(qualifiedName, CelFunctionKind.Global);
+        if (overloads.Count == 0)
+            return null;
+
+        overloads = FilterFeatureEnabledOverloads(call, overloads, binders);
+        var args = call.Args.Select(a => CompileNode(a, contextExpr, binders, scope)).ToArray();
+        return ResolveAndEmitCustomCall(call, qualifiedName, overloads, args, binders);
     }
 
     private static Expression? TryCompileCustomFunction(
@@ -2343,7 +2370,10 @@ public static class CelCompiler
         CelFunctionOrigin.Application or
         CelFunctionOrigin.StringExtension or
         CelFunctionOrigin.ListExtension or
-        CelFunctionOrigin.MathExtension;
+        CelFunctionOrigin.MathExtension or
+        CelFunctionOrigin.SetExtension or
+        CelFunctionOrigin.Base64Extension or
+        CelFunctionOrigin.RegexExtension;
 
     private static bool IsEnabled(CelFunctionOrigin origin, CelFeatureFlags enabledFeatures) => origin switch
     {
@@ -2351,6 +2381,9 @@ public static class CelCompiler
         CelFunctionOrigin.StringExtension => (enabledFeatures & CelFeatureFlags.StringExtensions) != 0,
         CelFunctionOrigin.ListExtension => (enabledFeatures & CelFeatureFlags.ListExtensions) != 0,
         CelFunctionOrigin.MathExtension => (enabledFeatures & CelFeatureFlags.MathExtensions) != 0,
+        CelFunctionOrigin.SetExtension => (enabledFeatures & CelFeatureFlags.SetExtensions) != 0,
+        CelFunctionOrigin.Base64Extension => (enabledFeatures & CelFeatureFlags.Base64Extensions) != 0,
+        CelFunctionOrigin.RegexExtension => (enabledFeatures & CelFeatureFlags.RegexExtensions) != 0,
         _ => true
     };
 
@@ -2359,6 +2392,9 @@ public static class CelCompiler
         CelFunctionOrigin.StringExtension when (enabledFeatures & CelFeatureFlags.StringExtensions) == 0 => "string extension bundle",
         CelFunctionOrigin.ListExtension when (enabledFeatures & CelFeatureFlags.ListExtensions) == 0 => "list extension bundle",
         CelFunctionOrigin.MathExtension when (enabledFeatures & CelFeatureFlags.MathExtensions) == 0 => "math extension bundle",
+        CelFunctionOrigin.SetExtension when (enabledFeatures & CelFeatureFlags.SetExtensions) == 0 => "set extension bundle",
+        CelFunctionOrigin.Base64Extension when (enabledFeatures & CelFeatureFlags.Base64Extensions) == 0 => "base64 extension bundle",
+        CelFunctionOrigin.RegexExtension when (enabledFeatures & CelFeatureFlags.RegexExtensions) == 0 => "regex extension bundle",
         _ => null
     };
 

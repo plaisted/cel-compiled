@@ -79,7 +79,37 @@ public sealed class CelFunctionRegistryBuilder
     }
 
     /// <summary>
-    /// Registers the shipped standard extension set (string, list, and math helpers).
+    /// Registers the shipped set extension library without changing the default CEL environment.
+    /// </summary>
+    public CelFunctionRegistryBuilder AddSetExtensions()
+    {
+        EnsureNotBuilt();
+        CelExtensionLibraryRegistrar.AddSetExtensions(this);
+        return this;
+    }
+
+    /// <summary>
+    /// Registers the shipped base64 extension library without changing the default CEL environment.
+    /// </summary>
+    public CelFunctionRegistryBuilder AddBase64Extensions()
+    {
+        EnsureNotBuilt();
+        CelExtensionLibraryRegistrar.AddBase64Extensions(this);
+        return this;
+    }
+
+    /// <summary>
+    /// Registers the shipped regex extension library without changing the default CEL environment.
+    /// </summary>
+    public CelFunctionRegistryBuilder AddRegexExtensions()
+    {
+        EnsureNotBuilt();
+        CelExtensionLibraryRegistrar.AddRegexExtensions(this);
+        return this;
+    }
+
+    /// <summary>
+    /// Registers the shipped standard extension set (string, list, math, set, base64, and regex helpers).
     /// </summary>
     public CelFunctionRegistryBuilder AddStandardExtensions()
     {
@@ -87,6 +117,9 @@ public sealed class CelFunctionRegistryBuilder
         CelExtensionLibraryRegistrar.AddStringExtensions(this);
         CelExtensionLibraryRegistrar.AddListExtensions(this);
         CelExtensionLibraryRegistrar.AddMathExtensions(this);
+        CelExtensionLibraryRegistrar.AddSetExtensions(this);
+        CelExtensionLibraryRegistrar.AddBase64Extensions(this);
+        CelExtensionLibraryRegistrar.AddRegexExtensions(this);
         return this;
     }
 

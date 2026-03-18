@@ -122,4 +122,24 @@ public class FeatureFlagTests
         Assert.Equal("feature_disabled", mathEx.ErrorCode);
         Assert.Contains("math extension bundle", mathEx.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void DisabledSetExtensions_FailWithFeatureDisabled()
+    {
+        var registry = new CelFunctionRegistryBuilder()
+            .AddStandardExtensions()
+            .Build();
+
+        var noSetOptions = new CelCompileOptions
+        {
+            FunctionRegistry = registry,
+            EnabledFeatures = CelFeatureFlags.All & ~CelFeatureFlags.SetExtensions,
+            EnableCaching = false
+        };
+
+        var ex = Assert.Throws<CelCompilationException>(() =>
+            CelCompiler.Compile<object, bool>("sets.contains([1], [1])", noSetOptions));
+        Assert.Equal("feature_disabled", ex.ErrorCode);
+        Assert.Contains("set extension bundle", ex.Message, StringComparison.Ordinal);
+    }
 }

@@ -2,6 +2,7 @@ using System.Collections;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace Cel.Compiled.Compiler;
 
@@ -201,6 +202,244 @@ internal static class CelExtensionFunctions
     public static bool IsInf(object value) => double.IsInfinity(ToDouble(value, "isInf"));
     public static bool IsNaN(object value) => double.IsNaN(ToDouble(value, "isNaN"));
     public static bool IsFinite(object value) => double.IsFinite(ToDouble(value, "isFinite"));
+
+    // --- Set extensions ---
+
+    public static bool SetsContains(object list, object sublist)
+    {
+        var items = NormalizeSequence(ToSequence(list));
+        var sub = NormalizeSequence(ToSequence(sublist));
+        foreach (var element in sub)
+        {
+            var found = false;
+            foreach (var item in items)
+            {
+                if (CelRuntimeHelpers.CelEquals(item, element))
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+                return false;
+        }
+        return true;
+    }
+
+    public static bool SetsEquivalent(object listA, object listB)
+    {
+        return SetsContains(listA, listB) && SetsContains(listB, listA);
+    }
+
+    public static bool SetsIntersects(object listA, object listB)
+    {
+        var a = NormalizeSequence(ToSequence(listA));
+        var b = NormalizeSequence(ToSequence(listB));
+        foreach (var itemA in a)
+        {
+            foreach (var itemB in b)
+            {
+                if (CelRuntimeHelpers.CelEquals(itemA, itemB))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<object?> NormalizeSequence(List<object?> items)
+    {
+        for (var i = 0; i < items.Count; i++)
+            items[i] = NormalizeComparableValue(items[i]);
+        return items;
+    }
+
+    // --- String extensions: reverse, quote, format ---
+
+    public static string ReverseString(string receiver)
+    {
+        var chars = receiver.ToCharArray();
+        Array.Reverse(chars);
+        return new string(chars);
+    }
+
+    public static string Quote(string receiver)
+    {
+        var sb = new System.Text.StringBuilder(receiver.Length + 2);
+        sb.Append('"');
+        foreach (var c in receiver)
+        {
+            switch (c)
+            {
+                case '\\': sb.Append("\\\\"); break;
+                case '"': sb.Append("\\\""); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\r': sb.Append("\\r"); break;
+                case '\t': sb.Append("\\t"); break;
+                default:
+                    if (char.IsControl(c))
+                        sb.Append($"\\u{(int)c:x4}");
+                    else
+                        sb.Append(c);
+                    break;
+            }
+        }
+        sb.Append('"');
+        return sb.ToString();
+    }
+
+    public static string Format(string receiver, object args)
+    {
+        var values = ToSequence(args);
+        var sb = new System.Text.StringBuilder(receiver.Length);
+        var valueIndex = 0;
+
+        for (var i = 0; i < receiver.Length; i++)
+        {
+            if (receiver[i] != '%')
+            {
+                sb.Append(receiver[i]);
+                continue;
+            }
+
+            if (i + 1 >= receiver.Length)
+                throw new CelRuntimeException("invalid_argument", "format: incomplete format verb at end of string.");
+
+            var verb = receiver[++i];
+
+            if (verb == '%')
+            {
+                sb.Append('%');
+                continue;
+            }
+
+            if (valueIndex >= values.Count)
+                throw new CelRuntimeException("invalid_argument", $"format: not enough arguments for verb '%{verb}' at index {valueIndex}.");
+
+            var value = values[valueIndex++];
+            var normalized = NormalizeFormatValue(value);
+
+            switch (verb)
+            {
+                case 's':
+                    sb.Append(CelRuntimeHelpers.ToCelString(normalized));
+                    break;
+                case 'd':
+                    sb.Append(ToFormatLong(normalized, verb));
+                    break;
+                case 'f':
+                    sb.Append(ToFormatDouble(normalized, verb).ToString("F6", CultureInfo.InvariantCulture));
+                    break;
+                case 'e':
+                    sb.Append(ToFormatDouble(normalized, verb).ToString("E6", CultureInfo.InvariantCulture));
+                    break;
+                case 'x':
+                    sb.Append(ToFormatLong(normalized, verb).ToString("x"));
+                    break;
+                case 'o':
+                    sb.Append(Convert.ToString(ToFormatLong(normalized, verb), 8));
+                    break;
+                case 'b':
+                    sb.Append(Convert.ToString(ToFormatLong(normalized, verb), 2));
+                    break;
+                default:
+                    throw new CelRuntimeException("invalid_argument", $"format: unsupported format verb '%{verb}'.");
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    // --- Base64 extensions ---
+
+    public static string Base64Encode(byte[] bytes) => Convert.ToBase64String(bytes);
+
+    public static byte[] Base64Decode(string s)
+    {
+        try
+        {
+            return Convert.FromBase64String(s);
+        }
+        catch (FormatException ex)
+        {
+            throw new CelRuntimeException("invalid_argument", $"base64.decode: invalid base64 input. {ex.Message}");
+        }
+    }
+
+    // --- Regex extensions ---
+
+    public static CelOptional RegexExtract(string receiver, string pattern)
+    {
+        try
+        {
+            var match = Regex.Match(receiver, pattern);
+            if (!match.Success) return CelOptional.None;
+
+            return match.Groups.Count > 1
+                ? CelOptional.Of(match.Groups[1].Value)
+                : CelOptional.Of(match.Value);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new CelRuntimeException("invalid_argument", $"regex.extract: invalid regex pattern. {ex.Message}");
+        }
+    }
+
+    public static string[] RegexExtractAll(string receiver, string pattern)
+    {
+        try
+        {
+            return Regex.Matches(receiver, pattern).Select(m => m.Value).ToArray();
+        }
+        catch (ArgumentException ex)
+        {
+            throw new CelRuntimeException("invalid_argument", $"regex.extractAll: invalid regex pattern. {ex.Message}");
+        }
+    }
+
+    public static string RegexReplace(string receiver, string pattern, string replacement)
+    {
+        try
+        {
+            return Regex.Replace(receiver, pattern, replacement);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new CelRuntimeException("invalid_argument", $"regex.replace: invalid regex pattern. {ex.Message}");
+        }
+    }
+
+    private static object? NormalizeFormatValue(object? value) => value switch
+    {
+        JsonElement e => NormalizeJsonElement(e),
+        JsonNode n => NormalizeComparableNode(n),
+        _ => value
+    };
+
+    private static object? NormalizeJsonElement(JsonElement e) => e.ValueKind switch
+    {
+        JsonValueKind.Number => e.TryGetInt64(out var l) ? l : e.TryGetUInt64(out var ul) ? ul : (object)e.GetDouble(),
+        JsonValueKind.String => e.GetString(),
+        JsonValueKind.True => true,
+        JsonValueKind.False => false,
+        JsonValueKind.Null => null,
+        _ => e
+    };
+
+    private static long ToFormatLong(object? value, char verb) => value switch
+    {
+        long l => l,
+        ulong ul => (long)ul,
+        double d => (long)d,
+        _ => throw new CelRuntimeException("invalid_argument", $"format: '%{verb}' requires an integer, got {value?.GetType().Name ?? "null"}.")
+    };
+
+    private static double ToFormatDouble(object? value, char verb) => value switch
+    {
+        double d => d,
+        long l => l,
+        ulong ul => ul,
+        _ => throw new CelRuntimeException("invalid_argument", $"format: '%{verb}' requires a number, got {value?.GetType().Name ?? "null"}.")
+    };
 
     private static List<object?> ToSequence(object receiver)
     {
