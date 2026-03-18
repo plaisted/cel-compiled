@@ -278,7 +278,7 @@ public class CelNetComparisonBenchmarks
     private record TestRecord(int A, int B);
     private static readonly TestRecord s_testRecord = new(1, 2);
     private static readonly int[] s_nativeList = [1, 2, 3];
-    private static readonly Func<bool>[] s_nativeDelegates =
+    private static readonly Func<TestRecord, bool>[] s_nativeDelegates =
     [
         static (TestRecord t) => 1 + 2 * 3 == 7,
         static (TestRecord t) => "hello world".Contains("world", StringComparison.Ordinal),
