@@ -1,0 +1,6 @@
+@Cel.Compiled.TestApi_HostAddress = http://localhost:5089
+
+GET {{Cel.Compiled.TestApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

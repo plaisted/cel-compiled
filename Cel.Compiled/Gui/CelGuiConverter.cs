@@ -14,11 +14,24 @@ public static class CelGuiConverter
 {
     /// <summary>
     /// Converts a CEL source expression into a GUI-friendly node structure.
+    /// The root node is always a <see cref="CelGuiGroup"/> so the visual builder
+    /// can add/remove conditions regardless of how simple the expression is.
     /// </summary>
     public static CelGuiNode ToGuiModel(string celExpression)
     {
         var ast = CelParser.Parse(celExpression);
-        return ToGuiModel(ast);
+        var node = ToGuiModel(ast);
+        if (node is CelGuiGroup)
+            return node;
+
+        // Wrap lone rules/macros/advanced nodes in a group so the visual builder
+        // always has a container to add further conditions into.
+        return new CelGuiGroup
+        {
+            Combinator = "and",
+            Not = false,
+            Rules = new List<CelGuiNode> { node }
+        };
     }
 
     /// <summary>

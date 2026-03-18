@@ -1,0 +1,60 @@
+{
+  "name": "@cel-compiled/react",
+  "version": "0.1.0",
+  "description": "Visual expression builder and code editor for CEL.Compiled",
+  "type": "module",
+  "files": [
+    "dist",
+    "src/cel-gui.css"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./editor": {
+      "import": "./dist/editor.js",
+      "require": "./dist/editor.cjs",
+      "types": "./dist/editor.d.ts"
+    },
+    "./style.css": "./src/cel-gui.css"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.17.0",
+    "@codemirror/language": "^6.10.2",
+    "@codemirror/lint": "^6.8.1",
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.28.4",
+    "@uiw/react-codemirror": "^4.22.1"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "^1.7.3",
+    "@rsbuild/plugin-react": "^1.4.6",
+    "@rslib/core": "^0.20.0",
+    "@testing-library/jest-dom": "^6.4.6",
+    "@testing-library/react": "^16.0.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "jsdom": "^24.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.5.2",
+    "vitest": "^1.6.0"
+  },
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "rslib build",
+    "preview": "rsbuild preview",
+    "test": "vitest",
+    "type-check": "tsc --noEmit"
+  }
+}
