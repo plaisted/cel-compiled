@@ -189,7 +189,9 @@ Available bundle helpers:
 - `AddListExtensions()`: `flatten`, `slice`, `reverse`, `first`, `last`, `distinct`, `sort`, `sortBy`, `range`
 - `AddMathExtensions()`: `greatest`, `least`, `abs`, `sign`, `ceil`, `floor`, `round`, `trunc`, `sqrt`, `isInf`, `isNaN`, `isFinite`
 - `AddSetExtensions()`: `sets.contains`, `sets.equivalent`, `sets.intersects`
-- `AddStandardExtensions()`: combines the string, list, math, and set bundles
+- `AddBase64Extensions()`: `base64.encode`, `base64.decode`
+- `AddRegexExtensions()`: `regex.extract`, `regex.extractAll`, `regex.replace`
+- `AddStandardExtensions()`: combines all the above bundles
 
 These helpers build on the same `CelFunctionRegistry` model as application-defined custom functions, so built-ins still retain precedence and the registry identity still participates in cache isolation.
 
@@ -205,6 +207,8 @@ Available flags:
 - `CelFeatureFlags.ListExtensions`
 - `CelFeatureFlags.MathExtensions`
 - `CelFeatureFlags.SetExtensions`
+- `CelFeatureFlags.Base64Extensions`
+- `CelFeatureFlags.RegexExtensions`
 - `CelFeatureFlags.All`
 
 By default, `EnabledFeatures` is `CelFeatureFlags.All`, so existing callers see no behavior change.

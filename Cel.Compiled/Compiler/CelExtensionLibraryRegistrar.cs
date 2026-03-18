@@ -98,6 +98,21 @@ internal static class CelExtensionLibraryRegistrar
             .AddGlobalFunction("sets.intersects", GetMethod(nameof(CelExtensionFunctions.SetsIntersects), typeof(object), typeof(object)), CelFunctionOrigin.SetExtension);
     }
 
+    public static void AddBase64Extensions(CelFunctionRegistryBuilder builder)
+    {
+        builder
+            .AddGlobalFunction("base64.encode", GetMethod(nameof(CelExtensionFunctions.Base64Encode), typeof(byte[])), CelFunctionOrigin.Base64Extension)
+            .AddGlobalFunction("base64.decode", GetMethod(nameof(CelExtensionFunctions.Base64Decode), typeof(string)), CelFunctionOrigin.Base64Extension);
+    }
+
+    public static void AddRegexExtensions(CelFunctionRegistryBuilder builder)
+    {
+        builder
+            .AddGlobalFunction("regex.extract", GetMethod(nameof(CelExtensionFunctions.RegexExtract), typeof(string), typeof(string)), CelFunctionOrigin.RegexExtension)
+            .AddGlobalFunction("regex.extractAll", GetMethod(nameof(CelExtensionFunctions.RegexExtractAll), typeof(string), typeof(string)), CelFunctionOrigin.RegexExtension)
+            .AddGlobalFunction("regex.replace", GetMethod(nameof(CelExtensionFunctions.RegexReplace), typeof(string), typeof(string), typeof(string)), CelFunctionOrigin.RegexExtension);
+    }
+
     private static MethodInfo GetMethod(string name, params Type[] parameterTypes) =>
         s_extensions.GetMethod(name, s_flags, binder: null, types: parameterTypes, modifiers: null)
         ?? throw new InvalidOperationException($"Missing extension helper method {name}({string.Join(", ", parameterTypes.Select(t => t.Name))}).");

@@ -40,27 +40,13 @@ This is not technically correct CEL, so it should remain feature-flagged and cle
 
 `reverse`, `quote`, `format` — added to the string extension bundle, completing `cel-go` string extension parity.
 
-### Base64 Helpers — P2 / D1
+### ~~Base64 Helpers — P2 / D1~~ Done
 
-`base64.encode`, `base64.decode`
+`base64.encode`, `base64.decode` — implemented as an opt-in base64 extension bundle with `CelFeatureFlags.Base64Extensions` gating. Included in `AddStandardExtensions()`.
 
-Common in webhook verification, JWT inspection, and API integration scenarios. Trivial to implement with `Convert.ToBase64String` / `Convert.FromBase64String`.
+### ~~Regex Extraction and Replacement — P2 / D1~~ Done
 
-```cel
-base64.decode(request.body.encoded_data).size() < 1024
-base64.encode(bytes("hello")) == "aGVsbG8="
-```
-
-### Regex Extraction and Replacement — P2 / D1
-
-`regex.extract`, `regex.extractAll`, `regex.replace`
-
-The library already uses .NET's `Regex` engine for the standard `matches` function. Adding extraction and replacement is a natural extension. The existing documented divergence from RE2 applies here as well.
-
-```cel
-regex.extract(user.email, "@(.+)$")
-regex.replace(input.name, "[^a-zA-Z0-9]", "_")
-```
+`regex.extract`, `regex.extractAll`, `regex.replace` — added to the regex extension bundle, completing `cel-go` regex extension parity.
 
 ---
 

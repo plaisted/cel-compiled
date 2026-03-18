@@ -92,14 +92,15 @@ internal static class CelPrinter
     private static void PrintSelect(CelSelect select, StringBuilder sb)
     {
         PrintNode(select.Operand, sb, 100); // High precedence for operand
-        sb.Append(select.IsOptional ? "?." : ".");
+        sb.Append(select.IsOptional ? ".?" : ".");
         sb.Append(select.Field);
     }
 
     private static void PrintIndex(CelIndex index, StringBuilder sb)
     {
         PrintNode(index.Operand, sb, 100);
-        sb.Append(index.IsOptional ? "?[" : "[");
+        sb.Append("[");
+        if (index.IsOptional) sb.Append("?");
         PrintNode(index.Index, sb, 0);
         sb.Append("]");
     }
@@ -207,6 +208,7 @@ internal static class CelPrinter
             case "_<=_": op = "<="; precedence = 60; return true;
             case "_>_": op = ">"; precedence = 60; return true;
             case "_>=_": op = ">="; precedence = 60; return true;
+            case "@in": op = "in"; precedence = 60; return true;
             case "_==_": op = "=="; precedence = 50; return true;
             case "_!=_": op = "!="; precedence = 50; return true;
             case "_&&_": op = "&&"; precedence = 40; return true;

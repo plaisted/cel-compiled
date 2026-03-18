@@ -2371,7 +2371,9 @@ public static class CelCompiler
         CelFunctionOrigin.StringExtension or
         CelFunctionOrigin.ListExtension or
         CelFunctionOrigin.MathExtension or
-        CelFunctionOrigin.SetExtension;
+        CelFunctionOrigin.SetExtension or
+        CelFunctionOrigin.Base64Extension or
+        CelFunctionOrigin.RegexExtension;
 
     private static bool IsEnabled(CelFunctionOrigin origin, CelFeatureFlags enabledFeatures) => origin switch
     {
@@ -2380,6 +2382,8 @@ public static class CelCompiler
         CelFunctionOrigin.ListExtension => (enabledFeatures & CelFeatureFlags.ListExtensions) != 0,
         CelFunctionOrigin.MathExtension => (enabledFeatures & CelFeatureFlags.MathExtensions) != 0,
         CelFunctionOrigin.SetExtension => (enabledFeatures & CelFeatureFlags.SetExtensions) != 0,
+        CelFunctionOrigin.Base64Extension => (enabledFeatures & CelFeatureFlags.Base64Extensions) != 0,
+        CelFunctionOrigin.RegexExtension => (enabledFeatures & CelFeatureFlags.RegexExtensions) != 0,
         _ => true
     };
 
@@ -2389,6 +2393,8 @@ public static class CelCompiler
         CelFunctionOrigin.ListExtension when (enabledFeatures & CelFeatureFlags.ListExtensions) == 0 => "list extension bundle",
         CelFunctionOrigin.MathExtension when (enabledFeatures & CelFeatureFlags.MathExtensions) == 0 => "math extension bundle",
         CelFunctionOrigin.SetExtension when (enabledFeatures & CelFeatureFlags.SetExtensions) == 0 => "set extension bundle",
+        CelFunctionOrigin.Base64Extension when (enabledFeatures & CelFeatureFlags.Base64Extensions) == 0 => "base64 extension bundle",
+        CelFunctionOrigin.RegexExtension when (enabledFeatures & CelFeatureFlags.RegexExtensions) == 0 => "regex extension bundle",
         _ => null
     };
 

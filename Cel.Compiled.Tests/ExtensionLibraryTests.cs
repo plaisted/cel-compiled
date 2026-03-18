@@ -15,6 +15,12 @@ public class ExtensionLibraryTests
     private static CelCompileOptions MathOptions =>
         new() { FunctionRegistry = new CelFunctionRegistryBuilder().AddMathExtensions().Build(), EnableCaching = false };
 
+    private static CelCompileOptions Base64Options =>
+        new() { FunctionRegistry = new CelFunctionRegistryBuilder().AddBase64Extensions().Build(), EnableCaching = false };
+
+    private static CelCompileOptions RegexOptions =>
+        new() { FunctionRegistry = new CelFunctionRegistryBuilder().AddRegexExtensions().Build(), EnableCaching = false };
+
     private static CelCompileOptions StandardOptions =>
         new() { FunctionRegistry = new CelFunctionRegistryBuilder().AddStandardExtensions().Build(), EnableCaching = false };
 
@@ -362,5 +368,93 @@ public class ExtensionLibraryTests
     public sealed class RolesContext
     {
         public string[] Roles { get; init; } = [];
+    }
+
+    // --- Base64 Extensions ---
+
+    [Fact]
+    public void Base64_EncodeDecode()
+    {
+        var fn = CelCompiler.Compile<object, string>("base64.encode(base64.decode('SGVsbG8='))", Base64Options);
+        Assert.Equal("SGVsbG8=", fn(new object()));
+    }
+
+    [Fact]
+    public void Base64_DecodeInvalid_Throws()
+    {
+        var fn = CelCompiler.Compile<object, byte[]>("base64.decode('!!!')", Base64Options);
+        var ex = Assert.Throws<CelRuntimeException>(() => fn(new object()));
+        Assert.Equal("invalid_argument", ex.ErrorCode);
+    }
+
+    [Fact]
+    public void Base64_AreOptIn()
+    {
+        Assert.ThrowsAny<CelCompilationException>(() =>
+            CelCompiler.Compile<object, string>("base64.encode(bytes('a'))"));
+
+        var fn = CelCompiler.Compile<object, string>("base64.encode(bytes('a'))", Base64Options);
+        Assert.Equal("YQ==", fn(new object()));
+    }
+
+    // --- Regex Extensions ---
+
+    [Fact]
+    public void Regex_Extract_NoGroups()
+    {
+        var fn = CelCompiler.Compile<object, CelOptional>("regex.extract('hello 123', '[0-9]+')", RegexOptions);
+        var result = fn(new object());
+        Assert.True(result.HasValue);
+        Assert.Equal("123", result.Value);
+    }
+
+    [Fact]
+    public void Regex_Extract_WithGroups()
+    {
+        var fn = CelCompiler.Compile<object, CelOptional>("regex.extract('hello 123', 'hello ([0-9]+)')", RegexOptions);
+        var result = fn(new object());
+        Assert.True(result.HasValue);
+        Assert.Equal("123", result.Value);
+    }
+
+    [Fact]
+    public void Regex_Extract_NoMatch()
+    {
+        var fn = CelCompiler.Compile<object, CelOptional>("regex.extract('hello', '[0-9]+')", RegexOptions);
+        var result = fn(new object());
+        Assert.False(result.HasValue);
+    }
+
+    [Fact]
+    public void Regex_ExtractAll()
+    {
+        var fn = CelCompiler.Compile<object, object>("regex.extractAll('1, 2, 3', '[0-9]+')", RegexOptions);
+        var result = Assert.IsType<string[]>(fn(new object()));
+        Assert.Equal(["1", "2", "3"], result);
+    }
+
+    [Fact]
+    public void Regex_Replace()
+    {
+        var fn = CelCompiler.Compile<object, string>("regex.replace('hello 123', '[0-9]+', 'world')", RegexOptions);
+        Assert.Equal("hello world", fn(new object()));
+    }
+
+    [Fact]
+    public void Regex_InvalidPattern_Throws()
+    {
+        var fn = CelCompiler.Compile<object, CelOptional>("regex.extract('hello', '[')", RegexOptions);
+        var ex = Assert.Throws<CelRuntimeException>(() => fn(new object()));
+        Assert.Equal("invalid_argument", ex.ErrorCode);
+    }
+
+    [Fact]
+    public void Regex_AreOptIn()
+    {
+        Assert.ThrowsAny<CelCompilationException>(() =>
+            CelCompiler.Compile<object, CelOptional>("regex.extract('a', 'a')"));
+
+        var fn = CelCompiler.Compile<object, CelOptional>("regex.extract('a', 'a')", RegexOptions);
+        Assert.True(fn(new object()).HasValue);
     }
 }

@@ -232,4 +232,162 @@ public class GuiTests
     {
         Assert.Throws<NotSupportedException>(() => CelValue.FromSimpleLiteral(new DateTime(2024, 1, 1)));
     }
+
+    [Fact]
+    public void CelGuiConverter_ToGuiModel_HasMacro()
+    {
+        var gui = CelGuiConverter.ToGuiModel("has(user.age)");
+
+        var macro = Assert.IsType<CelGuiMacro>(gui);
+        Assert.Equal("has", macro.Macro);
+        Assert.Equal("user.age", macro.Field);
+    }
+
+    [Fact]
+    public void CelGuiConverter_RoundTrip_HasMacro()
+    {
+        var source = "has(user.age)";
+        var gui = CelGuiConverter.ToGuiModel(source);
+        var backToSource = CelGuiConverter.ToCelString(gui);
+
+        Assert.Equal(source, backToSource);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToGuiModel_InOperator()
+    {
+        var gui = CelGuiConverter.ToGuiModel("user.role in ['admin', 'editor']");
+
+        var rule = Assert.IsType<CelGuiRule>(gui);
+        Assert.Equal("user.role", rule.Field);
+        Assert.Equal("in", rule.Operator);
+        var list = Assert.IsType<List<object?>>(rule.Value);
+        Assert.Equal(["admin", "editor"], list);
+    }
+
+    [Fact]
+    public void CelGuiConverter_RoundTrip_InOperator()
+    {
+        var source = "user.role in [\"admin\", \"editor\"]";
+        var gui = CelGuiConverter.ToGuiModel(source);
+        var backToSource = CelGuiConverter.ToCelString(gui);
+
+        Assert.Equal(source, backToSource);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToGuiModel_OptionalNavigation()
+    {
+        var gui = CelGuiConverter.ToGuiModel("user.?profile.age >= 18");
+
+        var rule = Assert.IsType<CelGuiRule>(gui);
+        Assert.Equal("user.?profile.age", rule.Field);
+    }
+
+    [Fact]
+    public void CelGuiConverter_RoundTrip_OptionalNavigation()
+    {
+        var source = "user.?profile.age >= 18";
+        var gui = CelGuiConverter.ToGuiModel(source);
+        var backToSource = CelGuiConverter.ToCelString(gui);
+
+        Assert.Equal(source, backToSource);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToGuiModel_StringRegexMethods()
+    {
+        var source = "user.email.matches(\"^[a-zA-Z0-9]+@gmail.com$\")";
+        var gui = CelGuiConverter.ToGuiModel(source);
+
+        var rule = Assert.IsType<CelGuiRule>(gui);
+        Assert.Equal("user.email", rule.Field);
+        Assert.Equal("matches", rule.Operator);
+        Assert.Equal("^[a-zA-Z0-9]+@gmail.com$", rule.Value);
+
+        var backToSource = CelGuiConverter.ToCelString(gui);
+        Assert.Equal(source, backToSource);
+    }
+
+    [Fact]
+    public void CelGuiConverter_JsonSerialization_Macro()
+    {
+        var macro = new CelGuiMacro { Macro = "has", Field = "user.age" };
+        var json = JsonSerializer.Serialize<CelGuiNode>(macro);
+        Assert.Contains("\"type\":\"macro\"", json);
+        Assert.Contains("\"macro\":\"has\"", json);
+        Assert.Contains("\"field\":\"user.age\"", json);
+
+        var deserialized = JsonSerializer.Deserialize<CelGuiNode>(json);
+        var macroBack = Assert.IsType<CelGuiMacro>(deserialized);
+        Assert.Equal("has", macroBack.Macro);
+        Assert.Equal("user.age", macroBack.Field);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToGuiModel_DeepOptional()
+    {
+        var gui = CelGuiConverter.ToGuiModel("a.?b.?c.d == 1");
+        var rule = Assert.IsType<CelGuiRule>(gui);
+        Assert.Equal("a.?b.?c.d", rule.Field);
+    }
+
+    [Fact]
+    public void CelPrinter_PrintsOptionalSelectAndIndex()
+    {
+        Assert.Equal("user.?name", CelPrinter.Print(CelParser.Parse("user.?name")));
+        Assert.Equal("items[?0]", CelPrinter.Print(CelParser.Parse("items[?0]")));
+        Assert.Equal("a.?b.?c", CelPrinter.Print(CelParser.Parse("a.?b.?c")));
+    }
+
+    [Fact]
+    public void CelPrinter_PrintsInOperator()
+    {
+        Assert.Equal("x in [1, 2, 3]", CelPrinter.Print(CelParser.Parse("x in [1, 2, 3]")));
+    }
+
+    [Fact]
+    public void CelGuiConverter_RoundTrip_ContainsStartsWithEndsWith()
+    {
+        var contains = "name.contains(\"alice\")";
+        Assert.Equal(contains, CelGuiConverter.ToCelString(CelGuiConverter.ToGuiModel(contains)));
+
+        var startsWith = "name.startsWith(\"corp-\")";
+        Assert.Equal(startsWith, CelGuiConverter.ToCelString(CelGuiConverter.ToGuiModel(startsWith)));
+
+        var endsWith = "email.endsWith(\"@example.com\")";
+        Assert.Equal(endsWith, CelGuiConverter.ToCelString(CelGuiConverter.ToGuiModel(endsWith)));
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToGuiModel_ReceiverStyleOperators()
+    {
+        var gui = CelGuiConverter.ToGuiModel("name.contains(\"test\")");
+        var rule = Assert.IsType<CelGuiRule>(gui);
+        Assert.Equal("name", rule.Field);
+        Assert.Equal("contains", rule.Operator);
+        Assert.Equal("test", rule.Value);
+
+        gui = CelGuiConverter.ToGuiModel("path.startsWith(\"/api\")");
+        rule = Assert.IsType<CelGuiRule>(gui);
+        Assert.Equal("path", rule.Field);
+        Assert.Equal("startsWith", rule.Operator);
+
+        gui = CelGuiConverter.ToGuiModel("host.endsWith(\".com\")");
+        rule = Assert.IsType<CelGuiRule>(gui);
+        Assert.Equal("host", rule.Field);
+        Assert.Equal("endsWith", rule.Operator);
+    }
+
+    [Fact]
+    public void CelGuiConverter_RoundTrip_HasWithOptionalField()
+    {
+        var source = "has(user.?profile.name)";
+        var gui = CelGuiConverter.ToGuiModel(source);
+        var macro = Assert.IsType<CelGuiMacro>(gui);
+        Assert.Equal("user.?profile.name", macro.Field);
+
+        var backToSource = CelGuiConverter.ToCelString(gui);
+        Assert.Equal(source, backToSource);
+    }
 }

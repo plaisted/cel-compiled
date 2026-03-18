@@ -77,14 +77,27 @@ public static class CelGuiConverter
                 };
             }
 
-            // 3. Try mapping simple comparison rules
+            // 3. Try mapping macros (e.g., has(user.name))
+            if (call.Target == null && call.Function == "has" && call.Args.Count == 1)
+            {
+                if (TryGetFieldPath(call.Args[0], out var fieldPath))
+                {
+                    return new CelGuiMacro
+                    {
+                        Macro = "has",
+                        Field = fieldPath
+                    };
+                }
+            }
+
+            // 4. Try mapping simple comparison rules
             if (TryMapToRule(call, out var rule))
             {
                 return rule;
             }
         }
 
-        // 4. Fallback to Advanced node
+        // 5. Fallback to Advanced node
         return new CelGuiAdvanced
         {
             Expression = CelPrinter.Print(expr)
@@ -111,36 +124,63 @@ public static class CelGuiConverter
     private static bool TryMapToRule(CelCall call, out CelGuiRule rule)
     {
         rule = null!;
+
+        // Handle @in (binary operator)
+        if (call.Target == null && call.Function == "@in" && call.Args.Count == 2)
+        {
+            if (TryGetFieldPath(call.Args[0], out var fieldPath) && TryGetSimpleLiteral(call.Args[1], out var value))
+            {
+                rule = new CelGuiRule { Field = fieldPath, Operator = "in", Value = value };
+                return true;
+            }
+        }
+
+        // Handle receiver-style calls (e.g., field.contains(value))
+        if (call.Target != null && call.Args.Count == 1)
+        {
+            string? op = call.Function switch
+            {
+                "contains" or "startsWith" or "endsWith" or "matches" => call.Function,
+                _ => null
+            };
+
+            if (op != null && TryGetFieldPath(call.Target, out var fieldPath) && TryGetSimpleLiteral(call.Args[0], out var value))
+            {
+                rule = new CelGuiRule { Field = fieldPath, Operator = op, Value = value };
+                return true;
+            }
+        }
+
         if (call.Target != null || call.Args.Count != 2) return false;
 
-        string op;
+        string opComp;
         switch (call.Function)
         {
-            case "_==_": op = "=="; break;
-            case "_!=_": op = "!="; break;
-            case "_<_": op = "<"; break;
-            case "_<=_": op = "<="; break;
-            case "_>_": op = ">"; break;
-            case "_>=_": op = ">="; break;
+            case "_==_": opComp = "=="; break;
+            case "_!=_": opComp = "!="; break;
+            case "_<_": opComp = "<"; break;
+            case "_<=_": opComp = "<="; break;
+            case "_>_": opComp = ">"; break;
+            case "_>=_": opComp = ">="; break;
             default: return false;
         }
 
-        if (TryGetFieldPath(call.Args[0], out var fieldPath) && TryGetSimpleLiteral(call.Args[1], out var value))
+        if (TryGetFieldPath(call.Args[0], out var fieldPathComp) && TryGetSimpleLiteral(call.Args[1], out var valueComp))
         {
-            rule = new CelGuiRule { Field = fieldPath, Operator = op, Value = value };
+            rule = new CelGuiRule { Field = fieldPathComp, Operator = opComp, Value = valueComp };
             return true;
         }
 
         // Handle reversed comparison: literal OP field
         if (TryGetSimpleLiteral(call.Args[0], out var valueRev) && TryGetFieldPath(call.Args[1], out var fieldPathRev))
         {
-            var flippedOp = op switch
+            var flippedOp = opComp switch
             {
                 "<" => ">",
                 "<=" => ">=",
                 ">" => "<",
                 ">=" => "<=",
-                _ => op
+                _ => opComp
             };
             rule = new CelGuiRule { Field = fieldPathRev, Operator = flippedOp, Value = valueRev };
             return true;
@@ -157,10 +197,11 @@ public static class CelGuiConverter
             case CelIdent ident:
                 path = ident.Name;
                 return true;
-            case CelSelect select when !select.IsOptional:
+            case CelSelect select:
                 if (TryGetFieldPath(select.Operand, out var parentPath))
                 {
-                    path = $"{parentPath}.{select.Field}";
+                    var sep = select.IsOptional ? ".?" : ".";
+                    path = $"{parentPath}{sep}{select.Field}";
                     return true;
                 }
                 return false;
@@ -172,21 +213,42 @@ public static class CelGuiConverter
     private static bool TryGetSimpleLiteral(CelExpr expr, out object? value)
     {
         value = null;
-        if (expr is not CelConstant constant) return false;
-
-        var val = constant.Value.Value;
-        switch (val)
+        if (expr is CelConstant constant)
         {
-            case null:
-            case bool:
-            case string:
-            case long:
-            case double:
-                value = val;
-                return true;
-            default:
-                return false; // uint, bytes, etc. are not "simple" for the basic GUI
+            var val = constant.Value.Value;
+            switch (val)
+            {
+                case null:
+                case bool:
+                case string:
+                case long:
+                case double:
+                    value = val;
+                    return true;
+                default:
+                    return false; // uint, bytes, etc. are not "simple" for the basic GUI
+            }
         }
+
+        if (expr is CelList list)
+        {
+            var result = new List<object?>();
+            foreach (var element in list.Elements)
+            {
+                if (TryGetSimpleLiteral(element, out var elementValue))
+                {
+                    result.Add(elementValue);
+                }
+                else
+                {
+                    return false; // List contains non-simple literals
+                }
+            }
+            value = result;
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -198,6 +260,7 @@ public static class CelGuiConverter
         {
             CelGuiGroup group => FromGuiGroup(group),
             CelGuiRule rule => FromGuiRule(rule),
+            CelGuiMacro macro => FromGuiMacro(macro),
             CelGuiAdvanced advanced => CelParser.Parse(advanced.Expression),
             _ => throw new NotSupportedException($"GUI Node of type {node.GetType().Name} is not supported.")
         };
@@ -246,7 +309,21 @@ public static class CelGuiConverter
     {
         var fieldExpr = ParseFieldPath(rule.Field);
         var value = GetJsonValue(rule.Value);
-        var valueExpr = new CelConstant(CelValue.FromSimpleLiteral(value));
+        var valueExpr = ToAstLiteral(value);
+
+        if (rule.Operator == "in")
+        {
+            return new CelCall("@in", null, new[] { fieldExpr, valueExpr });
+        }
+
+        switch (rule.Operator)
+        {
+            case "contains":
+            case "startsWith":
+            case "endsWith":
+            case "matches":
+                return new CelCall(rule.Operator, fieldExpr, new[] { valueExpr });
+        }
 
         var func = rule.Operator switch
         {
@@ -260,6 +337,31 @@ public static class CelGuiConverter
         };
 
         return new CelCall(func, null, new[] { fieldExpr, valueExpr });
+    }
+
+    private static CelExpr FromGuiMacro(CelGuiMacro macro)
+    {
+        if (macro.Macro != "has")
+        {
+            throw new NotSupportedException($"Macro '{macro.Macro}' is not supported.");
+        }
+
+        var fieldExpr = ParseFieldPath(macro.Field);
+        if (fieldExpr is not CelSelect select)
+        {
+            throw new InvalidOperationException("has() macro requires a field selection.");
+        }
+
+        return new CelCall("has", null, new[] { select });
+    }
+
+    private static CelExpr ToAstLiteral(object? value)
+    {
+        if (value is List<object?> list)
+        {
+            return new CelList(list.Select(ToAstLiteral).ToList());
+        }
+        return new CelConstant(CelValue.FromSimpleLiteral(value));
     }
 
     private static object? GetJsonValue(object? value)
@@ -279,6 +381,8 @@ public static class CelGuiConverter
                     return false;
                 case JsonValueKind.Null:
                     return null;
+                case JsonValueKind.Array:
+                    return element.EnumerateArray().Select(e => GetJsonValue(e)).ToList();
                 default:
                     throw new NotSupportedException($"JSON value kind {element.ValueKind} is not supported in simple rules.");
             }
@@ -288,12 +392,29 @@ public static class CelGuiConverter
 
     private static CelExpr ParseFieldPath(string path)
     {
-        var parts = path.Split('.');
-        CelExpr expr = new CelIdent(parts[0]);
-        for (int i = 1; i < parts.Length; i++)
+        // Use regex to find separators: . followed by optional ?
+        var matches = System.Text.RegularExpressions.Regex.Matches(path, @"\.\??");
+        int lastPos = 0;
+        CelExpr? expr = null;
+        bool nextIsOptional = false;
+
+        foreach (System.Text.RegularExpressions.Match match in matches)
         {
-            expr = new CelSelect(expr, parts[i]);
+            string segment = path[lastPos..match.Index];
+            if (expr == null)
+            {
+                expr = new CelIdent(segment);
+            }
+            else
+            {
+                expr = new CelSelect(expr, segment, nextIsOptional);
+            }
+            nextIsOptional = match.Value == ".?";
+            lastPos = match.Index + match.Length;
         }
-        return expr;
+
+        string lastSegment = path[lastPos..];
+        if (expr == null) return new CelIdent(lastSegment);
+        return new CelSelect(expr, lastSegment, nextIsOptional);
     }
 }

@@ -2,6 +2,7 @@ using System.Collections;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace Cel.Compiled.Compiler;
 
@@ -346,6 +347,65 @@ internal static class CelExtensionFunctions
         }
 
         return sb.ToString();
+    }
+
+    // --- Base64 extensions ---
+
+    public static string Base64Encode(byte[] bytes) => Convert.ToBase64String(bytes);
+
+    public static byte[] Base64Decode(string s)
+    {
+        try
+        {
+            return Convert.FromBase64String(s);
+        }
+        catch (FormatException ex)
+        {
+            throw new CelRuntimeException("invalid_argument", $"base64.decode: invalid base64 input. {ex.Message}");
+        }
+    }
+
+    // --- Regex extensions ---
+
+    public static CelOptional RegexExtract(string receiver, string pattern)
+    {
+        try
+        {
+            var match = Regex.Match(receiver, pattern);
+            if (!match.Success) return CelOptional.None;
+
+            return match.Groups.Count > 1
+                ? CelOptional.Of(match.Groups[1].Value)
+                : CelOptional.Of(match.Value);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new CelRuntimeException("invalid_argument", $"regex.extract: invalid regex pattern. {ex.Message}");
+        }
+    }
+
+    public static string[] RegexExtractAll(string receiver, string pattern)
+    {
+        try
+        {
+            return Regex.Matches(receiver, pattern).Select(m => m.Value).ToArray();
+        }
+        catch (ArgumentException ex)
+        {
+            throw new CelRuntimeException("invalid_argument", $"regex.extractAll: invalid regex pattern. {ex.Message}");
+        }
+    }
+
+    public static string RegexReplace(string receiver, string pattern, string replacement)
+    {
+        try
+        {
+            return Regex.Replace(receiver, pattern, replacement);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new CelRuntimeException("invalid_argument", $"regex.replace: invalid regex pattern. {ex.Message}");
+        }
     }
 
     private static object? NormalizeFormatValue(object? value) => value switch

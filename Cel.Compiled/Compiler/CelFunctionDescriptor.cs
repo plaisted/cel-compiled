@@ -65,5 +65,7 @@ internal enum CelFunctionOrigin
     StringExtension,
     ListExtension,
     MathExtension,
-    SetExtension
+    SetExtension,
+    Base64Extension,
+    RegexExtension
 }
