@@ -1,49 +1,81 @@
 /* cel-gui.css - Optional default styles for @cel-compiled/react */
 
+/* ─────────────────────────────────────────────────
+   CSS Custom Properties (design tokens)
+   ───────────────────────────────────────────────── */
 .cel-builder {
+  --cel-border: #e2e8f0;
+  --cel-bg-subtle: #f8fafc;
+  --cel-bg-card: #fff;
+  --cel-text: #334155;
+  --cel-text-muted: #64748b;
+  --cel-primary: #2563eb;
+  --cel-primary-light: #eff6ff;
+  --cel-danger: #dc2626;
+  --cel-danger-light: #fee2e2;
+  --cel-radius: 8px;
+  --cel-radius-sm: 6px;
+  --cel-shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --cel-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  --cel-transition: 0.15s ease;
+
   font-family: system-ui, -apple-system, sans-serif;
   font-size: 14px;
-  color: #333;
+  color: var(--cel-text);
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
+/* ─────────────────────────────────────────────────
+   Toolbar / Mode Toggle
+   ───────────────────────────────────────────────── */
 .cel-builder__toolbar {
   display: flex;
   justify-content: flex-end;
 }
 
 .cel-builder__mode-toggle {
-  padding: 4px 12px;
-  background-color: #f0f0f0;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  padding: 5px 14px;
+  background-color: var(--cel-bg-subtle);
+  border: 1px solid var(--cel-border);
+  border-radius: var(--cel-radius-sm);
+  color: var(--cel-text-muted);
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
+  transition: background var(--cel-transition), border-color var(--cel-transition), color var(--cel-transition);
 }
 
 .cel-builder__mode-toggle:hover {
-  background-color: #e0e0e0;
+  background-color: var(--cel-border);
+  color: var(--cel-text);
 }
 
 .cel-builder__content {
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  border: 1px solid var(--cel-border);
+  border-radius: var(--cel-radius);
   padding: 16px;
-  background-color: #fafafa;
+  background-color: var(--cel-bg-subtle);
+  transition: opacity var(--cel-transition);
 }
 
-/* Group Node */
+/* ─────────────────────────────────────────────────
+   Group Node
+   ───────────────────────────────────────────────── */
 .cel-group {
-  background-color: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  padding: 12px;
+  background-color: var(--cel-bg-card);
+  border: 1px solid var(--cel-border);
+  border-radius: var(--cel-radius);
+  padding: 14px;
   margin-bottom: 8px;
+  box-shadow: var(--cel-shadow-sm);
+  transition: border-color var(--cel-transition), box-shadow var(--cel-transition);
 }
 
 .cel-group--not {
-  border-color: #ffcccc;
+  border-color: #fca5a5;
+  background-color: #fff7f7;
 }
 
 .cel-group__header {
@@ -54,23 +86,41 @@
 }
 
 .cel-group__combinator {
-  padding: 4px 8px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
+  padding: 5px 10px;
+  border-radius: var(--cel-radius-sm);
+  border: 1px solid var(--cel-border);
+  background: var(--cel-bg-card);
+  color: var(--cel-text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--cel-transition), border-color var(--cel-transition), color var(--cel-transition);
+}
+
+.cel-group__combinator:hover {
+  border-color: #94a3b8;
 }
 
 .cel-group__not-toggle,
 .cel-group__remove {
-  padding: 4px 8px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
+  padding: 5px 10px;
+  border-radius: var(--cel-radius-sm);
+  border: 1px solid var(--cel-border);
   background-color: transparent;
+  color: var(--cel-text-muted);
+  font-size: 13px;
   cursor: pointer;
+  transition: background var(--cel-transition), border-color var(--cel-transition), color var(--cel-transition);
 }
 
-.cel-group__not-toggle:hover,
+.cel-group__not-toggle:hover {
+  background-color: var(--cel-bg-subtle);
+  color: var(--cel-text);
+}
+
 .cel-group__remove:hover {
-  background-color: #f0f0f0;
+  background-color: var(--cel-danger-light);
+  border-color: #fca5a5;
+  color: var(--cel-danger);
 }
 
 .cel-group__rules {
@@ -78,7 +128,7 @@
   flex-direction: column;
   gap: 8px;
   margin-left: 16px;
-  border-left: 2px solid #eee;
+  border-left: 2px solid var(--cel-border);
   padding-left: 12px;
 }
 
@@ -90,35 +140,76 @@
 
 .cel-group__add-rule,
 .cel-group__add-group {
-  padding: 6px 12px;
-  background-color: #e6f7ff;
-  border: 1px solid #91d5ff;
-  color: #0050b3;
-  border-radius: 4px;
+  padding: 6px 14px;
+  background-color: var(--cel-primary-light);
+  border: 1px solid #bfdbfe;
+  color: var(--cel-primary);
+  border-radius: var(--cel-radius-sm);
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
+  transition: background var(--cel-transition), border-color var(--cel-transition), color var(--cel-transition);
 }
 
-.cel-group__add-rule:hover,
+.cel-group__add-rule:hover {
+  background-color: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.cel-group__add-group {
+  background-color: var(--cel-bg-subtle);
+  border-color: var(--cel-border);
+  color: var(--cel-text-muted);
+}
+
 .cel-group__add-group:hover {
-  background-color: #bae7ff;
+  background-color: var(--cel-border);
+  border-color: #94a3b8;
+  color: var(--cel-text);
 }
 
-/* Rule Node */
+/* ─────────────────────────────────────────────────
+   Rule Node
+   ───────────────────────────────────────────────── */
 .cel-rule {
   display: flex;
   gap: 8px;
   align-items: center;
-  background-color: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  padding: 8px;
+  background-color: var(--cel-bg-card);
+  border: 1px solid var(--cel-border);
+  border-radius: var(--cel-radius-sm);
+  padding: 10px 12px;
+  box-shadow: var(--cel-shadow-sm);
+  transition: border-color var(--cel-transition), box-shadow var(--cel-transition), background var(--cel-transition);
+}
+
+.cel-rule:hover {
+  border-color: #cbd5e1;
+  box-shadow: var(--cel-shadow);
 }
 
 .cel-rule select,
 .cel-rule input {
-  padding: 6px 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--cel-border);
+  border-radius: var(--cel-radius-sm);
+  background: var(--cel-bg-card);
+  color: var(--cel-text);
+  font-size: 13px;
+  font-family: inherit;
+  transition: background var(--cel-transition), border-color var(--cel-transition), color var(--cel-transition);
+}
+
+.cel-rule select:hover,
+.cel-rule input:hover {
+  border-color: #94a3b8;
+}
+
+.cel-rule select:focus-visible,
+.cel-rule input:focus-visible {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
 }
 
 .cel-rule__field {
@@ -142,52 +233,74 @@
   padding: 4px 8px;
   background: none;
   border: none;
-  color: #999;
+  color: #94a3b8;
   cursor: pointer;
   font-size: 16px;
+  border-radius: var(--cel-radius-sm);
+  transition: background var(--cel-transition), color var(--cel-transition);
 }
 
 .cel-rule__remove:hover {
-  color: #ff4d4f;
+  background: var(--cel-danger-light);
+  color: var(--cel-danger);
 }
 
-/* Macro Node */
+/* ─────────────────────────────────────────────────
+   Macro Node
+   ───────────────────────────────────────────────── */
 .cel-macro {
   display: flex;
   gap: 8px;
   align-items: center;
-  background-color: #f9f0ff;
-  border: 1px solid #d3adf7;
-  border-radius: 4px;
-  padding: 8px;
+  background-color: #faf5ff;
+  border: 1px solid #e9d5ff;
+  border-radius: var(--cel-radius-sm);
+  padding: 10px 12px;
+  box-shadow: var(--cel-shadow-sm);
+  transition: border-color var(--cel-transition), box-shadow var(--cel-transition);
 }
 
 .cel-macro__label {
   font-weight: bold;
-  color: #531dab;
+  color: #6b21a8;
 }
 
 .cel-macro__argument select,
 .cel-macro__argument input {
-  padding: 6px 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--cel-border);
+  border-radius: var(--cel-radius-sm);
+  background: var(--cel-bg-card);
+  color: var(--cel-text);
+  font-size: 13px;
+  transition: background var(--cel-transition), border-color var(--cel-transition), color var(--cel-transition);
 }
 
-/* Advanced Node */
+.cel-macro__argument select:focus-visible,
+.cel-macro__argument input:focus-visible {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+/* ─────────────────────────────────────────────────
+   Advanced Node
+   ───────────────────────────────────────────────── */
 .cel-advanced {
-  background-color: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  padding: 8px;
+  background-color: var(--cel-bg-card);
+  border: 1px solid var(--cel-border);
+  border-radius: var(--cel-radius-sm);
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  box-shadow: var(--cel-shadow-sm);
+  transition: border-color var(--cel-transition), box-shadow var(--cel-transition);
 }
 
 .cel-advanced__editor {
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  border: 1px solid var(--cel-border);
+  border-radius: var(--cel-radius-sm);
   overflow: hidden;
 }
 
@@ -196,71 +309,138 @@
   padding: 4px 8px;
   background: none;
   border: none;
-  color: #999;
+  color: #94a3b8;
   cursor: pointer;
+  font-size: 16px;
+  border-radius: var(--cel-radius-sm);
+  transition: background var(--cel-transition), color var(--cel-transition);
 }
 
-/* Source Editor View */
+.cel-advanced__remove:hover {
+  background: var(--cel-danger-light);
+  color: var(--cel-danger);
+}
+
+/* ─────────────────────────────────────────────────
+   Source Editor View
+   ───────────────────────────────────────────────── */
 .cel-builder__source {
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  border: 1px solid var(--cel-border);
+  border-radius: var(--cel-radius-sm);
   overflow: hidden;
 }
 
+/* ─────────────────────────────────────────────────
+   Remove buttons (macro / shared)
+   ───────────────────────────────────────────────── */
 .cel-macro__remove {
   padding: 4px 8px;
   background: none;
   border: none;
-  color: #999;
+  color: #94a3b8;
   cursor: pointer;
   font-size: 16px;
+  border-radius: var(--cel-radius-sm);
+  transition: background var(--cel-transition), color var(--cel-transition);
 }
 
 .cel-macro__remove:hover {
-  color: #ff4d4f;
+  background: var(--cel-danger-light);
+  color: var(--cel-danger);
 }
 
-/* Value editor inputs */
+/* ─────────────────────────────────────────────────
+   Value editor inputs
+   ───────────────────────────────────────────────── */
 .cel-rule__value-input {
   width: 100%;
-  padding: 6px 8px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--cel-border);
+  border-radius: var(--cel-radius-sm);
+  background: var(--cel-bg-card);
+  color: var(--cel-text);
+  font-size: 13px;
+  font-family: inherit;
+  transition: background var(--cel-transition), border-color var(--cel-transition), color var(--cel-transition);
+}
+
+.cel-rule__value-input:hover {
+  border-color: #94a3b8;
+}
+
+.cel-rule__value-input:focus-visible {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
 }
 
 .cel-rule__value-checkbox {
   width: 16px;
   height: 16px;
   cursor: pointer;
+  accent-color: var(--cel-primary);
 }
 
-/* Builder status messages */
+/* ─────────────────────────────────────────────────
+   Builder status messages
+   ───────────────────────────────────────────────── */
 .cel-builder__converting,
 .cel-builder__loading,
 .cel-advanced__loading {
   padding: 8px 12px;
-  color: #666;
+  color: var(--cel-text-muted);
   font-style: italic;
 }
 
 .cel-builder__error {
   padding: 8px 12px;
-  color: #cf1322;
-  background-color: #fff1f0;
-  border: 1px solid #ffa39e;
-  border-radius: 4px;
+  color: var(--cel-danger);
+  background-color: var(--cel-danger-light);
+  border: 1px solid #fca5a5;
+  border-radius: var(--cel-radius-sm);
 }
 
 .cel-builder__empty {
   padding: 16px;
-  color: #999;
+  color: var(--cel-text-muted);
   text-align: center;
 }
 
-/* CodeMirror overrides for standard font */
+/* ─────────────────────────────────────────────────
+   CodeMirror overrides
+   ───────────────────────────────────────────────── */
 .cm-editor {
   font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
   font-size: 13px;
+}
+
+/* ─────────────────────────────────────────────────
+   Global focus-visible ring (3:1 contrast — #3b82f6 on white/light backgrounds)
+   ───────────────────────────────────────────────── */
+.cel-builder button:focus-visible,
+.cel-builder select:focus-visible,
+.cel-builder input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+}
+
+/* ─────────────────────────────────────────────────
+   Enter animation
+   ───────────────────────────────────────────────── */
+@keyframes cel-node-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.cel-node--entering {
+  animation: cel-node-enter 150ms ease-out;
+  animation-fill-mode: forwards;
 }
 
 /* ─────────────────────────────────────────────────
@@ -269,17 +449,18 @@
 
 /* Group — natural variant */
 .cel-group--natural {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--cel-bg-subtle);
+  border: 1px solid var(--cel-border);
   border-radius: 12px;
   padding: 12px 16px;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.02);
   margin-bottom: 0;
+  transition: border-color var(--cel-transition), box-shadow var(--cel-transition);
 }
 
 .cel-group--natural.cel-group--not {
-  border-color: #fecaca;
-  background: #fef2f2;
+  border-color: #cbd5e1;
+  background: #f8fafc;
 }
 
 .cel-group__natural-header {
@@ -300,8 +481,8 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  background: #fecaca;
-  color: #991b1b;
+  background: #e2e8f0;
+  color: #475569;
   border-radius: 4px;
   font-size: 11px;
   font-weight: 700;
@@ -315,7 +496,7 @@
   flex-direction: column;
   gap: 12px;
   margin-left: 8px;
-  border-left: 2px solid #e2e8f0;
+  border-left: 2px solid var(--cel-border);
   padding-left: 16px;
   position: relative;
 }
@@ -323,8 +504,8 @@
 /* AND / OR conjunction divider between rules */
 .cel-group__conjunction {
   position: absolute;
-  left: -12.5px; /* Centers the badge horizontally on the 2px border */
-  margin-top: -16px; /* pulls it up between the items rather than taking flow space */
+  left: -28.5px; /* centers on the 2px border relative to rule container padded left by 16px */
+  top: -16px; /* pulls it up into the gap between rules */
   display: inline-flex;
   align-items: center;
   z-index: 2;
@@ -343,10 +524,10 @@
   letter-spacing: 0.05em;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: background var(--cel-transition), color var(--cel-transition), border-color var(--cel-transition);
   user-select: none;
   border: 1px solid transparent;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05); /* separate from the line */
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 .cel-group__conjunction-btn--and {
@@ -377,9 +558,9 @@
   font-weight: 700;
   border-radius: 12px;
   background: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--cel-border);
   letter-spacing: 0.05em;
-  color: #64748b;
+  color: var(--cel-text-muted);
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
@@ -390,7 +571,7 @@
   color: #94a3b8;
   font-style: italic;
   font-size: 13px;
-  border: 1px dashed #e2e8f0;
+  border: 1px dashed var(--cel-border);
   border-radius: 8px;
 }
 
@@ -398,7 +579,7 @@
 .cel-group__actions--natural {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px dashed #e2e8f0;
+  border-top: 1px dashed var(--cel-border);
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
@@ -409,16 +590,16 @@
   padding: 4px 8px;
   background: none;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--cel-radius-sm);
   color: #94a3b8;
   cursor: pointer;
   font-size: 15px;
   line-height: 1.2;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--cel-transition), color var(--cel-transition);
 }
 
 .cel-group__remove--natural:hover {
-  background: #fee2e2;
+  background: var(--cel-danger-light);
   color: #b91c1c;
 }
 
@@ -426,26 +607,26 @@
   padding: 4px 10px;
   background: transparent;
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  color: #64748b;
+  border-radius: var(--cel-radius-sm);
+  color: var(--cel-text-muted);
   font-size: 12px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: background var(--cel-transition), color var(--cel-transition), border-color var(--cel-transition);
 }
 
 .cel-group__not-toggle:hover {
-  background: #f8fafc;
-  color: #334155;
+  background: var(--cel-bg-subtle);
+  color: var(--cel-text);
 }
 
 .cel-group__not-toggle--active {
-  background: #fef2f2;
-  border-color: #fca5a5;
-  color: #b91c1c;
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #475569;
 }
 
 .cel-group__not-toggle--active:hover {
-  background: #fee2e2;
+  background: #f1f5f9;
 }
 
 /* Natural layout add buttons - Ghost styling */
@@ -453,29 +634,29 @@
 .cel-builder--natural .cel-group__add-group {
   padding: 4px 10px;
   font-size: 12px;
-  border-radius: 6px;
+  border-radius: var(--cel-radius-sm);
   background: transparent;
   border: 1px solid #cbd5e1;
-  color: #64748b;
+  color: var(--cel-text-muted);
   font-weight: 500;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: background var(--cel-transition), color var(--cel-transition), border-color var(--cel-transition);
 }
 
 .cel-builder--natural .cel-group__add-rule:hover,
 .cel-builder--natural .cel-group__add-group:hover {
-  background: #f8fafc;
+  background: var(--cel-bg-subtle);
   border-color: #94a3b8;
-  color: #334155;
+  color: var(--cel-text);
 }
 
 .cel-builder--natural .cel-group__add-rule {
-  background: #fff;
+  background: var(--cel-bg-card);
   border-color: #93c5fd;
-  color: #2563eb;
+  color: var(--cel-primary);
 }
 
 .cel-builder--natural .cel-group__add-rule:hover {
-  background: #eff6ff;
+  background: var(--cel-primary-light);
   border-color: #60a5fa;
   color: #1d4ed8;
 }
@@ -486,11 +667,12 @@
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--cel-bg-card);
+  border: 1px solid var(--cel-border);
   border-radius: 8px;
   flex-wrap: wrap;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: border-color var(--cel-transition), box-shadow var(--cel-transition);
 }
 
 /* Chip wrappers */
@@ -510,14 +692,14 @@
   display: inline-flex;
   align-items: center;
   padding: 5px 10px;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
+  border-radius: var(--cel-radius-sm);
+  border: 1px solid var(--cel-border);
+  background: var(--cel-bg-card);
   font-size: 13px;
   font-family: inherit;
-  color: #334155;
+  color: var(--cel-text);
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color var(--cel-transition), box-shadow var(--cel-transition), background var(--cel-transition), color var(--cel-transition);
   cursor: pointer;
   /* Hide native select arrow — we add our own via background-image */
   -webkit-appearance: none;
@@ -525,9 +707,9 @@
   min-width: 0;
 }
 
-.cel-rule__chip:focus {
-  border-color: #93c5fd;
-  box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.25);
+.cel-rule__chip:focus-visible {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
 }
 
 /* Field chip */
@@ -542,7 +724,7 @@
   background-position: right 8px center;
 }
 
-.cel-rule__chip--field:focus {
+.cel-rule__chip--field:focus-visible {
   border-color: #7dd3fc;
   box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.25);
 }
@@ -556,8 +738,8 @@
 /* Operator chip */
 .cel-rule__chip--operator {
   background: #fafafa;
-  border-color: #e2e8f0;
-  color: #64748b;
+  border-color: var(--cel-border);
+  color: var(--cel-text-muted);
   font-style: italic;
   padding-right: 26px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -578,7 +760,7 @@
 }
 
 .cel-rule__chip--value:disabled {
-  background: #f8fafc;
+  background: var(--cel-bg-subtle);
   cursor: default;
 }
 
@@ -610,11 +792,11 @@
   font-size: 15px;
   line-height: 1.2;
   flex-shrink: 0;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background var(--cel-transition), border-color var(--cel-transition), color var(--cel-transition);
 }
 
 .cel-rule__remove--natural:hover {
-  background: #fee2e2;
+  background: var(--cel-danger-light);
   border-color: transparent;
-  color: #dc2626;
+  color: var(--cel-danger);
 }
