@@ -1,0 +1,287 @@
+/* example.css — styles for the CEL Expression Builder demo app */
+
+/* ─────────────────────────────────────────────────
+   Page shell
+   ───────────────────────────────────────────────── */
+.ex-page {
+  max-width: 960px;
+  margin: 40px auto;
+  padding: 0 16px;
+  font-family: system-ui, -apple-system, sans-serif;
+  color: #334155;
+}
+
+/* ─────────────────────────────────────────────────
+   Header
+   ───────────────────────────────────────────────── */
+.ex-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.ex-header__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.ex-header__subtitle {
+  color: #64748b;
+  margin-top: 4px;
+  margin-bottom: 24px;
+  font-size: 14px;
+}
+
+/* ─────────────────────────────────────────────────
+   Segmented layout toggle
+   ───────────────────────────────────────────────── */
+.ex-layout-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.ex-layout-toggle__btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 13px;
+  background: transparent;
+  color: #64748b;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ex-layout-toggle__btn:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px #3b82f6;
+}
+
+.ex-layout-toggle__btn--active {
+  background: #2563eb;
+  color: #fff;
+}
+
+.ex-layout-toggle__btn--active:hover {
+  background: #1d4ed8;
+}
+
+.ex-layout-toggle__btn:not(.ex-layout-toggle__btn--active):hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+/* ─────────────────────────────────────────────────
+   Two-column editor grid
+   ───────────────────────────────────────────────── */
+.ex-editors {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* ─────────────────────────────────────────────────
+   Editor panel (schema / context)
+   ───────────────────────────────────────────────── */
+.ex-editor-panel__label {
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+  color: #334155;
+  margin-bottom: 4px;
+}
+
+.ex-editor-panel__label-hint {
+  font-weight: 400;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.ex-editor-panel__textarea {
+  width: 100%;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  box-sizing: border-box;
+  resize: vertical;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ex-editor-panel__textarea:hover {
+  border-color: #94a3b8;
+}
+
+.ex-editor-panel__textarea:focus-visible {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+.ex-editor-panel__textarea--error {
+  border-color: #f87171;
+  background: #fff7f7;
+}
+
+.ex-editor-panel__textarea--error:focus-visible {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.2);
+}
+
+.ex-editor-panel__error {
+  color: #dc2626;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* ─────────────────────────────────────────────────
+   Evaluate bar
+   ───────────────────────────────────────────────── */
+.ex-eval-bar {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ex-eval-btn {
+  padding: 8px 20px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.ex-eval-btn:hover {
+  background: #1d4ed8;
+}
+
+.ex-eval-btn:active {
+  background: #1e40af;
+}
+
+.ex-eval-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.ex-eval-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+}
+
+/* ─────────────────────────────────────────────────
+   Result display
+   ───────────────────────────────────────────────── */
+.ex-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ex-result__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 20px;
+  font-size: 14px;
+  color: #166534;
+}
+
+.ex-result__value {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-weight: 700;
+}
+
+.ex-result__type {
+  font-size: 11px;
+  color: #4ade80;
+  font-weight: 500;
+}
+
+.ex-result__error {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  color: #dc2626;
+  font-size: 13px;
+}
+
+/* ─────────────────────────────────────────────────
+   JSON model collapsible
+   ───────────────────────────────────────────────── */
+.ex-model-details {
+  margin-top: 32px;
+}
+
+.ex-model-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  color: #475569;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  transition: background 0.15s;
+}
+
+.ex-model-details summary:hover {
+  background: #f1f5f9;
+}
+
+.ex-model-details summary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+.ex-model-details summary::before {
+  content: '▶';
+  font-size: 10px;
+  color: #94a3b8;
+  transition: transform 0.15s;
+}
+
+.ex-model-details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.ex-model-details__pre {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  padding: 16px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  overflow-x: auto;
+  margin-top: 0;
+  color: #334155;
+}

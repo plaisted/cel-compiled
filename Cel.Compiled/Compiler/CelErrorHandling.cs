@@ -50,6 +50,17 @@ public class CelRuntimeException : Exception
         return new CelRuntimeException("no_matching_overload", $"No matching overload for '{function}' with argument types ({types}).");
     }
 
+    public static CelRuntimeException NoMatchingOverloadForValues(string function, params object?[] argumentValues)
+    {
+        var types = string.Join(", ", argumentValues.Select(static v =>
+        {
+            if (v == null) return "null";
+            if (v is System.Text.Json.JsonElement je) return $"JsonElement::{je.ValueKind.ToString().ToLowerInvariant()}";
+            return v.GetType().Name;
+        }));
+        return new CelRuntimeException("no_matching_overload", $"No matching overload for '{function}' with argument types ({types}).");
+    }
+
     public static CelRuntimeException NoSuchField(string fieldName)
     {
         return new CelRuntimeException("no_such_field", $"No such field: '{fieldName}'.");

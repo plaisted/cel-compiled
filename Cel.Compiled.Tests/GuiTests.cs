@@ -31,7 +31,12 @@ public class GuiTests
     {
         var gui = CelGuiConverter.ToGuiModel("user.age >= 18");
 
-        var rule = Assert.IsType<CelGuiRule>(gui);
+        // Single-expression inputs are always wrapped in a root group so the
+        // visual builder can add further conditions.
+        var group = Assert.IsType<CelGuiGroup>(gui);
+        Assert.Equal("and", group.Combinator);
+        Assert.Equal(1, group.Rules.Count);
+        var rule = Assert.IsType<CelGuiRule>(group.Rules[0]);
         Assert.Equal("user.age", rule.Field);
         Assert.Equal(">=", rule.Operator);
         Assert.Equal(18L, rule.Value);
@@ -58,7 +63,9 @@ public class GuiTests
     {
         var gui = CelGuiConverter.ToGuiModel("items.all(x, x > 0)");
 
-        var advanced = Assert.IsType<CelGuiAdvanced>(gui);
+        var group = Assert.IsType<CelGuiGroup>(gui);
+        Assert.Equal(1, group.Rules.Count);
+        var advanced = Assert.IsType<CelGuiAdvanced>(group.Rules[0]);
         Assert.Equal("items.all(x, x > 0)", advanced.Expression);
     }
 
@@ -193,7 +200,9 @@ public class GuiTests
         // literal on the left: 18 <= user.age  →  field=user.age, op=>=, value=18
         var gui = CelGuiConverter.ToGuiModel("18 <= user.age");
 
-        var rule = Assert.IsType<CelGuiRule>(gui);
+        var group = Assert.IsType<CelGuiGroup>(gui);
+        Assert.Equal(1, group.Rules.Count);
+        var rule = Assert.IsType<CelGuiRule>(group.Rules[0]);
         Assert.Equal("user.age", rule.Field);
         Assert.Equal(">=", rule.Operator);
         Assert.Equal(18L, rule.Value);
@@ -238,7 +247,9 @@ public class GuiTests
     {
         var gui = CelGuiConverter.ToGuiModel("has(user.age)");
 
-        var macro = Assert.IsType<CelGuiMacro>(gui);
+        var group = Assert.IsType<CelGuiGroup>(gui);
+        Assert.Equal(1, group.Rules.Count);
+        var macro = Assert.IsType<CelGuiMacro>(group.Rules[0]);
         Assert.Equal("has", macro.Macro);
         Assert.Equal("user.age", macro.Field);
     }
@@ -258,7 +269,9 @@ public class GuiTests
     {
         var gui = CelGuiConverter.ToGuiModel("user.role in ['admin', 'editor']");
 
-        var rule = Assert.IsType<CelGuiRule>(gui);
+        var group = Assert.IsType<CelGuiGroup>(gui);
+        Assert.Equal(1, group.Rules.Count);
+        var rule = Assert.IsType<CelGuiRule>(group.Rules[0]);
         Assert.Equal("user.role", rule.Field);
         Assert.Equal("in", rule.Operator);
         var list = Assert.IsType<List<object?>>(rule.Value);
@@ -280,7 +293,9 @@ public class GuiTests
     {
         var gui = CelGuiConverter.ToGuiModel("user.?profile.age >= 18");
 
-        var rule = Assert.IsType<CelGuiRule>(gui);
+        var group = Assert.IsType<CelGuiGroup>(gui);
+        Assert.Equal(1, group.Rules.Count);
+        var rule = Assert.IsType<CelGuiRule>(group.Rules[0]);
         Assert.Equal("user.?profile.age", rule.Field);
     }
 
@@ -300,7 +315,9 @@ public class GuiTests
         var source = "user.email.matches(\"^[a-zA-Z0-9]+@gmail.com$\")";
         var gui = CelGuiConverter.ToGuiModel(source);
 
-        var rule = Assert.IsType<CelGuiRule>(gui);
+        var group = Assert.IsType<CelGuiGroup>(gui);
+        Assert.Equal(1, group.Rules.Count);
+        var rule = Assert.IsType<CelGuiRule>(group.Rules[0]);
         Assert.Equal("user.email", rule.Field);
         Assert.Equal("matches", rule.Operator);
         Assert.Equal("^[a-zA-Z0-9]+@gmail.com$", rule.Value);
@@ -328,7 +345,9 @@ public class GuiTests
     public void CelGuiConverter_ToGuiModel_DeepOptional()
     {
         var gui = CelGuiConverter.ToGuiModel("a.?b.?c.d == 1");
-        var rule = Assert.IsType<CelGuiRule>(gui);
+        var group = Assert.IsType<CelGuiGroup>(gui);
+        Assert.Equal(1, group.Rules.Count);
+        var rule = Assert.IsType<CelGuiRule>(group.Rules[0]);
         Assert.Equal("a.?b.?c.d", rule.Field);
     }
 
@@ -363,18 +382,22 @@ public class GuiTests
     public void CelGuiConverter_ToGuiModel_ReceiverStyleOperators()
     {
         var gui = CelGuiConverter.ToGuiModel("name.contains(\"test\")");
-        var rule = Assert.IsType<CelGuiRule>(gui);
+        var group = Assert.IsType<CelGuiGroup>(gui);
+        Assert.Equal(1, group.Rules.Count);
+        var rule = Assert.IsType<CelGuiRule>(group.Rules[0]);
         Assert.Equal("name", rule.Field);
         Assert.Equal("contains", rule.Operator);
         Assert.Equal("test", rule.Value);
 
         gui = CelGuiConverter.ToGuiModel("path.startsWith(\"/api\")");
-        rule = Assert.IsType<CelGuiRule>(gui);
+        group = Assert.IsType<CelGuiGroup>(gui);
+        rule = Assert.IsType<CelGuiRule>(group.Rules[0]);
         Assert.Equal("path", rule.Field);
         Assert.Equal("startsWith", rule.Operator);
 
         gui = CelGuiConverter.ToGuiModel("host.endsWith(\".com\")");
-        rule = Assert.IsType<CelGuiRule>(gui);
+        group = Assert.IsType<CelGuiGroup>(gui);
+        rule = Assert.IsType<CelGuiRule>(group.Rules[0]);
         Assert.Equal("host", rule.Field);
         Assert.Equal("endsWith", rule.Operator);
     }
@@ -384,7 +407,9 @@ public class GuiTests
     {
         var source = "has(user.?profile.name)";
         var gui = CelGuiConverter.ToGuiModel(source);
-        var macro = Assert.IsType<CelGuiMacro>(gui);
+        var group = Assert.IsType<CelGuiGroup>(gui);
+        Assert.Equal(1, group.Rules.Count);
+        var macro = Assert.IsType<CelGuiMacro>(group.Rules[0]);
         Assert.Equal("user.?profile.name", macro.Field);
 
         var backToSource = CelGuiConverter.ToCelString(gui);

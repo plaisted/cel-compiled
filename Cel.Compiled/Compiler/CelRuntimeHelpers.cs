@@ -24,6 +24,9 @@ internal static class CelRuntimeHelpers
     private static CelRuntimeException NoMatchingOverloadWithSource(string function, string? expressionText, int start, int end, params Type[] argumentTypes) =>
         WithSource(CelRuntimeException.NoMatchingOverload(function, argumentTypes), expressionText, start, end);
 
+    private static CelRuntimeException NoMatchingOverloadForValuesWithSource(string function, string? expressionText, int start, int end, params object?[] argumentValues) =>
+        WithSource(CelRuntimeException.NoMatchingOverloadForValues(function, argumentValues), expressionText, start, end);
+
     private static CelRuntimeException NoSuchFieldWithSource(string fieldName, string? expressionText, int start, int end) =>
         WithSource(CelRuntimeException.NoSuchField(fieldName), expressionText, start, end);
 
@@ -87,6 +90,18 @@ internal static class CelRuntimeHelpers
             return OptionalOf(value);
 
         return OptionalNone();
+    }
+
+    public static CelRuntimeException InvalidComprehensionTarget(object? value)
+    {
+        return new CelRuntimeException(
+            "no_matching_overload",
+            $"Comprehension macros require a list or map target, but got '{DescribeComprehensionTarget(value)}'.");
+    }
+
+    public static CelRuntimeException InvalidComprehensionTarget(object? value, string? expressionText, int start, int end)
+    {
+        return WithSource(InvalidComprehensionTarget(value), expressionText, start, end);
     }
 
     public static CelOptional GetOptionalJsonNodeArrayElement(JsonNode? node, long index)
@@ -1088,56 +1103,56 @@ internal static class CelRuntimeHelpers
     {
         if (TryGetString(target, out var s) && TryGetString(substring, out var sub))
             return s.Contains(sub, StringComparison.Ordinal);
-        throw CelRuntimeException.NoMatchingOverload("contains", target?.GetType() ?? typeof(object), substring?.GetType() ?? typeof(object));
+        throw CelRuntimeException.NoMatchingOverloadForValues("contains", target, substring);
     }
 
     public static bool CelContains(object? target, object? substring, string? expressionText, int start, int end)
     {
         if (TryGetString(target, out var s) && TryGetString(substring, out var sub))
             return s.Contains(sub, StringComparison.Ordinal);
-        throw NoMatchingOverloadWithSource("contains", expressionText, start, end, target?.GetType() ?? typeof(object), substring?.GetType() ?? typeof(object));
+        throw NoMatchingOverloadForValuesWithSource("contains", expressionText, start, end, target, substring);
     }
 
     public static bool CelStartsWith(object? target, object? prefix)
     {
         if (TryGetString(target, out var s) && TryGetString(prefix, out var p))
             return s.StartsWith(p, StringComparison.Ordinal);
-        throw CelRuntimeException.NoMatchingOverload("startsWith", target?.GetType() ?? typeof(object), prefix?.GetType() ?? typeof(object));
+        throw CelRuntimeException.NoMatchingOverloadForValues("startsWith", target, prefix);
     }
 
     public static bool CelStartsWith(object? target, object? prefix, string? expressionText, int start, int end)
     {
         if (TryGetString(target, out var s) && TryGetString(prefix, out var p))
             return s.StartsWith(p, StringComparison.Ordinal);
-        throw NoMatchingOverloadWithSource("startsWith", expressionText, start, end, target?.GetType() ?? typeof(object), prefix?.GetType() ?? typeof(object));
+        throw NoMatchingOverloadForValuesWithSource("startsWith", expressionText, start, end, target, prefix);
     }
 
     public static bool CelEndsWith(object? target, object? suffix)
     {
         if (TryGetString(target, out var s) && TryGetString(suffix, out var suf))
             return s.EndsWith(suf, StringComparison.Ordinal);
-        throw CelRuntimeException.NoMatchingOverload("endsWith", target?.GetType() ?? typeof(object), suffix?.GetType() ?? typeof(object));
+        throw CelRuntimeException.NoMatchingOverloadForValues("endsWith", target, suffix);
     }
 
     public static bool CelEndsWith(object? target, object? suffix, string? expressionText, int start, int end)
     {
         if (TryGetString(target, out var s) && TryGetString(suffix, out var suf))
             return s.EndsWith(suf, StringComparison.Ordinal);
-        throw NoMatchingOverloadWithSource("endsWith", expressionText, start, end, target?.GetType() ?? typeof(object), suffix?.GetType() ?? typeof(object));
+        throw NoMatchingOverloadForValuesWithSource("endsWith", expressionText, start, end, target, suffix);
     }
 
     public static bool CelMatches(object? target, object? pattern)
     {
         if (TryGetString(target, out var s) && TryGetString(pattern, out var p))
             return Regex.IsMatch(s, p, RegexOptions.None, TimeSpan.FromSeconds(1));
-        throw CelRuntimeException.NoMatchingOverload("matches", target?.GetType() ?? typeof(object), pattern?.GetType() ?? typeof(object));
+        throw CelRuntimeException.NoMatchingOverloadForValues("matches", target, pattern);
     }
 
     public static bool CelMatches(object? target, object? pattern, string? expressionText, int start, int end)
     {
         if (TryGetString(target, out var s) && TryGetString(pattern, out var p))
             return Regex.IsMatch(s, p, RegexOptions.None, TimeSpan.FromSeconds(1));
-        throw NoMatchingOverloadWithSource("matches", expressionText, start, end, target?.GetType() ?? typeof(object), pattern?.GetType() ?? typeof(object));
+        throw NoMatchingOverloadForValuesWithSource("matches", expressionText, start, end, target, pattern);
     }
 
     private static bool TryGetString(object? value, out string result)
@@ -1312,6 +1327,30 @@ internal static class CelRuntimeHelpers
         return property;
     }
 
+    public static string[] GetJsonElementPropertyNames(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+            throw CelRuntimeException.NoMatchingOverload("@comprehension", typeof(JsonElement));
+
+        var result = new string[element.EnumerateObject().Count()];
+        int index = 0;
+        foreach (var property in element.EnumerateObject())
+            result[index++] = property.Name;
+        return result;
+    }
+
+    public static string[] GetJsonNodePropertyNames(JsonNode? node)
+    {
+        if (node is not JsonObject obj)
+            throw CelRuntimeException.NoMatchingOverload("@comprehension", node?.GetType() ?? typeof(JsonNode));
+
+        var result = new string[obj.Count];
+        int index = 0;
+        foreach (var property in obj)
+            result[index++] = property.Key;
+        return result;
+    }
+
     public static TKey[] GetDictionaryKeys<TKey, TValue>(IDictionary<TKey, TValue> dictionary)
         where TKey : notnull
     {
@@ -1347,6 +1386,16 @@ internal static class CelRuntimeHelpers
         {
             ICollection collection => collection.Count,
             _ => enumerable.Cast<object?>().Count()
+        };
+    }
+
+    private static string DescribeComprehensionTarget(object? value)
+    {
+        return value switch
+        {
+            null => "null",
+            JsonElement element => $"JsonElement::{element.ValueKind.ToString().ToLowerInvariant()}",
+            _ => value.GetType().Name
         };
     }
 }

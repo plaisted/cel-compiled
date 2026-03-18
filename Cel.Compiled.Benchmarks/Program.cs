@@ -275,12 +275,14 @@ public class CelNetComparisonBenchmarks
         "'hello world'.contains('world')",
         "[1, 2, 3].exists(x, x == 2)"
     ];
+    private record TestRecord(int A, int B);
+    private static readonly TestRecord s_testRecord = new(1, 2);
     private static readonly int[] s_nativeList = [1, 2, 3];
-    private static readonly Func<bool>[] s_nativeDelegates =
+    private static readonly Func<TestRecord, bool>[] s_nativeDelegates =
     [
-        static () => 1 + 2 * 3 == 7,
-        static () => "hello world".Contains("world", StringComparison.Ordinal),
-        static () => Array.Exists(s_nativeList, static x => x == 2)
+        static (TestRecord t) => 1 + 2 * 3 == 7,
+        static (TestRecord t) => "hello world".Contains("world", StringComparison.Ordinal),
+        static (TestRecord t) => Array.Exists(s_nativeList, static x => x == 2)
     ];
 
     private readonly Func<object, bool>[] _compiledDelegates =
@@ -294,7 +296,7 @@ public class CelNetComparisonBenchmarks
     {
         var result = false;
         foreach (var expression in s_expressions)
-            result ^= CelExpression.Compile<object, bool>(expression, new CelCompileOptions { EnableCaching = false })(new object());
+            result ^= CelExpression.Compile<object, bool>(expression, new CelCompileOptions { EnableCaching = false })(s_testRecord);
         return result;
     }
 
@@ -303,7 +305,7 @@ public class CelNetComparisonBenchmarks
     {
         var result = false;
         foreach (var compiled in _compiledDelegates)
-            result ^= compiled(new object());
+            result ^= compiled(s_testRecord);
         return result;
     }
 
@@ -324,7 +326,7 @@ public class CelNetComparisonBenchmarks
     {
         var result = false;
         foreach (var native in s_nativeDelegates)
-            result ^= native();
+            result ^= native(s_testRecord);
         return result;
     }
 }
