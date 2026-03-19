@@ -25,7 +25,7 @@ describe('useCelConversion', () => {
 
     expect(source).toBe('a == 1');
     expect(result.current.isConverting).toBe(false);
-    expect(toCelString).toHaveBeenCalledWith(node);
+    expect(toCelString).toHaveBeenCalledWith(node, undefined);
   });
 
   it('surfaces errors during conversion', async () => {

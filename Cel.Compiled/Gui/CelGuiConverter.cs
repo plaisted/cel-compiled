@@ -37,10 +37,10 @@ public static class CelGuiConverter
     /// <summary>
     /// Converts a GUI node structure back into a CEL source string.
     /// </summary>
-    public static string ToCelString(CelGuiNode node)
+    public static string ToCelString(CelGuiNode node, bool pretty = false)
     {
         var ast = FromGuiModel(node);
-        return CelPrinter.Print(ast);
+        return pretty ? CelPrettyPrinter.Print(ast) : CelPrinter.Print(ast);
     }
 
     /// <summary>

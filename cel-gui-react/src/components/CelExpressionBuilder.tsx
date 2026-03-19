@@ -14,7 +14,9 @@ export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
   onChange,
   onSourceChange,
   onModeChange,
+  onPrettyChange,
   mode: modeProp,
+  pretty: prettyProp,
   readOnly,
   conversion,
   schema,
@@ -24,12 +26,15 @@ export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
     node: internalNode,
     source,
     mode: internalMode,
+    pretty: internalPretty,
     setNode: setInternalNode,
     setSource: setInternalSource,
     setMode: setInternalMode,
+    setPretty: setInternalPretty,
   } = useCelExpression({
     defaultValue,
     defaultMode: modeProp ?? 'auto',
+    defaultPretty: prettyProp ?? false,
   });
 
   const { convertToSource, convertToGui, isConverting, error: conversionError } =
@@ -38,6 +43,7 @@ export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
   const isControlled = value !== undefined;
   const currentNode = isControlled ? value : internalNode;
   const currentMode = modeProp ?? internalMode;
+  const currentPretty = prettyProp ?? internalPretty;
 
   const setSource = useCallback(
     (text: string) => {
@@ -55,6 +61,14 @@ export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
     [setInternalMode, onModeChange]
   );
 
+  const setPretty = useCallback(
+    (pretty: boolean) => {
+      setInternalPretty(pretty);
+      onPrettyChange?.(pretty);
+    },
+    [setInternalPretty, onPrettyChange]
+  );
+
   const handleNodeChange = useCallback(
     (newNode: CelGuiNode) => {
       if (!isControlled) setInternalNode(newNode);
@@ -68,7 +82,7 @@ export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
       // visual/auto → source: convert node to CEL text first
       if (currentNode && conversion) {
         try {
-          const text = await convertToSource(currentNode);
+          const text = await convertToSource(currentNode, currentPretty);
           setSource(text);
         } catch {
           return; // stay in visual on conversion error
@@ -90,6 +104,7 @@ export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
   }, [
     currentMode,
     currentNode,
+    currentPretty,
     source,
     conversion,
     convertToSource,
@@ -99,6 +114,21 @@ export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
     handleNodeChange,
   ]);
 
+  const handlePrettyToggle = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.checked;
+    setPretty(newValue);
+    
+    // If in source mode, re-format immediately if possible
+    if (currentMode === 'source' && currentNode && conversion) {
+      try {
+        const text = await convertToSource(currentNode, newValue);
+        setSource(text);
+      } catch {
+        // ignore formatting errors
+      }
+    }
+  }, [currentMode, currentNode, conversion, convertToSource, setSource, setPretty]);
+
   // Show toggle unless the consumer has locked the mode to visual or source
   const showToggle = !modeProp || modeProp === 'auto';
 
@@ -107,6 +137,17 @@ export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
       <CelBuilderProvider readOnly={readOnly}>
         <div className="cel-builder cel-builder--natural">
           <div className="cel-builder__toolbar">
+            <div className="cel-builder__toolbar-group">
+              <label className="cel-builder__pretty-toggle">
+                <input
+                  type="checkbox"
+                  checked={currentPretty}
+                  onChange={handlePrettyToggle}
+                  disabled={isConverting}
+                />
+                <span>Pretty Print</span>
+              </label>
+            </div>
             {showToggle && (
               <button
                 type="button"

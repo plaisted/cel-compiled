@@ -15,7 +15,7 @@ export function useCelConversion(options?: CelConversionOptions) {
   // Track concurrent calls so isConverting only clears when all are done.
   const pendingRef = useRef(0);
 
-  const convertToSource = useCallback(async (node: CelGuiNode) => {
+  const convertToSource = useCallback(async (node: CelGuiNode, pretty?: boolean) => {
     if (!toCelStringRef.current) {
       console.warn('useCelConversion: toCelString is not configured');
       return '';
@@ -23,7 +23,7 @@ export function useCelConversion(options?: CelConversionOptions) {
     if (++pendingRef.current === 1) setIsConverting(true);
     setError(null);
     try {
-      return await toCelStringRef.current(node);
+      return await toCelStringRef.current(node, pretty);
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
       setError(err);

@@ -192,9 +192,13 @@ describe('7.4 Focus management after add-rule', () => {
       not: false,
       rules: [],
     };
+    const conversion = {
+      toCelString: vi.fn().mockResolvedValue(''),
+      toGuiModel: vi.fn().mockResolvedValue(defaultGroup),
+    };
     // No schema → NaturalRuleNode renders a plain text input for field
     render(
-      <CelExpressionBuilder defaultValue={defaultGroup} />
+      <CelExpressionBuilder defaultValue={defaultGroup} conversion={conversion} />
     );
 
     fireEvent.click(screen.getByText('+ condition'));
