@@ -158,17 +158,20 @@ internal static class CelRuntimeHelpers
 
     public static bool CelEquals(object? left, object? right)
     {
+        left = NormalizeCelValue(left);
+        right = NormalizeCelValue(right);
+
         if (left == null && right == null) return true;
         if (left == null || right == null) return false;
-
-        var leftType = left.GetType();
-        var rightType = right.GetType();
 
         if (TryEnumerateDictionary(left, out var leftDictionary) && TryEnumerateDictionary(right, out var rightDictionary))
             return DictionaryEquals(leftDictionary, rightDictionary);
 
         if (TryEnumerateSequence(left, out var leftSequence) && TryEnumerateSequence(right, out var rightSequence))
             return SequenceEquals(leftSequence, rightSequence);
+
+        var leftType = left.GetType();
+        var rightType = right.GetType();
 
         if (leftType == rightType)
         {
@@ -202,6 +205,65 @@ internal static class CelRuntimeHelpers
         }
 
         return false;
+    }
+
+    private static object? NormalizeCelValue(object? value)
+    {
+        return value switch
+        {
+            JsonElement element => NormalizeJsonElementValue(element),
+            JsonNode node => NormalizeJsonNodeValue(node),
+            _ => value
+        };
+    }
+
+    private static object? NormalizeJsonElementValue(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.Null or JsonValueKind.Undefined => null,
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number => NormalizeJsonNumber(
+                () => element.TryGetInt64(out var i) ? i : null,
+                () => element.TryGetUInt64(out var u) ? u : null,
+                () => element.GetDouble()),
+            // very costly, need to look into improvements here to avoid
+            // but the whole dictionary compares are pretty ugly
+            JsonValueKind.Array => element.EnumerateArray().Select(NormalizeJsonElementValue).ToList(),
+            JsonValueKind.Object => element.EnumerateObject()
+                .ToDictionary(static property => property.Name, static property => NormalizeJsonElementValue(property.Value)),
+            _ => element
+        };
+    }
+
+    private static object? NormalizeJsonNodeValue(JsonNode? node)
+    {
+        return node switch
+        {
+            null => null,
+            JsonArray array => array.Select(NormalizeJsonNodeValue).ToList(),
+            JsonObject obj => obj.ToDictionary(static pair => pair.Key, static pair => NormalizeJsonNodeValue(pair.Value)),
+            JsonValue value when value.TryGetValue<bool>(out var b) => b,
+            JsonValue value when value.TryGetValue<string>(out var s) => s,
+            JsonValue value => NormalizeJsonNumber(
+                () => value.TryGetValue<long>(out var i) ? i : null,
+                () => value.TryGetValue<ulong>(out var u) ? u : null,
+                () => value.GetValue<double>()),
+            _ => node
+        };
+    }
+
+    private static object NormalizeJsonNumber(Func<long?> getInt64, Func<ulong?> getUInt64, Func<double> getDouble)
+    {
+        if (getInt64() is long int64Value)
+            return int64Value;
+
+        if (getUInt64() is ulong uint64Value)
+            return uint64Value;
+
+        return getDouble();
     }
 
     private static bool SequenceEquals(IReadOnlyList<object?> left, IReadOnlyList<object?> right)

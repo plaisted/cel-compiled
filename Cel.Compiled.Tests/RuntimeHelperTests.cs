@@ -1,4 +1,6 @@
 using System;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Cel.Compiled.Compiler;
 using Xunit;
 
@@ -246,6 +248,23 @@ public class RuntimeHelperTests
     {
         Assert.False(CelRuntimeHelpers.CelEquals("hello", 1L));
         Assert.False(CelRuntimeHelpers.CelEquals(true, 1L));
+    }
+
+    [Fact]
+    public void CelEquals_NormalizesJsonScalars()
+    {
+        using var document = JsonDocument.Parse("""{"s":"Value","n":1,"b":true,"nullValue":null}""");
+        var node = JsonNode.Parse("""{"s":"Value","n":1,"b":true,"nullValue":null}""")!;
+
+        Assert.True(CelRuntimeHelpers.CelEquals(document.RootElement.GetProperty("s"), "Value"));
+        Assert.True(CelRuntimeHelpers.CelEquals(document.RootElement.GetProperty("n"), 1L));
+        Assert.True(CelRuntimeHelpers.CelEquals(document.RootElement.GetProperty("b"), true));
+        Assert.True(CelRuntimeHelpers.CelEquals(document.RootElement.GetProperty("nullValue"), null));
+
+        Assert.True(CelRuntimeHelpers.CelEquals(node["s"], "Value"));
+        Assert.True(CelRuntimeHelpers.CelEquals(node["n"], 1L));
+        Assert.True(CelRuntimeHelpers.CelEquals(node["b"], true));
+        Assert.True(CelRuntimeHelpers.CelEquals(node["nullValue"], null));
     }
 
     // --- CelCompare ---

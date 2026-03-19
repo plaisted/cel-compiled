@@ -78,29 +78,6 @@
   background-color: #fff7f7;
 }
 
-.cel-group__header {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.cel-group__combinator {
-  padding: 5px 10px;
-  border-radius: var(--cel-radius-sm);
-  border: 1px solid var(--cel-border);
-  background: var(--cel-bg-card);
-  color: var(--cel-text);
-  font-size: 13px;
-  cursor: pointer;
-  transition: background var(--cel-transition), border-color var(--cel-transition), color var(--cel-transition);
-}
-
-.cel-group__combinator:hover {
-  border-color: #94a3b8;
-}
-
-.cel-group__not-toggle,
 .cel-group__remove {
   padding: 5px 10px;
   border-radius: var(--cel-radius-sm);
@@ -110,11 +87,6 @@
   font-size: 13px;
   cursor: pointer;
   transition: background var(--cel-transition), border-color var(--cel-transition), color var(--cel-transition);
-}
-
-.cel-group__not-toggle:hover {
-  background-color: var(--cel-bg-subtle);
-  color: var(--cel-text);
 }
 
 .cel-group__remove:hover {
@@ -132,41 +104,6 @@
   padding-left: 12px;
 }
 
-.cel-group__actions {
-  margin-top: 12px;
-  display: flex;
-  gap: 8px;
-}
-
-.cel-group__add-rule,
-.cel-group__add-group {
-  padding: 6px 14px;
-  background-color: var(--cel-primary-light);
-  border: 1px solid #bfdbfe;
-  color: var(--cel-primary);
-  border-radius: var(--cel-radius-sm);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background var(--cel-transition), border-color var(--cel-transition), color var(--cel-transition);
-}
-
-.cel-group__add-rule:hover {
-  background-color: #dbeafe;
-  border-color: #93c5fd;
-}
-
-.cel-group__add-group {
-  background-color: var(--cel-bg-subtle);
-  border-color: var(--cel-border);
-  color: var(--cel-text-muted);
-}
-
-.cel-group__add-group:hover {
-  background-color: var(--cel-border);
-  border-color: #94a3b8;
-  color: var(--cel-text);
-}
 
 /* ─────────────────────────────────────────────────
    Rule Node
@@ -467,7 +404,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 22px;
+  min-height: 24px;
   margin-bottom: 8px;
 }
 
@@ -477,17 +414,117 @@
   align-items: center;
 }
 
-.cel-group__not-badge {
+.cel-group__header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Combinator toggle pill — ALL / ANY / NOT ALL / NOT ANY */
+.cel-group__combinator-toggle {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  background: #e2e8f0;
-  color: #475569;
-  border-radius: 4px;
+  padding: 3px 10px;
+  border-radius: 12px;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid transparent;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: background var(--cel-transition), color var(--cel-transition), border-color var(--cel-transition);
+}
+
+.cel-group__combinator-toggle--and {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+  color: #0369a1;
+}
+
+.cel-group__combinator-toggle--and:not(.cel-group__combinator-toggle--readonly):hover {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+}
+
+.cel-group__combinator-toggle--or {
+  background: #fdf4ff;
+  border-color: #e9d5ff;
+  color: #7e22ce;
+}
+
+.cel-group__combinator-toggle--or:not(.cel-group__combinator-toggle--readonly):hover {
+  background: #f3e8ff;
+  border-color: #c4b5fd;
+}
+
+.cel-group__combinator-toggle--readonly {
+  cursor: default;
+  box-shadow: none;
+}
+
+/* NOT switch — labeled pill toggle on the right */
+.cel-group__not-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 4px 3px 6px;
+  background: none;
+  border: none;
+  border-radius: var(--cel-radius-sm);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  transition: color var(--cel-transition);
+}
+
+.cel-group__not-switch:hover {
+  color: var(--cel-text-muted);
+}
+
+.cel-group__not-switch--on {
+  color: #475569;
+}
+
+.cel-group__not-switch__label {
+  line-height: 1;
+}
+
+.cel-group__not-switch__track {
+  display: block;
+  width: 26px;
+  height: 14px;
+  background: #e2e8f0;
+  border-radius: 7px;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.cel-group__not-switch__track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  transition: transform 0.15s;
+}
+
+.cel-group__not-switch--on .cel-group__not-switch__track {
+  background: #475569;
+}
+
+.cel-group__not-switch--on .cel-group__not-switch__track::after {
+  transform: translateX(12px);
 }
 
 /* Rules list — natural variant */
@@ -577,13 +614,11 @@
 
 /* Actions bar — natural variant */
 .cel-group__actions--natural {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--cel-border);
+  margin-top: 10px;
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 4px;
   align-items: center;
+  padding-left: 2px;
 }
 
 .cel-group__remove--natural {
@@ -603,62 +638,41 @@
   color: #b91c1c;
 }
 
-.cel-group__not-toggle {
-  padding: 4px 10px;
-  background: transparent;
-  border: 1px solid #cbd5e1;
-  border-radius: var(--cel-radius-sm);
-  color: var(--cel-text-muted);
+
+/* Natural add buttons — Option C: plain text links */
+.cel-group__add-rule,
+.cel-group__add-group {
+  padding: 0;
+  background: none;
+  border: none;
   font-size: 12px;
+  font-family: inherit;
   cursor: pointer;
-  transition: background var(--cel-transition), color var(--cel-transition), border-color var(--cel-transition);
+  transition: color var(--cel-transition);
 }
 
-.cel-group__not-toggle:hover {
-  background: var(--cel-bg-subtle);
-  color: var(--cel-text);
-}
-
-.cel-group__not-toggle--active {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #475569;
-}
-
-.cel-group__not-toggle--active:hover {
-  background: #f1f5f9;
-}
-
-/* Natural layout add buttons - Ghost styling */
-.cel-builder--natural .cel-group__add-rule,
-.cel-builder--natural .cel-group__add-group {
-  padding: 4px 10px;
-  font-size: 12px;
-  border-radius: var(--cel-radius-sm);
-  background: transparent;
-  border: 1px solid #cbd5e1;
-  color: var(--cel-text-muted);
-  font-weight: 500;
-  transition: background var(--cel-transition), color var(--cel-transition), border-color var(--cel-transition);
-}
-
-.cel-builder--natural .cel-group__add-rule:hover,
-.cel-builder--natural .cel-group__add-group:hover {
-  background: var(--cel-bg-subtle);
-  border-color: #94a3b8;
-  color: var(--cel-text);
-}
-
-.cel-builder--natural .cel-group__add-rule {
-  background: var(--cel-bg-card);
-  border-color: #93c5fd;
+.cel-group__add-rule {
   color: var(--cel-primary);
 }
 
-.cel-builder--natural .cel-group__add-rule:hover {
-  background: var(--cel-primary-light);
-  border-color: #60a5fa;
+.cel-group__add-rule:hover {
   color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.cel-group__add-group {
+  color: var(--cel-text-muted);
+}
+
+.cel-group__add-group:hover {
+  color: var(--cel-text);
+  text-decoration: underline;
+}
+
+.cel-group__actions-sep {
+  color: #cbd5e1;
+  font-size: 12px;
+  user-select: none;
 }
 
 /* Rule — natural variant */

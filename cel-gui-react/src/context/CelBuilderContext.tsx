@@ -2,26 +2,22 @@ import React, { createContext, useContext, useMemo, ReactNode } from 'react';
 
 export interface CelBuilderContextValue {
   readOnly?: boolean;
-  layout?: 'standard' | 'natural';
 }
 
 const CelBuilderContext = createContext<CelBuilderContextValue>({
   readOnly: false,
-  layout: 'standard',
 });
 
 export interface CelBuilderProviderProps {
   readOnly?: boolean;
-  layout?: 'standard' | 'natural';
   children: ReactNode;
 }
 
 export const CelBuilderProvider: React.FC<CelBuilderProviderProps> = ({
   readOnly,
-  layout,
   children,
 }) => {
-  const value = useMemo(() => ({ readOnly, layout }), [readOnly, layout]);
+  const value = useMemo(() => ({ readOnly }), [readOnly]);
   return (
     <CelBuilderContext.Provider value={value}>
       {children}

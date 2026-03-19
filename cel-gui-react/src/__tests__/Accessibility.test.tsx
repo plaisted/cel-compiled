@@ -1,8 +1,8 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
-import { GroupNode } from '../components/GroupNode.tsx';
-import { RuleNode } from '../components/RuleNode.tsx';
+import { NaturalGroupNode } from '../components/NaturalGroupNode.tsx';
+import { NaturalRuleNode } from '../components/NaturalRuleNode.tsx';
 import { CelExpressionBuilder } from '../components/CelExpressionBuilder.tsx';
 import { CelGuiGroup, CelGuiRule } from '../types.ts';
 import { CelBuilderProvider } from '../context/CelBuilderContext.tsx';
@@ -34,7 +34,7 @@ describe('7.1 Group ARIA attributes', () => {
   it('AND group has role="group" and aria-label "All of the following conditions"', () => {
     render(
       <CelBuilderProvider>
-        <GroupNode node={mkGroup('and', false)} onChange={vi.fn()} />
+        <NaturalGroupNode node={mkGroup('and', false)} onChange={vi.fn()} />
       </CelBuilderProvider>
     );
     const group = screen.getByRole('group');
@@ -44,7 +44,7 @@ describe('7.1 Group ARIA attributes', () => {
   it('OR group has aria-label "Any of the following conditions"', () => {
     render(
       <CelBuilderProvider>
-        <GroupNode node={mkGroup('or', false)} onChange={vi.fn()} />
+        <NaturalGroupNode node={mkGroup('or', false)} onChange={vi.fn()} />
       </CelBuilderProvider>
     );
     expect(screen.getByRole('group')).toHaveAttribute(
@@ -56,7 +56,7 @@ describe('7.1 Group ARIA attributes', () => {
   it('NOT+AND group has aria-label "None of the following conditions"', () => {
     render(
       <CelBuilderProvider>
-        <GroupNode node={mkGroup('and', true)} onChange={vi.fn()} />
+        <NaturalGroupNode node={mkGroup('and', true)} onChange={vi.fn()} />
       </CelBuilderProvider>
     );
     expect(screen.getByRole('group')).toHaveAttribute(
@@ -68,7 +68,7 @@ describe('7.1 Group ARIA attributes', () => {
   it('NOT+OR group has aria-label "Not any of the following conditions"', () => {
     render(
       <CelBuilderProvider>
-        <GroupNode node={mkGroup('or', true)} onChange={vi.fn()} />
+        <NaturalGroupNode node={mkGroup('or', true)} onChange={vi.fn()} />
       </CelBuilderProvider>
     );
     expect(screen.getByRole('group')).toHaveAttribute(
@@ -91,11 +91,10 @@ describe('7.2 Rule aria-label', () => {
     render(
       <CelBuilderProvider>
         <CelSchemaProvider>
-          <RuleNode node={node} onChange={vi.fn()} />
+          <NaturalRuleNode node={node} onChange={vi.fn()} />
         </CelSchemaProvider>
       </CelBuilderProvider>
     );
-    // The rule container div carries the aria-label
     const rule = document.querySelector('.cel-rule');
     expect(rule).toHaveAttribute('aria-label', 'Condition: user.age is at least 18');
   });
@@ -110,7 +109,7 @@ describe('7.2 Rule aria-label', () => {
     render(
       <CelBuilderProvider>
         <CelSchemaProvider>
-          <RuleNode node={node} onChange={vi.fn()} />
+          <NaturalRuleNode node={node} onChange={vi.fn()} />
         </CelSchemaProvider>
       </CelBuilderProvider>
     );
@@ -128,7 +127,7 @@ describe('7.2 Rule aria-label', () => {
     render(
       <CelBuilderProvider>
         <CelSchemaProvider>
-          <RuleNode node={node} onChange={vi.fn()} />
+          <NaturalRuleNode node={node} onChange={vi.fn()} />
         </CelSchemaProvider>
       </CelBuilderProvider>
     );
@@ -150,7 +149,7 @@ describe('7.3 Icon-only button aria-labels', () => {
     render(
       <CelBuilderProvider>
         <CelSchemaProvider>
-          <RuleNode node={node} onChange={vi.fn()} onRemove={vi.fn()} />
+          <NaturalRuleNode node={node} onChange={vi.fn()} onRemove={vi.fn()} />
         </CelSchemaProvider>
       </CelBuilderProvider>
     );
@@ -160,7 +159,7 @@ describe('7.3 Icon-only button aria-labels', () => {
   it('remove group button has aria-label="Remove group"', () => {
     render(
       <CelBuilderProvider>
-        <GroupNode
+        <NaturalGroupNode
           node={{ type: 'group', combinator: 'and', not: false, rules: [] }}
           onChange={vi.fn()}
           onRemove={vi.fn()}
@@ -173,32 +172,32 @@ describe('7.3 Icon-only button aria-labels', () => {
   it('NOT toggle button has aria-label="Toggle NOT modifier"', () => {
     render(
       <CelBuilderProvider>
-        <GroupNode
+        <NaturalGroupNode
           node={{ type: 'group', combinator: 'and', not: false, rules: [] }}
           onChange={vi.fn()}
         />
       </CelBuilderProvider>
     );
-    expect(screen.getByRole('button', { name: 'Toggle NOT modifier' })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Toggle NOT modifier' })).toBeInTheDocument();
   });
 });
 
 // ─── 7.4  Focus moves to new rule's field selector after add-rule ─────────────
 
 describe('7.4 Focus management after add-rule', () => {
-  it('moves focus to the new rule field input after clicking Add Rule', async () => {
+  it('moves focus to the new rule field input after clicking + condition', async () => {
     const defaultGroup: CelGuiGroup = {
       type: 'group',
       combinator: 'and',
       not: false,
       rules: [],
     };
-    // No schema → RuleNode renders a plain text input for field
+    // No schema → NaturalRuleNode renders a plain text input for field
     render(
       <CelExpressionBuilder defaultValue={defaultGroup} />
     );
 
-    fireEvent.click(screen.getByText('Add Rule'));
+    fireEvent.click(screen.getByText('+ condition'));
 
     await waitFor(() => {
       const fieldInput = screen.getByPlaceholderText('field');

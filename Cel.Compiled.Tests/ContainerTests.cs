@@ -299,6 +299,14 @@ public class ContainerTests
     }
 
     [Fact]
+    public void JsonElementStringMembershipUsesCelEquality()
+    {
+        using var document = JsonDocument.Parse("""{"Value":"Value"}""");
+        var result = Eval("""Value in ["Value"]""", document.RootElement);
+        Assert.Equal(true, result);
+    }
+
+    [Fact]
     public void GenericListIndex()
     {
         var result = Eval("Numbers[1]", new ListContext { Numbers = new List<long> { 10, 20, 30 } });

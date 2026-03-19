@@ -114,7 +114,9 @@ export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({
     [node, onChange]
   );
 
-  const combinatorLabel = node.combinator === 'and' ? 'ALL' : 'ANY';
+  const combinatorLabel = node.not
+    ? node.combinator === 'and' ? 'NOT ALL' : 'NOT ANY'
+    : node.combinator === 'and' ? 'ALL' : 'ANY';
   const ariaLabel = getGroupAriaLabel(node.combinator, !!node.not);
 
   return (
@@ -128,30 +130,44 @@ export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({
           {!readOnly ? (
             <button
               type="button"
-              className={`cel-group__combinator-toggle cel-group__combinator-toggle--${node.combinator}`}
+              className={`cel-group__combinator-toggle cel-group__combinator-toggle--${node.combinator}${node.not ? ' cel-group__combinator-toggle--not' : ''}`}
               onClick={handleCombinatorToggle}
               title="Click to toggle ALL / ANY"
             >
               {combinatorLabel}
             </button>
           ) : (
-            <span className={`cel-group__combinator-toggle cel-group__combinator-toggle--${node.combinator} cel-group__combinator-toggle--readonly`}>
+            <span className={`cel-group__combinator-toggle cel-group__combinator-toggle--${node.combinator}${node.not ? ' cel-group__combinator-toggle--not' : ''} cel-group__combinator-toggle--readonly`}>
               {combinatorLabel}
             </span>
           )}
-          {node.not && <span className="cel-group__not-badge">NOT</span>}
         </div>
-        {!readOnly && onRemove && (
-          <button
-            type="button"
-            className="cel-group__remove cel-group__remove--natural"
-            aria-label="Remove group"
-            onClick={onRemove}
-            title="Remove group"
-          >
-            ×
-          </button>
-        )}
+        <div className="cel-group__header-right">
+          {!readOnly && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!!node.not}
+              aria-label="Toggle NOT modifier"
+              className={`cel-group__not-switch${node.not ? ' cel-group__not-switch--on' : ''}`}
+              onClick={handleNotToggle}
+            >
+              <span className="cel-group__not-switch__label">NOT</span>
+              <span className="cel-group__not-switch__track" aria-hidden="true" />
+            </button>
+          )}
+          {!readOnly && onRemove && (
+            <button
+              type="button"
+              className="cel-group__remove cel-group__remove--natural"
+              aria-label="Remove group"
+              onClick={onRemove}
+              title="Remove group"
+            >
+              ×
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="cel-group__rules cel-group__rules--natural">
@@ -181,23 +197,16 @@ export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({
       {!readOnly && (
         <div className="cel-group__actions cel-group__actions--natural">
           <button
-            type="button"
-            className={`cel-group__not-toggle${node.not ? ' cel-group__not-toggle--active' : ''}`}
-            aria-label="Toggle NOT modifier"
-            onClick={handleNotToggle}
-          >
-            {node.not ? '− Remove NOT' : '+ NOT'}
-          </button>
-          <button
             ref={addRuleButtonRef}
             type="button"
             className="cel-group__add-rule"
             onClick={handleAddRule}
           >
-            + Add condition
+            + condition
           </button>
+          <span className="cel-group__actions-sep" aria-hidden="true">·</span>
           <button type="button" className="cel-group__add-group" onClick={handleAddGroup}>
-            + Add group
+            + group
           </button>
         </div>
       )}
