@@ -4,12 +4,11 @@ import { describe, it, expect, vi } from 'vitest';
 import { NodeRenderer } from '../components/NodeRenderer.tsx';
 import { CelGuiGroup, CelGuiRule, CelGuiMacro, CelGuiAdvanced } from '../types.ts';
 
-// Mock child components
-vi.mock('../components/GroupNode.tsx', () => ({
-  GroupNode: () => <div data-testid="group-node">Group Node</div>,
+vi.mock('../components/NaturalGroupNode.tsx', () => ({
+  NaturalGroupNode: () => <div data-testid="group-node">Group Node</div>,
 }));
-vi.mock('../components/RuleNode.tsx', () => ({
-  RuleNode: () => <div data-testid="rule-node">Rule Node</div>,
+vi.mock('../components/NaturalRuleNode.tsx', () => ({
+  NaturalRuleNode: () => <div data-testid="rule-node">Rule Node</div>,
 }));
 vi.mock('../components/MacroNode.tsx', () => ({
   MacroNode: () => <div data-testid="macro-node">Macro Node</div>,
@@ -21,13 +20,13 @@ vi.mock('../components/AdvancedNode.tsx', () => ({
 describe('NodeRenderer', () => {
   const onChange = vi.fn();
 
-  it('renders GroupNode for group type', () => {
+  it('renders NaturalGroupNode for group type', () => {
     const node: CelGuiGroup = { type: 'group', combinator: 'and', not: false, rules: [] };
     render(<NodeRenderer node={node} onChange={onChange} />);
     expect(screen.getByTestId('group-node')).toBeInTheDocument();
   });
 
-  it('renders RuleNode for rule type', () => {
+  it('renders NaturalRuleNode for rule type', () => {
     const node: CelGuiRule = { type: 'rule', field: 'a', operator: '==', value: 1 };
     render(<NodeRenderer node={node} onChange={onChange} />);
     expect(screen.getByTestId('rule-node')).toBeInTheDocument();

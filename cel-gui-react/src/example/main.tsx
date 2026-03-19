@@ -10,8 +10,6 @@ import {
 import '../cel-gui.css';
 import './example.css';
 
-type Layout = 'standard' | 'natural';
-
 const API_BASE = 'http://localhost:5089';
 
 const DEFAULT_SCHEMA_JSON = JSON.stringify(
@@ -51,7 +49,6 @@ const DEFAULT_NODE: CelGuiNode = {
 };
 
 const App = () => {
-  const [layout, setLayout] = useState<Layout>('standard');
   const [currentNode, setCurrentNode] = useState<CelGuiNode>(DEFAULT_NODE);
   const [validationErrors, setValidationErrors] = useState<CelError[]>([]);
   const [evalErrors, setEvalErrors] = useState<CelError[]>([]);
@@ -167,19 +164,6 @@ const App = () => {
     <div className="ex-page">
       <div className="ex-header">
         <h2 className="ex-header__title">CEL Expression Builder</h2>
-        <div className="ex-layout-toggle" role="group" aria-label="Layout style">
-          {(['standard', 'natural'] as Layout[]).map((l) => (
-            <button
-              key={l}
-              type="button"
-              className={`ex-layout-toggle__btn${layout === l ? ' ex-layout-toggle__btn--active' : ''}`}
-              onClick={() => setLayout(l)}
-              aria-pressed={layout === l}
-            >
-              {l === 'standard' ? 'Standard' : 'Natural'}
-            </button>
-          ))}
-        </div>
       </div>
       <p className="ex-header__subtitle">
         Edit the schema and context below, build an expression, then hit Evaluate.
@@ -233,7 +217,6 @@ const App = () => {
         schema={schema}
         conversion={conversion}
         errors={[...validationErrors, ...evalErrors]}
-        layout={layout}
       />
 
       {/* Evaluate bar */}

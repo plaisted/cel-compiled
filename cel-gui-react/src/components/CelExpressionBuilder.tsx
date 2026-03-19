@@ -19,7 +19,6 @@ export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
   conversion,
   schema,
   errors,
-  layout = 'standard',
 }) => {
   const {
     node: internalNode,
@@ -105,8 +104,8 @@ export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
 
   return (
     <CelSchemaProvider schema={schema}>
-      <CelBuilderProvider readOnly={readOnly} layout={layout}>
-        <div className={`cel-builder${layout === 'natural' ? ' cel-builder--natural' : ''}`}>
+      <CelBuilderProvider readOnly={readOnly}>
+        <div className="cel-builder cel-builder--natural">
           <div className="cel-builder__toolbar">
             {showToggle && (
               <button

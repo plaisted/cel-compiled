@@ -45,7 +45,7 @@ describe('Integration Test: Expression Building', () => {
     render(<CelExpressionBuilder schema={schema} defaultValue={defaultGroup} onChange={onChange} />);
 
     // Add a rule
-    fireEvent.click(screen.getByText('Add Rule'));
+    fireEvent.click(screen.getByText('+ condition'));
     expect(onChange).toHaveBeenCalled();
 
     // Get the latest node from onChange
@@ -58,17 +58,17 @@ describe('Integration Test: Expression Building', () => {
     // but CelExpressionBuilder also works uncontrolled. Let's just use DOM interactions
     // since it manages internal state when not fully controlled!
     const selects = screen.getAllByRole('combobox');
-    const ruleFieldSelect = selects[1]; // 0 is group combinator, 1 is rule field
+    const ruleFieldSelect = selects[0]; // natural layout uses a button for combinator, so 0 is rule field
     fireEvent.change(ruleFieldSelect, { target: { value: 'user.age' } });
 
-    const ruleOperatorSelect = screen.getAllByRole('combobox')[2];
+    const ruleOperatorSelect = screen.getAllByRole('combobox')[1];
     fireEvent.change(ruleOperatorSelect, { target: { value: '>=' } });
 
-    const ruleValueInput = screen.getByPlaceholderText('0');
+    const ruleValueInput = screen.getByPlaceholderText('value');
     fireEvent.change(ruleValueInput, { target: { value: '18' } });
 
     // Add a nested group
-    fireEvent.click(screen.getByText('Add Group'));
+    fireEvent.click(screen.getByText('+ group'));
 
     // Check final emitted structure
     const finalNode = onChange.mock.calls[onChange.mock.calls.length - 1][0] as CelGuiGroup;

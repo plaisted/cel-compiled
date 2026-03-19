@@ -91,5 +91,4 @@ export interface CelExpressionBuilderProps {
   conversion?: CelConversionOptions;
   schema?: CelSchema;
   errors?: CelError[];
-  layout?: 'standard' | 'natural';
 }
