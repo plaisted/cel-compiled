@@ -5,16 +5,19 @@ export interface UseCelExpressionOptions {
   defaultValue?: CelGuiNode;
   defaultSource?: string;
   defaultMode?: CelBuilderMode;
+  defaultPretty?: boolean;
 }
 
 export function useCelExpression({
   defaultValue,
   defaultSource = '',
   defaultMode = 'auto',
+  defaultPretty = false,
 }: UseCelExpressionOptions = {}) {
   const [node, setNodeState] = useState<CelGuiNode | undefined>(defaultValue);
   const [source, setSourceState] = useState<string>(defaultSource);
   const [mode, setModeState] = useState<CelBuilderMode>(defaultMode);
+  const [pretty, setPrettyState] = useState<boolean>(defaultPretty);
   const [isDirty, setIsDirty] = useState(false);
 
   const setNode = useCallback((newNode: CelGuiNode) => {
@@ -31,6 +34,10 @@ export function useCelExpression({
     setModeState(newMode);
   }, []);
 
+  const setPretty = useCallback((isPretty: boolean) => {
+    setPrettyState(isPretty);
+  }, []);
+
   const toggleMode = useCallback(() => {
     setModeState((prev) => (prev === 'source' ? 'auto' : 'source'));
   }, []);
@@ -43,10 +50,12 @@ export function useCelExpression({
     node,
     source,
     mode,
+    pretty,
     isDirty,
     setNode,
     setSource,
     setMode,
+    setPretty,
     toggleMode,
     resetDirty,
   };

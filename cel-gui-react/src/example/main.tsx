@@ -50,6 +50,7 @@ const DEFAULT_NODE: CelGuiNode = {
 
 const App = () => {
   const [currentNode, setCurrentNode] = useState<CelGuiNode>(DEFAULT_NODE);
+  const [pretty, setPretty] = useState(false);
   const [validationErrors, setValidationErrors] = useState<CelError[]>([]);
   const [evalErrors, setEvalErrors] = useState<CelError[]>([]);
 
@@ -72,8 +73,11 @@ const App = () => {
   const [isEvaluating, setIsEvaluating] = useState(false);
 
   const conversion = {
-    toCelString: async (node: CelGuiNode) => {
-      const res = await fetch(`${API_BASE}/api/cel/to-cel-string`, {
+    toCelString: async (node: CelGuiNode, isPretty?: boolean) => {
+      const url = new URL(`${API_BASE}/api/cel/to-cel-string`);
+      if (isPretty) url.searchParams.set('pretty', 'true');
+      
+      const res = await fetch(url.toString(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(node),
@@ -139,7 +143,7 @@ const App = () => {
       const source =
         builderModeRef.current === 'source'
           ? builderSourceRef.current
-          : await conversion.toCelString(currentNode);
+          : await conversion.toCelString(currentNode, pretty);
       const res = await fetch(`${API_BASE}/api/cel/evaluate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -214,6 +218,8 @@ const App = () => {
         onChange={handleChange}
         onSourceChange={(s) => { builderSourceRef.current = s; }}
         onModeChange={(m) => { builderModeRef.current = m; }}
+        pretty={pretty}
+        onPrettyChange={setPretty}
         schema={schema}
         conversion={conversion}
         errors={[...validationErrors, ...evalErrors]}

@@ -65,7 +65,7 @@ export interface CelSchema {
 }
 
 export interface CelConversionOptions {
-  toCelString: (node: CelGuiNode) => Promise<string>;
+  toCelString: (node: CelGuiNode, pretty?: boolean) => Promise<string>;
   toGuiModel: (source: string) => Promise<CelGuiNode>;
 }
 
@@ -86,7 +86,9 @@ export interface CelExpressionBuilderProps {
   onChange?: (node: CelGuiNode) => void;
   onSourceChange?: (source: string) => void;
   onModeChange?: (mode: CelBuilderMode) => void;
+  onPrettyChange?: (pretty: boolean) => void;
   mode?: CelBuilderMode;
+  pretty?: boolean;
   readOnly?: boolean;
   conversion?: CelConversionOptions;
   schema?: CelSchema;

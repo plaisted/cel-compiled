@@ -52,7 +52,10 @@ app.MapPost("/api/cel/to-cel-string", async (HttpContext context) =>
         var node = await JsonSerializer.DeserializeAsync<CelGuiNode>(context.Request.Body, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
         if (node == null) return Results.BadRequest("Invalid JSON");
 
-        var celString = CelGuiConverter.ToCelString(node);
+        bool pretty = context.Request.Query.TryGetValue("pretty", out var prettyValues) && 
+                      bool.TryParse(prettyValues.FirstOrDefault(), out var isPretty) && isPretty;
+
+        var celString = CelGuiConverter.ToCelString(node, pretty);
         return Results.Text(celString);
     }
     catch (Exception ex)

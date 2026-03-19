@@ -81,7 +81,7 @@ describe('CelExpressionBuilder', () => {
       fireEvent.click(toggleBtn);
     });
 
-    expect(conversion.toCelString).toHaveBeenCalledWith(defaultNode);
+    expect(conversion.toCelString).toHaveBeenCalledWith(defaultNode, false);
     expect(screen.getByText('Visual')).toBeInTheDocument(); // button text changes
 
     const editor = await screen.findByTestId('cel-code-editor');
@@ -140,5 +140,56 @@ describe('CelExpressionBuilder', () => {
     render(<CelExpressionBuilder mode="visual" defaultValue={defaultNode} />);
     expect(screen.queryByText('Source')).not.toBeInTheDocument();
     expect(screen.queryByText('Visual')).not.toBeInTheDocument();
+  });
+
+  it('renders pretty print checkbox and toggles it', async () => {
+    const conversion = {
+      toCelString: vi.fn().mockResolvedValue('a == 1'),
+      toGuiModel: vi.fn().mockResolvedValue({ type: 'rule', field: 'a', operator: '==', value: 1 }),
+    };
+    const onPrettyChange = vi.fn();
+
+    render(
+      <CelExpressionBuilder
+        defaultValue={defaultNode}
+        conversion={conversion}
+        onPrettyChange={onPrettyChange}
+      />
+    );
+
+    const checkbox = screen.getByLabelText('Pretty Print') as HTMLInputElement;
+    expect(checkbox).toBeInTheDocument();
+    expect(checkbox.checked).toBe(false);
+
+    // Toggle checkbox
+    fireEvent.click(checkbox);
+    expect(checkbox.checked).toBe(true);
+    expect(onPrettyChange).toHaveBeenCalledWith(true);
+  });
+
+  it('re-formats source immediately when pretty print is toggled in source mode', async () => {
+    const conversion = {
+      toCelString: vi.fn().mockResolvedValue('a == 1'),
+      toGuiModel: vi.fn().mockResolvedValue({ type: 'rule', field: 'a', operator: '==', value: 1 }),
+    };
+
+    render(
+      <CelExpressionBuilder
+        defaultValue={defaultNode}
+        conversion={conversion}
+        mode="source"
+      />
+    );
+
+    const checkbox = screen.getByLabelText('Pretty Print');
+    
+    // Clear initial call if any
+    conversion.toCelString.mockClear();
+    
+    await act(async () => {
+      fireEvent.click(checkbox);
+    });
+
+    expect(conversion.toCelString).toHaveBeenCalledWith(expect.anything(), true);
   });
 });

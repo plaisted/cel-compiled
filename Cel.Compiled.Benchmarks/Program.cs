@@ -282,7 +282,13 @@ public class CelNetComparisonBenchmarks
     [
         static (TestRecord t) => 1 + 2 * 3 == 7,
         static (TestRecord t) => "hello world".Contains("world", StringComparison.Ordinal),
-        static (TestRecord t) => Array.Exists(s_nativeList, static x => x == 2)
+        static (TestRecord t) => 
+        {
+            var list = s_nativeList;
+            for (int i = 0; i < list.Length; i++)
+                if (list[i] == 2) return true;
+            return false;
+        }
     ];
 
     private readonly Func<object, bool>[] _compiledDelegates =

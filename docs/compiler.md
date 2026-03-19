@@ -1,104 +1,76 @@
-# Compiler Flow
+  The compiler is now split across partial files in `Cel.Compiled/Compiler/` so the flow is easier to navigate. For the contributor
+  workflow for adding new builtins, custom functions, or shipped extensions, see `docs/compiler-functions.md`.
 
-This document summarizes how `Cel.Compiled` turns a parsed CEL AST into an executable .NET delegate.
+  - `CelCompiler.cs`: entrypoints, diagnostics, AST dispatch, literals, identifier/member lowering
+  - `CelCompiler.Calls.cs`: `CompileCall(...)` routing, built-ins, custom-function overload resolution
+  - `CelCompiler.Indexing.cs`: AST index lowering, optional index flow, `in` special form
+  - `CelCompiler.Macros.cs`: macro lowering and comprehension planning
+  - `CelCompiler.Operators.cs`: low-level index access, arithmetic/comparison/logical operators, shared helper utilities
 
-## High-Level Pipeline
+  The real compilation happens in `CompileUncached<TContext, TResult>` in `Cel.Compiled/Compiler/CelCompiler.cs`. It:
 
-1. Public entrypoints such as `CelCompiler.Compile<TContext, TResult>(...)` parse the expression if needed, then delegate to the uncached compiler path or the cache.
-2. `CompileUncached` creates the root `ParameterExpression` for the context, builds the binder set for the requested context type and options, and compiles the AST into a LINQ `Expression`.
-3. The final expression is converted to the requested result type if needed, wrapped in a lambda, and compiled into a delegate.
+  1. Pushes diagnostic/source-map context.
+  2. Creates the lambda parameter context.
+  3. Builds a CelBinderSet for the context type and options.
+  4. Recursively lowers the AST via CompileNode(...).
+  5. Converts the final expression to TResult if needed.
+  6. Wraps it in Expression.Lambda<Func<TContext, TResult>>(...).Compile().
 
-The main implementation lives in [`CelCompiler.cs`](/mnt/c/source/github/cel-compiled/Cel.Compiled/Compiler/CelCompiler.cs).
+  `CompileNode(...)` in `Cel.Compiled/Compiler/CelCompiler.cs` is the main dispatcher:
 
-## Binder Setup
+  - CelConstant -> constant expression
+  - CelIdent -> local scope lookup first, otherwise binder-based member resolution
+  - CelSelect -> member access, with optional-chain support
+  - CelIndex -> index access, with optional-index support
+  - CelCall -> function/operator/macro routing
+  - CelList / CelMap -> literal construction
 
-`CelBinderSet.Create(...)` chooses the active binding model for the root context and stores the available binders in precedence order.
+  The most important branch is `CompileCall(...)` in `Cel.Compiled/Compiler/CelCompiler.Calls.cs`. It tries handlers in a strict order:
 
-Current binder order is:
+  1. macros: all, exists, exists_one, map, filter
+  2. special forms: index, in, ternary
+  3. string built-ins
+  4. timestamp/duration accessors
+  5. size
+  6. scalar conversions like int(...), string(...)
+  7. type(...)
+  8. global optional helpers
+  9. namespaced custom functions
+  10. optional receiver methods
+  11. has(...)
+  12. operators
+  13. general custom functions
+  14. fallback error
 
-1. `JsonElement` / `JsonDocument`
-2. `JsonNode`
-3. Descriptor-backed CLR types, when a `CelTypeRegistry` is supplied
-4. Plain POCOs
+  That ordering matters. Built-ins get first claim; custom functions only run after built-ins; fallback preserves “known built-in
+  with bad arity/types” vs “unknown function” diagnostics.
 
-The root binder is selected once from the compile-time context type, but member and index access later re-resolve against the runtime expression type when necessary.
+  Binding is delegated to CelBinderSet in Cel.Compiled/Compiler/CelBinderSet.cs. The compiler itself does not know how to read foo.b
+  ar from every runtime type; it asks the binder set to resolve members, presence checks, optional members, indexers, size, and coer
+  cions for POCOs, JsonElement, JsonNode, or descriptor-backed types.
 
-See [`CelBinderSet.cs`](/mnt/c/source/github/cel-compiled/Cel.Compiled/Compiler/CelBinderSet.cs) and the binder implementations in [`JsonElementCelBinder.cs`](/mnt/c/source/github/cel-compiled/Cel.Compiled/Compiler/JsonElementCelBinder.cs), [`JsonNodeCelBinder.cs`](/mnt/c/source/github/cel-compiled/Cel.Compiled/Compiler/JsonNodeCelBinder.cs), and [`PocoCelBinder.cs`](/mnt/c/source/github/cel-compiled/Cel.Compiled/Compiler/PocoCelBinder.cs).
+  A few major lowering patterns:
 
-## AST Lowering
+  - Literals: CompileList and CompileMap infer a common element/key/value type where possible, otherwise fall back to object.
+  - Member/index access: if the binder can resolve it, use that; otherwise fall back to built-in array/list/dictionary handling in
+    `Cel.Compiled/Compiler/CelCompiler.Operators.cs`.
+  - Operators: TryCompileCallOperator normalizes operand types, then emits arithmetic/comparison/logical expression trees. Arithmetic
+    and bool logic route through runtime helpers when CEL semantics differ from raw C#.
+  - Optionals: CompileOptionalSelect, CompileOptionalIndex, and optional receiver helpers build explicit CelOptional flow with
+    hasValue/value/or/orValue.
+  - Custom functions: overload resolution is three-pass in `Cel.Compiled/Compiler/CelCompiler.Calls.cs`: exact match first, then
+    binder-assisted coercion, then all-object fallback.
 
-`CompileNode` is the central dispatcher. It recursively lowers each AST node kind into an expression tree:
+  Macros are the most elaborate part. `all`/`exists`/`exists_one`/`map`/`filter` compile into explicit loop-shaped expression trees
+  in `Cel.Compiled/Compiler/CelCompiler.Macros.cs`. The compiler:
 
-1. Constants become `Expression.Constant(...)`.
-2. Identifiers and field selections are resolved through the binder set.
-3. Indexing is compiled through binder-aware index resolution or built-in container helpers.
-4. Function and operator calls are translated into specific helper methods or inline expression patterns.
-5. List and map literals are converted into array and dictionary construction expressions.
+  1. Compiles the macro target once into macroSource.
+  2. Builds a ComprehensionPlan describing how to count and read items from arrays, lists, dictionaries, JSON arrays/objects, etc.
+  3. Extends the local scope with the iterator variable.
+  4. Emits a loop using Expression.Loop, locals, break labels, and accumulator variables.
 
-That recursion is the core compiler strategy: each node produces a typed expression, and the parent node decides how to combine the child expressions.
+  There are two comprehension modes:
 
-## Calls And Operators
-
-`CompileCall` handles the language surface area in a fixed order:
-
-1. Built-in macros and special forms first, such as `all`, `exists`, `exists_one`, `map`, `filter`, `has`, optional helpers, and `@in`.
-2. Built-in operators such as arithmetic, comparisons, logical operators, and ternary conditionals.
-3. Built-in functions such as `size`, string helpers, conversions, timestamp/duration accessors, and extension-library calls.
-4. User-defined functions from the function registry.
-
-If no overload or special case matches, compilation fails with a CEL-style overload error.
-
-## Comprehensions
-
-Comprehension macros are the most shape-sensitive part of the compiler.
-
-The compiler first builds a `ComprehensionPlan` that describes:
-
-1. The item type exposed to the iterator variable.
-2. Any temporary variables needed to cache keys or other intermediate state.
-3. How many iterations to run.
-4. How to read the current item by index.
-
-For normal typed collections, the plan is simple:
-
-1. Arrays iterate directly.
-2. Generic and non-generic lists iterate by index.
-3. Dictionaries iterate over keys.
-
-For weakly typed JSON or `object`-typed inputs, the compiler may generate runtime branches so the same expression can work over:
-
-1. `JsonElement` arrays or objects.
-2. `JsonNode` arrays or objects.
-3. Boxed `object` values that happen to contain one of the above, or ordinary POCO collections.
-
-This is the part of the compiler that avoids unnecessary boxing and preserves JSON value shapes when possible.
-
-## Result Construction
-
-List and map literals are emitted as strongly typed expression tree constructs when the compiler can infer a common element type. If the elements do not share a single concrete type, the compiler falls back to `object`.
-
-That same result-type logic is reused for macro output:
-
-1. `map` returns an array of the transform result.
-2. `filter` returns an array of the filtered item type.
-3. `exists` and `all` return `bool`.
-4. `exists_one` returns `bool`.
-
-If the final expression type does not match the requested delegate result type, `CompileUncached<TContext, TResult>` inserts an `Expression.Convert(...)` when possible.
-
-## Error Handling
-
-The compiler distinguishes between compile-time and runtime failures:
-
-1. Compile-time failures are raised when the AST cannot be lowered to a valid expression tree.
-2. Runtime helper methods throw CEL-style `CelRuntimeException`s when a value has the wrong shape at evaluation time.
-3. Source spans are threaded through many helpers so runtime errors can be attributed back to the original expression text when available.
-
-## Practical Reading Order
-
-If you are changing the compiler, the most useful reading order is:
-
-1. [`CelCompiler.cs`](/mnt/c/source/github/cel-compiled/Cel.Compiled/Compiler/CelCompiler.cs) for the overall lowering flow.
-2. [`CelBinderSet.cs`](/mnt/c/source/github/cel-compiled/Cel.Compiled/Compiler/CelBinderSet.cs) for binder selection.
-3. The binder implementations for binding-specific behavior.
-4. [`CelRuntimeHelpers.cs`](/mnt/c/source/github/cel-compiled/Cel.Compiled/Compiler/CelRuntimeHelpers.cs) for the runtime helpers the compiler emits.
+  - Static: if the target type is already known as array/list/map, CreateComprehensionPlan(...) builds one direct plan.
+  - Dynamic: if the target is `object`, `JsonElement`, or `JsonNode`, it builds runtime type branches first, then dispatches to the
+    right plan in `Cel.Compiled/Compiler/CelCompiler.Macros.cs`.
