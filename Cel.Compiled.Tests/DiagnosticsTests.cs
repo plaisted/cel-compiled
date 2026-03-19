@@ -356,6 +356,57 @@ public class DiagnosticsTests
         Assert.StartsWith("ERROR: policy.cel:1:5:", formatted);
     }
 
+    [Fact]
+    public void ReceiverFormSizeWithExtraArgFailsAsBuiltinOverloadError()
+    {
+        // Task 4.1: receiver-form size must require zero args; 'abc'.size(1) is invalid.
+        var ex = Assert.Throws<CelCompilationException>(() =>
+            CelExpression.Compile<object>("'abc'.size(1)", new CelCompileOptions { EnableCaching = false }));
+
+        Assert.Equal("no_matching_overload", ex.ErrorCode);
+        Assert.Contains("size", ex.Message);
+    }
+
+    [Fact]
+    public void FallbackKnownBuiltinWrongShapeReportsNoMatchingOverload()
+    {
+        // Task 5.1: a known built-in name in a call shape no helper owns must still produce
+        // no_matching_overload (not undeclared_reference) via CreateCallFallbackError.
+        // contains() in global form (no receiver) is not owned by TryCompileCallStringBuiltin,
+        // which requires a receiver, so it falls through to the final fallback.
+        var ex = Assert.Throws<CelCompilationException>(() =>
+            CelExpression.Compile<object>("contains('hello', 'ell')", new CelCompileOptions { EnableCaching = false }));
+
+        Assert.Equal("no_matching_overload", ex.ErrorCode);
+        Assert.Contains("contains", ex.Message);
+        Assert.DoesNotContain("Undeclared reference", ex.Message);
+    }
+
+    [Fact]
+    public void FallbackUnknownFunctionReportsUndeclaredReference()
+    {
+        // Task 5.1: unknown function names that reach the final fallback must produce
+        // undeclared_reference (not no_matching_overload) via CreateCallFallbackError.
+        var ex = Assert.Throws<CelCompilationException>(() =>
+            CelExpression.Compile<object>("totallyUnknownFn(1, 2)", new CelCompileOptions { EnableCaching = false }));
+
+        Assert.Equal("undeclared_reference", ex.ErrorCode);
+        Assert.Contains("totallyUnknownFn", ex.Message);
+    }
+
+    [Fact]
+    public void DurationAccessorWrongArityFailsAsBuiltinDiagnosticNotUndeclaredReference()
+    {
+        // Task 4.2 / 5.3: duration accessor wrong arity must throw a built-in compilation error,
+        // not undeclared_reference. Lock to the exact current error code so temporal-accessor
+        // diagnostic behavior is parity-preserved and not silently altered by future refactors.
+        var ex = Assert.Throws<CelCompilationException>(() =>
+            CelExpression.Compile<object>("duration('1s').getSeconds('utc')", new CelCompileOptions { EnableCaching = false }));
+
+        Assert.Equal("compilation_error", ex.ErrorCode);
+        Assert.Contains("getSeconds", ex.Message);
+    }
+
     private sealed class Widget
     {
         public string Name { get; init; } = string.Empty;

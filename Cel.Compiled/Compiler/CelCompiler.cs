@@ -662,304 +662,375 @@ public static class CelCompiler
         }
     }
 
+    // Carries compilation context for CompileCall helpers, avoiding repeated parameter threading.
+    private readonly struct CallCompileContext(Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    {
+        public readonly Expression ContextExpr = contextExpr;
+        public readonly CelBinderSet Binders = binders;
+        public readonly IReadOnlyDictionary<string, Expression>? Scope = scope;
+
+        public Expression Compile(CelExpr expr) => CompileNode(expr, ContextExpr, Binders, Scope);
+    }
+
     private static Expression CompileCall(CelCall call, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    {
+        var ctx = new CallCompileContext(contextExpr, binders, scope);
+
+        return TryCompileCallMacro(call, ctx)
+            ?? TryCompileCallSpecialForm(call, ctx)
+            ?? TryCompileCallStringBuiltin(call, ctx)
+            ?? TryCompileCallTemporalAccessor(call, ctx)
+            ?? TryCompileCallSize(call, ctx)
+            ?? TryCompileCallConversion(call, ctx)
+            ?? TryCompileCallType(call, ctx)
+            ?? TryCompileCallOptionalGlobal(call, ctx)
+            ?? TryCompileCallNamespacedCustomFunction(call, ctx)
+            ?? TryCompileCallOptionalReceiver(call, ctx)
+            ?? TryCompileCallHas(call, ctx)
+            ?? TryCompileCallOperator(call, ctx)
+            ?? TryCompileCallCustomFunction(call, ctx)
+            ?? throw CreateCallFallbackError(call);
+    }
+
+    private static Expression? TryCompileCallMacro(CelCall call, CallCompileContext ctx)
     {
         if (call.Target != null && call.Args.Count == 2 && call.Args[0] is CelIdent iterator)
         {
             if (IsMacroFunction(call.Function))
-                EnsureFeatureEnabled(binders, CelFeatureFlags.Macros, "standard macros", call);
+                EnsureFeatureEnabled(ctx.Binders, CelFeatureFlags.Macros, "standard macros", call);
 
             if (call.Function == "all")
-                return CompileQuantifierMacro(call.Target, iterator.Name, call.Args[1], contextExpr, binders, scope, MacroKind.All);
+                return CompileQuantifierMacro(call.Target, iterator.Name, call.Args[1], ctx.ContextExpr, ctx.Binders, ctx.Scope, MacroKind.All);
 
             if (call.Function == "exists")
-                return CompileQuantifierMacro(call.Target, iterator.Name, call.Args[1], contextExpr, binders, scope, MacroKind.Exists);
+                return CompileQuantifierMacro(call.Target, iterator.Name, call.Args[1], ctx.ContextExpr, ctx.Binders, ctx.Scope, MacroKind.Exists);
 
             if (call.Function == "exists_one")
-                return CompileExistsOneMacro(call.Target, iterator.Name, call.Args[1], contextExpr, binders, scope);
+                return CompileExistsOneMacro(call.Target, iterator.Name, call.Args[1], ctx.ContextExpr, ctx.Binders, ctx.Scope);
 
             if (call.Function == "map")
-                return CompileMapMacro(call.Target, iterator.Name, null, call.Args[1], contextExpr, binders, scope);
+                return CompileMapMacro(call.Target, iterator.Name, null, call.Args[1], ctx.ContextExpr, ctx.Binders, ctx.Scope);
 
             if (call.Function == "filter")
-                return CompileFilterMacro(call.Target, iterator.Name, call.Args[1], contextExpr, binders, scope);
+                return CompileFilterMacro(call.Target, iterator.Name, call.Args[1], ctx.ContextExpr, ctx.Binders, ctx.Scope);
         }
 
         if (call.Target != null && call.Function == "map" && call.Args.Count == 3 && call.Args[0] is CelIdent filterIterator)
         {
-            EnsureFeatureEnabled(binders, CelFeatureFlags.Macros, "standard macros", call);
-            return CompileMapMacro(call.Target, filterIterator.Name, call.Args[1], call.Args[2], contextExpr, binders, scope);
+            EnsureFeatureEnabled(ctx.Binders, CelFeatureFlags.Macros, "standard macros", call);
+            return CompileMapMacro(call.Target, filterIterator.Name, call.Args[1], call.Args[2], ctx.ContextExpr, ctx.Binders, ctx.Scope);
         }
 
+        return null;
+    }
+
+    private static Expression? TryCompileCallSpecialForm(CelCall call, CallCompileContext ctx)
+    {
         if (call.Function == "_[_]" && call.Args.Count == 2)
-        {
-            return CompileIndexAccess(
-                CompileNode(call.Args[0], contextExpr, binders, scope),
-                CompileNode(call.Args[1], contextExpr, binders, scope),
-                binders,
-                call);
-        }
+            return CompileIndexAccess(ctx.Compile(call.Args[0]), ctx.Compile(call.Args[1]), ctx.Binders, call);
 
         if (call.Function == "@in" && call.Args.Count == 2)
-        {
-            return CompileIn(
-                CompileNode(call.Args[0], contextExpr, binders, scope),
-                CompileNode(call.Args[1], contextExpr, binders, scope),
-                call);
-        }
+            return CompileIn(ctx.Compile(call.Args[0]), ctx.Compile(call.Args[1]), call);
 
         if (call.Function == "_?_:_" && call.Args.Count == 3)
         {
-            var cond = CompileNode(call.Args[0], contextExpr, binders, scope);
-            var left = CompileNode(call.Args[1], contextExpr, binders, scope);
-            var right = CompileNode(call.Args[2], contextExpr, binders, scope);
-
-            (left, right) = CelTypeCoercion.NormalizeTernaryBranches(left, right, binders);
+            var cond = ctx.Compile(call.Args[0]);
+            var left = ctx.Compile(call.Args[1]);
+            var right = ctx.Compile(call.Args[2]);
+            (left, right) = CelTypeCoercion.NormalizeTernaryBranches(left, right, ctx.Binders);
             return Expression.Condition(cond, left, right);
         }
 
-        if ((call.Function == "contains" || call.Function == "startsWith" || call.Function == "endsWith" || call.Function == "matches") && (call.Args.Count == 1 && call.Target != null))
+        return null;
+    }
+
+    private static Expression? TryCompileCallStringBuiltin(CelCall call, CallCompileContext ctx)
+    {
+        if (call.Target == null || call.Args.Count != 1)
+            return null;
+
+        if (call.Function != "contains" && call.Function != "startsWith" && call.Function != "endsWith" && call.Function != "matches")
+            return null;
+
+        var target = ctx.Compile(call.Target);
+        var arg = ctx.Compile(call.Args[0]);
+
+        if (target.Type == typeof(string) && arg.Type == typeof(string))
         {
-            var target = CompileNode(call.Target, contextExpr, binders, scope);
-            var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
-
-            if (target.Type == typeof(string) && arg.Type == typeof(string))
+            var method = call.Function switch
             {
-                var method = call.Function switch
-                {
-                    "contains" => s_stringContains,
-                    "startsWith" => s_stringStartsWith,
-                    "endsWith" => s_stringEndsWith,
-                    "matches" => s_stringMatches,
-                    _ => throw new InvalidOperationException()
-                };
-                return Expression.Call(method, target, arg);
-            }
-
-            var celMethod = call.Function switch
-            {
-                "contains" => s_celContainsWithSource,
-                "startsWith" => s_celStartsWithWithSource,
-                "endsWith" => s_celEndsWithWithSource,
-                "matches" => s_celMatchesWithSource,
+                "contains" => s_stringContains,
+                "startsWith" => s_stringStartsWith,
+                "endsWith" => s_stringEndsWith,
+                "matches" => s_stringMatches,
                 _ => throw new InvalidOperationException()
             };
-            var source = CelDiagnosticUtilities.GetSourceContextConstants(call);
-            return Expression.Call(celMethod, BoxIfNeeded(target), BoxIfNeeded(arg), source.ExpressionText, source.Start, source.End);
+            return Expression.Call(method, target, arg);
         }
 
-        if (call.Target != null && (IsDurationAccessor(call.Function) || IsTimestampAccessor(call.Function)))
+        var celMethod = call.Function switch
         {
-            var target = CompileNode(call.Target, contextExpr, binders, scope);
-            if (target.Type == typeof(TimeSpan) && IsDurationAccessor(call.Function))
-                return CompileDurationAccessor(call.Function, target, call.Args, call);
+            "contains" => s_celContainsWithSource,
+            "startsWith" => s_celStartsWithWithSource,
+            "endsWith" => s_celEndsWithWithSource,
+            "matches" => s_celMatchesWithSource,
+            _ => throw new InvalidOperationException()
+        };
+        var source = CelDiagnosticUtilities.GetSourceContextConstants(call);
+        return Expression.Call(celMethod, BoxIfNeeded(target), BoxIfNeeded(arg), source.ExpressionText, source.Start, source.End);
+    }
 
-            if (target.Type == typeof(DateTimeOffset) && IsTimestampAccessor(call.Function))
-                return CompileTimestampAccessor(call.Function, target, call.Args, contextExpr, binders, scope, call);
+    private static Expression? TryCompileCallTemporalAccessor(CelCall call, CallCompileContext ctx)
+    {
+        if (call.Target == null || (!IsDurationAccessor(call.Function) && !IsTimestampAccessor(call.Function)))
+            return null;
+
+        var target = ctx.Compile(call.Target);
+
+        if (target.Type == typeof(TimeSpan) && IsDurationAccessor(call.Function))
+            return CompileDurationAccessor(call.Function, target, call.Args, call);
+
+        if (target.Type == typeof(DateTimeOffset) && IsTimestampAccessor(call.Function))
+            return CompileTimestampAccessor(call.Function, target, call.Args, ctx.ContextExpr, ctx.Binders, ctx.Scope, call);
+
+        return null;
+    }
+
+    // Task 4.1: Tightened receiver-form size arity — target.size() must have zero args.
+    private static Expression? TryCompileCallSize(CelCall call, CallCompileContext ctx)
+    {
+        if (call.Function != "size")
+            return null;
+
+        Expression operand;
+        if (call.Target == null && call.Args.Count == 1)
+        {
+            operand = ctx.Compile(call.Args[0]);
         }
-
-        if (call.Function == "size" && (call.Args.Count == 1 || call.Target != null))
+        else if (call.Target != null && call.Args.Count == 0)
         {
-            var operand = call.Target != null ? CompileNode(call.Target, contextExpr, binders, scope) : CompileNode(call.Args[0], contextExpr, binders, scope);
-            
-            if (operand.Type == typeof(string))
-            {
-                return Expression.Call(s_getStringSize, operand);
-            }
-
-            if (operand.Type == typeof(byte[]))
-            {
-                var length = Expression.ArrayLength(operand);
-                return Expression.Convert(length, typeof(long));
-            }
-
-            if (operand.Type.IsArray)
-            {
-                var length = Expression.ArrayLength(operand);
-                return Expression.Convert(length, typeof(long));
-            }
-
-            if (typeof(IDictionary).IsAssignableFrom(operand.Type) ||
-                TryGetGenericInterface(operand.Type, typeof(IDictionary<,>), out _) ||
-                TryGetGenericInterface(operand.Type, typeof(IReadOnlyDictionary<,>), out _))
-            {
-                var count = Expression.Property(operand, "Count");
-                return Expression.Convert(count, typeof(long));
-            }
-
-            if (typeof(System.Collections.ICollection).IsAssignableFrom(operand.Type) || 
-                operand.Type.GetInterfaces().Any(i => i.IsGenericType && (i.GetGenericTypeDefinition() == typeof(ICollection<>) || i.GetGenericTypeDefinition() == typeof(IReadOnlyCollection<>))))
-            {
-                var count = Expression.Property(operand, "Count");
-                return Expression.Convert(count, typeof(long));
-            }
-
-            if (binders.TryResolveSize(operand, out var binderSize))
-            {
-                return binderSize;
-            }
-
+            operand = ctx.Compile(call.Target);
+        }
+        else
+        {
             throw CompilationError(
                 call,
-                $"No matching overload for function 'size' applied to type '{operand.Type.Name}'.",
+                $"No matching overload for function 'size' with {call.Args.Count} argument(s).",
                 "no_matching_overload",
                 functionName: "size");
         }
 
-        if (call.Function == "int" && call.Args.Count == 1)
+        if (operand.Type == typeof(string))
+            return Expression.Call(s_getStringSize, operand);
+
+        if (operand.Type == typeof(byte[]))
         {
-            var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
-            if (arg.Type == typeof(long)) return arg;
-            if (arg.Type == typeof(ulong)) return Expression.Call(s_toCelIntUint, arg);
-            if (arg.Type == typeof(double)) return Expression.Call(s_toCelIntDouble, arg);
-            if (arg.Type == typeof(string)) return Expression.Call(s_toCelIntString, arg);
-            if (arg.Type == typeof(bool)) return Expression.Call(s_toCelIntBool, arg);
-            if (arg.Type == typeof(DateTimeOffset)) return Expression.Call(s_toCelIntTimestamp, arg);
-            return Expression.Call(s_toCelIntObject, BoxIfNeeded(arg));
+            var length = Expression.ArrayLength(operand);
+            return Expression.Convert(length, typeof(long));
         }
 
-        if (call.Function == "uint" && call.Args.Count == 1)
+        if (operand.Type.IsArray)
         {
-            var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
-            if (arg.Type == typeof(ulong)) return arg;
-            if (arg.Type == typeof(long)) return Expression.Call(s_toCelUintInt, arg);
-            if (arg.Type == typeof(double)) return Expression.Call(s_toCelUintDouble, arg);
-            if (arg.Type == typeof(string)) return Expression.Call(s_toCelUintString, arg);
-            if (arg.Type == typeof(bool)) return Expression.Call(s_toCelUintBool, arg);
-            return Expression.Call(s_toCelUintObject, BoxIfNeeded(arg));
+            var length = Expression.ArrayLength(operand);
+            return Expression.Convert(length, typeof(long));
         }
 
-        if (call.Function == "double" && call.Args.Count == 1)
+        if (typeof(IDictionary).IsAssignableFrom(operand.Type) ||
+            TryGetGenericInterface(operand.Type, typeof(IDictionary<,>), out _) ||
+            TryGetGenericInterface(operand.Type, typeof(IReadOnlyDictionary<,>), out _))
         {
-            var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
-            if (arg.Type == typeof(double)) return arg;
-            if (arg.Type == typeof(long)) return Expression.Call(s_toCelDoubleInt, arg);
-            if (arg.Type == typeof(ulong)) return Expression.Call(s_toCelDoubleUint, arg);
-            if (arg.Type == typeof(string)) return Expression.Call(s_toCelDoubleString, arg);
-            return Expression.Call(s_toCelDoubleObject, BoxIfNeeded(arg));
+            var count = Expression.Property(operand, "Count");
+            return Expression.Convert(count, typeof(long));
         }
 
-        if (call.Function == "string" && call.Args.Count == 1)
+        if (typeof(System.Collections.ICollection).IsAssignableFrom(operand.Type) ||
+            operand.Type.GetInterfaces().Any(i => i.IsGenericType && (i.GetGenericTypeDefinition() == typeof(ICollection<>) || i.GetGenericTypeDefinition() == typeof(IReadOnlyCollection<>))))
         {
-            var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
-            if (arg.Type == typeof(string)) return arg;
-            if (arg.Type == typeof(long)) return Expression.Call(s_toCelStringInt, arg);
-            if (arg.Type == typeof(ulong)) return Expression.Call(s_toCelStringUint, arg);
-            if (arg.Type == typeof(double)) return Expression.Call(s_toCelStringDouble, arg);
-            if (arg.Type == typeof(bool)) return Expression.Call(s_toCelStringBool, arg);
-            if (arg.Type == typeof(byte[])) return Expression.Call(s_toCelStringBytes, arg);
-            if (arg.Type == typeof(DateTimeOffset)) return Expression.Call(s_toCelStringTimestamp, arg);
-            if (arg.Type == typeof(TimeSpan)) return Expression.Call(s_toCelStringDuration, arg);
-            return Expression.Call(s_toCelStringObject, BoxIfNeeded(arg));
+            var count = Expression.Property(operand, "Count");
+            return Expression.Convert(count, typeof(long));
         }
 
-        if (call.Function == "bool" && call.Args.Count == 1)
-        {
-            var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
-            if (arg.Type == typeof(bool)) return arg;
-            if (arg.Type == typeof(string)) return Expression.Call(s_toCelBoolString, arg);
-            return Expression.Call(s_toCelBoolObject, BoxIfNeeded(arg));
-        }
+        if (ctx.Binders.TryResolveSize(operand, out var binderSize))
+            return binderSize;
 
-        if (call.Function == "bytes" && call.Args.Count == 1)
-        {
-            var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
-            if (arg.Type == typeof(byte[])) return arg;
-            if (arg.Type == typeof(string)) return Expression.Call(s_toCelBytesString, arg);
-            return Expression.Call(s_toCelBytesObject, BoxIfNeeded(arg));
-        }
+        throw CompilationError(
+            call,
+            $"No matching overload for function 'size' applied to type '{operand.Type.Name}'.",
+            "no_matching_overload",
+            functionName: "size");
+    }
 
-        if (call.Function == "duration" && call.Args.Count == 1)
-        {
-            var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
-            if (arg.Type == typeof(TimeSpan)) return arg;
-            if (arg.Type == typeof(string)) return Expression.Call(s_toCelDurationString, arg);
-            return Expression.Call(s_toCelDurationObject, BoxIfNeeded(arg));
-        }
+    private static readonly System.Collections.Generic.HashSet<string> s_conversionFunctions =
+        new() { "int", "uint", "double", "string", "bool", "bytes", "duration", "timestamp" };
 
-        if (call.Function == "timestamp" && call.Args.Count == 1)
-        {
-            var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
-            if (arg.Type == typeof(DateTimeOffset)) return arg;
-            if (arg.Type == typeof(string)) return Expression.Call(s_toCelTimestampString, arg);
-            return Expression.Call(s_toCelTimestampObject, BoxIfNeeded(arg));
-        }
+    private static Expression? TryCompileCallConversion(CelCall call, CallCompileContext ctx)
+    {
+        if (call.Args.Count != 1 || !s_conversionFunctions.Contains(call.Function))
+            return null;
 
-        if (call.Function == "type" && call.Args.Count == 1)
-        {
-            var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
-            return Expression.Call(s_toCelTypeObject, BoxIfNeeded(arg));
-        }
+        var arg = ctx.Compile(call.Args[0]);
 
+        switch (call.Function)
+        {
+            case "int":
+                if (arg.Type == typeof(long)) return arg;
+                if (arg.Type == typeof(ulong)) return Expression.Call(s_toCelIntUint, arg);
+                if (arg.Type == typeof(double)) return Expression.Call(s_toCelIntDouble, arg);
+                if (arg.Type == typeof(string)) return Expression.Call(s_toCelIntString, arg);
+                if (arg.Type == typeof(bool)) return Expression.Call(s_toCelIntBool, arg);
+                if (arg.Type == typeof(DateTimeOffset)) return Expression.Call(s_toCelIntTimestamp, arg);
+                return Expression.Call(s_toCelIntObject, BoxIfNeeded(arg));
+
+            case "uint":
+                if (arg.Type == typeof(ulong)) return arg;
+                if (arg.Type == typeof(long)) return Expression.Call(s_toCelUintInt, arg);
+                if (arg.Type == typeof(double)) return Expression.Call(s_toCelUintDouble, arg);
+                if (arg.Type == typeof(string)) return Expression.Call(s_toCelUintString, arg);
+                if (arg.Type == typeof(bool)) return Expression.Call(s_toCelUintBool, arg);
+                return Expression.Call(s_toCelUintObject, BoxIfNeeded(arg));
+
+            case "double":
+                if (arg.Type == typeof(double)) return arg;
+                if (arg.Type == typeof(long)) return Expression.Call(s_toCelDoubleInt, arg);
+                if (arg.Type == typeof(ulong)) return Expression.Call(s_toCelDoubleUint, arg);
+                if (arg.Type == typeof(string)) return Expression.Call(s_toCelDoubleString, arg);
+                return Expression.Call(s_toCelDoubleObject, BoxIfNeeded(arg));
+
+            case "string":
+                if (arg.Type == typeof(string)) return arg;
+                if (arg.Type == typeof(long)) return Expression.Call(s_toCelStringInt, arg);
+                if (arg.Type == typeof(ulong)) return Expression.Call(s_toCelStringUint, arg);
+                if (arg.Type == typeof(double)) return Expression.Call(s_toCelStringDouble, arg);
+                if (arg.Type == typeof(bool)) return Expression.Call(s_toCelStringBool, arg);
+                if (arg.Type == typeof(byte[])) return Expression.Call(s_toCelStringBytes, arg);
+                if (arg.Type == typeof(DateTimeOffset)) return Expression.Call(s_toCelStringTimestamp, arg);
+                if (arg.Type == typeof(TimeSpan)) return Expression.Call(s_toCelStringDuration, arg);
+                return Expression.Call(s_toCelStringObject, BoxIfNeeded(arg));
+
+            case "bool":
+                if (arg.Type == typeof(bool)) return arg;
+                if (arg.Type == typeof(string)) return Expression.Call(s_toCelBoolString, arg);
+                return Expression.Call(s_toCelBoolObject, BoxIfNeeded(arg));
+
+            case "bytes":
+                if (arg.Type == typeof(byte[])) return arg;
+                if (arg.Type == typeof(string)) return Expression.Call(s_toCelBytesString, arg);
+                return Expression.Call(s_toCelBytesObject, BoxIfNeeded(arg));
+
+            case "duration":
+                if (arg.Type == typeof(TimeSpan)) return arg;
+                if (arg.Type == typeof(string)) return Expression.Call(s_toCelDurationString, arg);
+                return Expression.Call(s_toCelDurationObject, BoxIfNeeded(arg));
+
+            case "timestamp":
+                if (arg.Type == typeof(DateTimeOffset)) return arg;
+                if (arg.Type == typeof(string)) return Expression.Call(s_toCelTimestampString, arg);
+                return Expression.Call(s_toCelTimestampObject, BoxIfNeeded(arg));
+
+            default:
+                return null;
+        }
+    }
+
+    private static Expression? TryCompileCallType(CelCall call, CallCompileContext ctx)
+    {
+        if (call.Function != "type" || call.Args.Count != 1)
+            return null;
+
+        var arg = ctx.Compile(call.Args[0]);
+        return Expression.Call(s_toCelTypeObject, BoxIfNeeded(arg));
+    }
+
+    private static Expression? TryCompileCallOptionalGlobal(CelCall call, CallCompileContext ctx)
+    {
         if (IsOptionalOfCall(call))
         {
-            EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support", call);
-            var arg = CompileNode(call.Args[0], contextExpr, binders, scope);
+            EnsureFeatureEnabled(ctx.Binders, CelFeatureFlags.OptionalSupport, "optional support", call);
+            var arg = ctx.Compile(call.Args[0]);
             return Expression.Call(s_optionalOf, BoxIfNeeded(arg));
         }
 
         if (IsOptionalNoneCall(call))
         {
-            EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support", call);
+            EnsureFeatureEnabled(ctx.Binders, CelFeatureFlags.OptionalSupport, "optional support", call);
             return Expression.Call(s_optionalNone);
         }
 
-        // Namespace-style custom function: ident.function(args...) → try "ident.function" as a qualified global function
-        // before attempting to compile the target as an expression (which may fail for unknown identifiers like "sets" or "math").
-        if (call.Target is CelIdent nsIdent && binders.FunctionRegistry != null)
+        return null;
+    }
+
+    // Resolves namespace-style calls (e.g. sets.contains(...)) before the target identifier is compiled as an expression.
+    // This stage runs before optional-receiver handling to preserve the early-probe contract.
+    private static Expression? TryCompileCallNamespacedCustomFunction(CelCall call, CallCompileContext ctx)
+    {
+        if (call.Target is not CelIdent nsIdent || ctx.Binders.FunctionRegistry == null)
+            return null;
+
+        var registry = ctx.Binders.FunctionRegistry;
+        var qualifiedName = $"{nsIdent.Name}.{call.Function}";
+        var overloads = registry.GetOverloads(qualifiedName, CelFunctionKind.Global);
+        if (overloads.Count == 0)
+            return null;
+
+        overloads = FilterFeatureEnabledOverloads(call, overloads, ctx.Binders);
+        var args = call.Args.Select(a => ctx.Compile(a)).ToArray();
+        return ResolveAndEmitCustomCall(call, qualifiedName, overloads, args, ctx.Binders);
+    }
+
+    private static Expression? TryCompileCallOptionalReceiver(CelCall call, CallCompileContext ctx)
+    {
+        if (call.Target == null || call.Target is CelIdent { Name: "optional" })
+            return null;
+
+        var target = ctx.Compile(call.Target);
+        if (target.Type != typeof(CelOptional))
+            return null;
+
+        EnsureFeatureEnabled(ctx.Binders, CelFeatureFlags.OptionalSupport, "optional support", call);
+
+        if (call.Function == "hasValue" && call.Args.Count == 0)
+            return Expression.Call(s_optionalHasValue, target);
+
+        if (call.Function == "value" && call.Args.Count == 0)
+            return Expression.Call(s_optionalValue, target);
+
+        if (call.Function == "or" && call.Args.Count == 1)
+            return Expression.Call(s_optionalOr, target, EnsureOptionalArgument(call.Args[0], ctx.ContextExpr, ctx.Binders, ctx.Scope));
+
+        if (call.Function == "orValue" && call.Args.Count == 1)
+            return Expression.Call(s_optionalOrValue, target, BoxIfNeeded(ctx.Compile(call.Args[0])));
+
+        throw CompilationError(
+            call,
+            $"Optional type does not support receiver function '{call.Function}' with {call.Args.Count} argument(s). Supported: hasValue(), value(), or(optional), orValue(value).",
+            "no_matching_overload",
+            functionName: call.Function);
+    }
+
+    private static Expression? TryCompileCallHas(CelCall call, CallCompileContext ctx)
+    {
+        if (call.Function != "has")
+            return null;
+
+        if (call.Args.Count != 1 || call.Args[0] is not CelSelect select)
         {
-            var qualifiedResult = TryCompileNamespacedFunction(call, nsIdent, contextExpr, binders, scope);
-            if (qualifiedResult != null)
-                return qualifiedResult;
+            throw CompilationError(
+                call.Args.Count == 1 ? call.Args[0] : call,
+                "Invalid argument to has() macro: argument must be a field selection, e.g. has(x.field).",
+                "invalid_argument");
         }
 
-        if (call.Target != null && call.Target is not CelIdent { Name: "optional" })
-        {
-            var target = CompileNode(call.Target, contextExpr, binders, scope);
-            if (target.Type == typeof(CelOptional))
-            {
-                EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support", call);
+        var operand = ctx.Compile(select.Operand);
+        return ctx.Binders.ResolvePresence(operand, select.Field, select);
+    }
 
-                if (call.Function == "hasValue" && call.Args.Count == 0)
-                    return Expression.Call(s_optionalHasValue, target);
-
-                if (call.Function == "value" && call.Args.Count == 0)
-                    return Expression.Call(s_optionalValue, target);
-
-                if (call.Function == "or" && call.Args.Count == 1)
-                    return Expression.Call(s_optionalOr, target, EnsureOptionalArgument(call.Args[0], contextExpr, binders, scope));
-
-                if (call.Function == "orValue" && call.Args.Count == 1)
-                    return Expression.Call(s_optionalOrValue, target, BoxIfNeeded(CompileNode(call.Args[0], contextExpr, binders, scope)));
-
-                throw CompilationError(
-                    call,
-                    $"Optional type does not support receiver function '{call.Function}' with {call.Args.Count} argument(s). Supported: hasValue(), value(), or(optional), orValue(value).",
-                    "no_matching_overload",
-                    functionName: call.Function);
-            }
-        }
-
-        if (call.Function == "has")
-        {
-            if (call.Args.Count != 1 || call.Args[0] is not CelSelect select)
-            {
-                throw CompilationError(
-                    call.Args.Count == 1 ? call.Args[0] : call,
-                    "Invalid argument to has() macro: argument must be a field selection, e.g. has(x.field).",
-                    "invalid_argument");
-            }
-
-            var operand = CompileNode(select.Operand, contextExpr, binders, scope);
-            return binders.ResolvePresence(operand, select.Field, select);
-        }
-
+    private static Expression? TryCompileCallOperator(CelCall call, CallCompileContext ctx)
+    {
         if (call.Args.Count == 2 && IsBinaryOperator(call.Function))
         {
-            var left = CompileNode(call.Args[0], contextExpr, binders, scope);
-            var right = CompileNode(call.Args[1], contextExpr, binders, scope);
-
-            (left, right) = CelTypeCoercion.NormalizeOperands(left, right, binders);
+            var left = ctx.Compile(call.Args[0]);
+            var right = ctx.Compile(call.Args[1]);
+            (left, right) = CelTypeCoercion.NormalizeOperands(left, right, ctx.Binders);
 
             return call.Function switch
             {
@@ -975,7 +1046,7 @@ public static class CelCompiler
 
         if (call.Args.Count == 1 && IsUnaryOperator(call.Function))
         {
-            var operand = CompileNode(call.Args[0], contextExpr, binders, scope);
+            var operand = ctx.Compile(call.Args[0]);
             return call.Function switch
             {
                 "!_" => Expression.Not(operand),
@@ -984,15 +1055,59 @@ public static class CelCompiler
             };
         }
 
-        // Custom function lookup: resolve registered functions after all built-ins, including operators.
-        if (binders.FunctionRegistry != null)
-        {
-            var customResult = TryCompileCustomFunction(call, contextExpr, binders, scope);
-            if (customResult != null)
-                return customResult;
-        }
+        return null;
+    }
 
-        throw IsKnownBuiltinFunction(call.Function)
+    // Custom function lookup: resolve registered functions after all built-ins.
+    // Namespace-style calls are already handled by TryCompileCallNamespacedCustomFunction.
+    private static Expression? TryCompileCallCustomFunction(CelCall call, CallCompileContext ctx)
+    {
+        if (ctx.Binders.FunctionRegistry == null)
+            return null;
+
+        var registry = ctx.Binders.FunctionRegistry;
+
+        if (call.Target != null)
+        {
+            // Receiver-style: target.function(args...)
+            var overloads = registry.GetOverloads(call.Function, CelFunctionKind.Receiver);
+            if (overloads.Count == 0)
+                return null;
+
+            overloads = FilterFeatureEnabledOverloads(call, overloads, ctx.Binders);
+
+            var target = ctx.Compile(call.Target);
+            var args = call.Args.Select(a => ctx.Compile(a)).ToArray();
+
+            var allArgExprs = new Expression[args.Length + 1];
+            allArgExprs[0] = target;
+            Array.Copy(args, 0, allArgExprs, 1, args.Length);
+
+            return ResolveAndEmitCustomCall(call, call.Function, overloads, allArgExprs, ctx.Binders);
+        }
+        else
+        {
+            // Global-style: function(args...)
+            var overloads = registry.GetOverloads(call.Function, CelFunctionKind.Global);
+            if (overloads.Count == 0)
+                return null;
+
+            overloads = FilterFeatureEnabledOverloads(call, overloads, ctx.Binders);
+            var args = call.Args.Select(a => ctx.Compile(a)).ToArray();
+            return ResolveAndEmitCustomCall(call, call.Function, overloads, args, ctx.Binders);
+        }
+    }
+
+    // Final fallback classification — separate from the helper ownership contract.
+    // Each TryCompileCall* helper returns null when it does not own the call shape.
+    // A helper that *recognizes* its family must compile or throw without returning null.
+    // However, that ownership contract alone is not sufficient: if any recognized built-in
+    // name escapes all helpers (e.g. due to an unusual call shape), this fallback must still
+    // preserve the known-built-in vs unknown-function split so diagnostics remain correct.
+    // Do not remove this method or merge it into a generic catch-all without updating the
+    // routing chain to guarantee all built-in names are claimed before reaching this point.
+    private static CelCompilationException CreateCallFallbackError(CelCall call) =>
+        IsKnownBuiltinFunction(call.Function)
             ? CompilationError(
                 call,
                 $"No matching overload for function '{call.Function}' with {call.Args.Count} argument(s).",
@@ -1003,7 +1118,6 @@ public static class CelCompiler
                 $"Undeclared reference to '{call.Function}' (with {call.Args.Count} argument(s)).",
                 "undeclared_reference",
                 functionName: call.Function);
-    }
 
     private static bool IsBinaryOperator(string function) => function is
         "_+_" or "_-_" or "_*_" or "_/_" or "_%_" or
@@ -1037,78 +1151,6 @@ public static class CelCompiler
             throw CompilationError(expr, "Optional receiver function 'or' requires a CEL optional argument.");
 
         return compiled;
-    }
-
-    private static Expression? TryCompileNamespacedFunction(
-        CelCall call,
-        CelIdent nsIdent,
-        Expression contextExpr,
-        CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope)
-    {
-        var registry = binders.FunctionRegistry!;
-        var qualifiedName = $"{nsIdent.Name}.{call.Function}";
-        var overloads = registry.GetOverloads(qualifiedName, CelFunctionKind.Global);
-        if (overloads.Count == 0)
-            return null;
-
-        overloads = FilterFeatureEnabledOverloads(call, overloads, binders);
-        var args = call.Args.Select(a => CompileNode(a, contextExpr, binders, scope)).ToArray();
-        return ResolveAndEmitCustomCall(call, qualifiedName, overloads, args, binders);
-    }
-
-    private static Expression? TryCompileCustomFunction(
-        CelCall call,
-        Expression contextExpr,
-        CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope)
-    {
-        var registry = binders.FunctionRegistry!;
-
-        if (call.Target != null)
-        {
-            // Namespace-style: ident.function(args...) → resolve as global "ident.function"
-            if (call.Target is CelIdent ns)
-            {
-                var qualifiedName = $"{ns.Name}.{call.Function}";
-                var nsOverloads = registry.GetOverloads(qualifiedName, CelFunctionKind.Global);
-                if (nsOverloads.Count > 0)
-                {
-                    nsOverloads = FilterFeatureEnabledOverloads(call, nsOverloads, binders);
-                    var nsArgs = call.Args.Select(a => CompileNode(a, contextExpr, binders, scope)).ToArray();
-                    return ResolveAndEmitCustomCall(call, qualifiedName, nsOverloads, nsArgs, binders);
-                }
-            }
-
-            // Receiver-style: target.function(args...)
-            var overloads = registry.GetOverloads(call.Function, CelFunctionKind.Receiver);
-            if (overloads.Count == 0)
-                return null;
-
-            overloads = FilterFeatureEnabledOverloads(call, overloads, binders);
-
-            var target = CompileNode(call.Target, contextExpr, binders, scope);
-            var args = call.Args.Select(a => CompileNode(a, contextExpr, binders, scope)).ToArray();
-
-            // Build combined argument expressions: [receiver, arg0, arg1, ...]
-            var allArgExprs = new Expression[args.Length + 1];
-            allArgExprs[0] = target;
-            Array.Copy(args, 0, allArgExprs, 1, args.Length);
-
-            return ResolveAndEmitCustomCall(call, call.Function, overloads, allArgExprs, binders);
-        }
-        else
-        {
-            // Global-style: function(args...)
-            var overloads = registry.GetOverloads(call.Function, CelFunctionKind.Global);
-            if (overloads.Count == 0)
-                return null;
-
-            overloads = FilterFeatureEnabledOverloads(call, overloads, binders);
-
-            var args = call.Args.Select(a => CompileNode(a, contextExpr, binders, scope)).ToArray();
-            return ResolveAndEmitCustomCall(call, call.Function, overloads, args, binders);
-        }
     }
 
     private static IReadOnlyList<CelFunctionDescriptor> FilterFeatureEnabledOverloads(
