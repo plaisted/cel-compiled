@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { CelGuiNode, CelConversionOptions } from '../types.ts';
+import { sanitizeNodeForConversion } from '../utils/sanitizeNode.ts';
 
 export function useCelConversion(options?: CelConversionOptions) {
   const [isConverting, setIsConverting] = useState(false);
@@ -20,10 +21,14 @@ export function useCelConversion(options?: CelConversionOptions) {
       console.warn('useCelConversion: toCelString is not configured');
       return '';
     }
+    const sanitizedNode = sanitizeNodeForConversion(node);
+    if (!sanitizedNode) {
+      return '';
+    }
     if (++pendingRef.current === 1) setIsConverting(true);
     setError(null);
     try {
-      return await toCelStringRef.current(node, pretty);
+      return await toCelStringRef.current(sanitizedNode, pretty);
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
       setError(err);

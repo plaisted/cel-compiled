@@ -57,4 +57,34 @@ describe('MacroNode', () => {
 
     expect(screen.getByDisplayValue('user.name')).toBeInTheDocument();
   });
+
+  it('uses object fields as groups instead of selectable duplicate options', () => {
+    const onChange = vi.fn();
+    const nestedSchema = {
+      fields: [
+        {
+          name: 'user',
+          label: 'User',
+          children: [
+            { name: 'name', type: 'string' as const },
+            { name: 'age', type: 'number' as const },
+          ],
+        },
+      ],
+    };
+
+    render(
+      <CelBuilderProvider readOnly={false}>
+        <CelSchemaProvider schema={nestedSchema}>
+          <MacroNode node={{ ...defaultNode, field: '' }} onChange={onChange} />
+        </CelSchemaProvider>
+      </CelBuilderProvider>
+    );
+
+    const options = screen.getAllByRole('option').map((option) => option.textContent);
+    expect(options).not.toContain('User');
+    expect(options).not.toContain('user');
+    expect(options).toContain('user.name (Abc)');
+    expect(options).toContain('user.age (#)');
+  });
 });

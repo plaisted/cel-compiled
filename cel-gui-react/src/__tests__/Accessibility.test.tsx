@@ -31,17 +31,17 @@ describe('7.1 Group ARIA attributes', () => {
     rules: [],
   });
 
-  it('AND group has role="group" and aria-label "All of the following conditions"', () => {
+  it('AND group has role="group" and aria-label "All rules match"', () => {
     render(
       <CelBuilderProvider>
         <NaturalGroupNode node={mkGroup('and', false)} onChange={vi.fn()} />
       </CelBuilderProvider>
     );
     const group = screen.getByRole('group');
-    expect(group).toHaveAttribute('aria-label', 'All of the following conditions');
+    expect(group).toHaveAttribute('aria-label', 'All rules match');
   });
 
-  it('OR group has aria-label "Any of the following conditions"', () => {
+  it('OR group has aria-label "Any rule matches"', () => {
     render(
       <CelBuilderProvider>
         <NaturalGroupNode node={mkGroup('or', false)} onChange={vi.fn()} />
@@ -49,11 +49,11 @@ describe('7.1 Group ARIA attributes', () => {
     );
     expect(screen.getByRole('group')).toHaveAttribute(
       'aria-label',
-      'Any of the following conditions'
+      'Any rule matches'
     );
   });
 
-  it('NOT+AND group has aria-label "None of the following conditions"', () => {
+  it('NOT+AND group has aria-label "No rules match"', () => {
     render(
       <CelBuilderProvider>
         <NaturalGroupNode node={mkGroup('and', true)} onChange={vi.fn()} />
@@ -61,11 +61,11 @@ describe('7.1 Group ARIA attributes', () => {
     );
     expect(screen.getByRole('group')).toHaveAttribute(
       'aria-label',
-      'None of the following conditions'
+      'No rules match'
     );
   });
 
-  it('NOT+OR group has aria-label "Not any of the following conditions"', () => {
+  it('NOT+OR group has aria-label "Not all rules match"', () => {
     render(
       <CelBuilderProvider>
         <NaturalGroupNode node={mkGroup('or', true)} onChange={vi.fn()} />
@@ -73,7 +73,7 @@ describe('7.1 Group ARIA attributes', () => {
     );
     expect(screen.getByRole('group')).toHaveAttribute(
       'aria-label',
-      'Not any of the following conditions'
+      'Not all rules match'
     );
   });
 });
@@ -134,11 +134,93 @@ describe('7.2 Rule aria-label', () => {
     const rule = document.querySelector('.cel-rule');
     expect(rule).toHaveAttribute('aria-label', 'Condition: user.name contains alice');
   });
+
+  it('limits list fields to CEL-sensible operators', () => {
+    const node: CelGuiRule = {
+      type: 'rule',
+      field: 'user.tags',
+      operator: 'contains',
+      value: 'admin',
+    };
+    const schema = {
+      fields: [
+        { name: 'user.tags', type: 'list' as const },
+      ],
+    };
+
+    render(
+      <CelBuilderProvider>
+        <CelSchemaProvider schema={schema}>
+          <NaturalRuleNode node={node} onChange={vi.fn()} />
+        </CelSchemaProvider>
+      </CelBuilderProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit condition: user.tags contains admin' }));
+    const operatorSelect = screen.getAllByRole('combobox')[1];
+    const labels = Array.from(operatorSelect.querySelectorAll('option')).map((option) => option.textContent);
+
+    expect(labels).toEqual(['contains']);
+  });
+
+  it('renders boolean fields as a single true/false predicate selector', () => {
+    const node: CelGuiRule = {
+      type: 'rule',
+      field: 'user.active',
+      operator: '==',
+      value: true,
+    };
+    const schema = {
+      fields: [
+        { name: 'user.active', type: 'boolean' as const },
+      ],
+    };
+
+    render(
+      <CelBuilderProvider>
+        <CelSchemaProvider schema={schema}>
+          <NaturalRuleNode node={node} onChange={vi.fn()} />
+        </CelSchemaProvider>
+      </CelBuilderProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit condition: user.active is true' }));
+    const selects = screen.getAllByRole('combobox');
+    expect(selects).toHaveLength(2);
+    const predicateOptions = Array.from(selects[1].querySelectorAll('option')).map((option) => option.textContent);
+
+    expect(predicateOptions).toEqual(['is true', 'is false']);
+  });
+
+  it('defaults boolean predicate selector to a valid value when rule value is empty', () => {
+    const node: CelGuiRule = {
+      type: 'rule',
+      field: 'user.active',
+      operator: '==',
+      value: '',
+    };
+    const schema = {
+      fields: [
+        { name: 'user.active', type: 'boolean' as const },
+      ],
+    };
+
+    render(
+      <CelBuilderProvider>
+        <CelSchemaProvider schema={schema}>
+          <NaturalRuleNode node={node} onChange={vi.fn()} />
+        </CelSchemaProvider>
+      </CelBuilderProvider>
+    );
+
+    const selects = screen.getAllByRole('combobox');
+    expect(selects[1]).toHaveValue('true');
+  });
 });
 
 // ─── 7.3  Icon-only button aria-labels ───────────────────────────────────────
 
-describe('7.3 Icon-only button aria-labels', () => {
+describe('7.3 Group control aria-labels', () => {
   it('remove condition button has aria-label="Remove condition"', () => {
     const node: CelGuiRule = {
       type: 'rule',
@@ -169,7 +251,7 @@ describe('7.3 Icon-only button aria-labels', () => {
     expect(screen.getByRole('button', { name: 'Remove group' })).toBeInTheDocument();
   });
 
-  it('NOT toggle button has aria-label="Toggle NOT modifier"', () => {
+  it('logic mode selector trigger has aria-label="Rule matching mode"', () => {
     render(
       <CelBuilderProvider>
         <NaturalGroupNode
@@ -178,14 +260,14 @@ describe('7.3 Icon-only button aria-labels', () => {
         />
       </CelBuilderProvider>
     );
-    expect(screen.getByRole('switch', { name: 'Toggle NOT modifier' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Rule matching mode' })).toBeInTheDocument();
   });
 });
 
 // ─── 7.4  Focus moves to new rule's field selector after add-rule ─────────────
 
 describe('7.4 Focus management after add-rule', () => {
-  it('moves focus to the new rule field input after clicking + condition', async () => {
+  it('moves focus to the new rule field input after clicking Add condition', async () => {
     const defaultGroup: CelGuiGroup = {
       type: 'group',
       combinator: 'and',
@@ -201,7 +283,7 @@ describe('7.4 Focus management after add-rule', () => {
       <CelExpressionBuilder defaultValue={defaultGroup} conversion={conversion} />
     );
 
-    fireEvent.click(screen.getByText('+ condition'));
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
 
     await waitFor(() => {
       const fieldInput = screen.getByPlaceholderText('field');
