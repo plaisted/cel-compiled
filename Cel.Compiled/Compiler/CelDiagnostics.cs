@@ -116,6 +116,14 @@ internal static class CelDiagnosticUtilities
             Expression.Constant(-1));
     }
 
+    public static Expression GetRuntimeSourceSiteConstant(CelExpr? expr)
+    {
+        if (TryGetSourceInfo(expr, out var expressionText, out var span))
+            return Expression.Constant(new CelRuntimeSourceSite(expressionText, span.Start, span.End));
+
+        return Expression.Constant(CelRuntimeSourceSite.None);
+    }
+
     public static (int Line, int Column) GetLineColumn(string sourceText, int position)
     {
         var line = 1;

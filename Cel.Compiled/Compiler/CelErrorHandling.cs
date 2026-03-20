@@ -4,6 +4,15 @@ using Cel.Compiled;
 
 namespace Cel.Compiled.Compiler;
 
+internal readonly record struct CelRuntimeSourceSite(string? ExpressionText, int Start, int End)
+{
+    public static CelRuntimeSourceSite None => new(null, -1, -1);
+
+    public bool HasSource => !string.IsNullOrEmpty(ExpressionText) && Start >= 0 && End >= Start;
+
+    public CelSourceSpan? SourceSpan => HasSource ? new CelSourceSpan(Start, End) : null;
+}
+
 /// <summary>
 /// Exception thrown during CEL expression evaluation.
 /// </summary>

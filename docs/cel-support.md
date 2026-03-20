@@ -284,8 +284,8 @@ Public failures expose structured metadata through `CelCompilationException` and
 
 - Parse and compile failures include stable `ErrorCode` values and, when source text is available, `ExpressionText`, `Position`, `SourceSpan`, `Line`, and `Column`.
 - Common semantic mistakes such as invalid `has()` arguments and undeclared function references produce deliberate CEL-style messages with dedicated error codes (`invalid_argument`, `undeclared_reference`).
-- Common runtime failures carry the same source metadata for attributed paths such as missing JSON fields and runtime overload mismatches from string-style helpers.
-- Runtime categories that are not yet attributed still preserve stable `ErrorCode` values but may not include source spans.
+- Compiler-owned runtime failures from source-text workflows now carry the same source metadata for indexing, conversions, arithmetic overflow/divide-by-zero, timestamp/duration construction, missing-field lookups, and overload mismatches.
+- The guarantee stops at compiler-owned failure sites. Custom delegates and external helper code still surface through the public runtime exception shape, but the innermost source span is only available when the compiler-owned lowering created the failure.
 
 Use the structured fields for programmatic handling. If you want human-readable output for logs or UI, format the exception with `CelDiagnosticFormatter`.
 

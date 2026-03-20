@@ -224,41 +224,42 @@ public static partial class CelCompiler
             return null;
 
         var arg = ctx.Compile(call.Args[0]);
+        var sourceSite = CelDiagnosticUtilities.GetRuntimeSourceSiteConstant(call);
 
         switch (call.Function)
         {
             case "int":
                 if (arg.Type == typeof(long)) return arg;
-                if (arg.Type == typeof(ulong)) return Expression.Call(s_toCelIntUint, arg);
-                if (arg.Type == typeof(double)) return Expression.Call(s_toCelIntDouble, arg);
-                if (arg.Type == typeof(string)) return Expression.Call(s_toCelIntString, arg);
+                if (arg.Type == typeof(ulong)) return Expression.Call(s_toCelIntUintWithSource, arg, sourceSite);
+                if (arg.Type == typeof(double)) return Expression.Call(s_toCelIntDoubleWithSource, arg, sourceSite);
+                if (arg.Type == typeof(string)) return Expression.Call(s_toCelIntStringWithSource, arg, sourceSite);
                 if (arg.Type == typeof(bool)) return Expression.Call(s_toCelIntBool, arg);
                 if (arg.Type == typeof(DateTimeOffset)) return Expression.Call(s_toCelIntTimestamp, arg);
-                return Expression.Call(s_toCelIntObject, BoxIfNeeded(arg));
+                return Expression.Call(s_toCelIntObjectWithSource, BoxIfNeeded(arg), sourceSite);
 
             case "uint":
                 if (arg.Type == typeof(ulong)) return arg;
-                if (arg.Type == typeof(long)) return Expression.Call(s_toCelUintInt, arg);
-                if (arg.Type == typeof(double)) return Expression.Call(s_toCelUintDouble, arg);
-                if (arg.Type == typeof(string)) return Expression.Call(s_toCelUintString, arg);
+                if (arg.Type == typeof(long)) return Expression.Call(s_toCelUintIntWithSource, arg, sourceSite);
+                if (arg.Type == typeof(double)) return Expression.Call(s_toCelUintDoubleWithSource, arg, sourceSite);
+                if (arg.Type == typeof(string)) return Expression.Call(s_toCelUintStringWithSource, arg, sourceSite);
                 if (arg.Type == typeof(bool)) return Expression.Call(s_toCelUintBool, arg);
-                return Expression.Call(s_toCelUintObject, BoxIfNeeded(arg));
+                return Expression.Call(s_toCelUintObjectWithSource, BoxIfNeeded(arg), sourceSite);
 
             case "double":
                 if (arg.Type == typeof(double)) return arg;
                 if (arg.Type == typeof(long)) return Expression.Call(s_toCelDoubleInt, arg);
                 if (arg.Type == typeof(ulong)) return Expression.Call(s_toCelDoubleUint, arg);
                 if (arg.Type == typeof(decimal)) return Expression.Call(s_toCelDoubleDecimal, arg);
-                if (arg.Type == typeof(string)) return Expression.Call(s_toCelDoubleString, arg);
-                return Expression.Call(s_toCelDoubleObject, BoxIfNeeded(arg));
+                if (arg.Type == typeof(string)) return Expression.Call(s_toCelDoubleStringWithSource, arg, sourceSite);
+                return Expression.Call(s_toCelDoubleObjectWithSource, BoxIfNeeded(arg), sourceSite);
 
             case "decimal":
                 if (arg.Type == typeof(decimal)) return arg;
                 if (arg.Type == typeof(long)) return Expression.Call(s_toCelDecimalInt, arg);
                 if (arg.Type == typeof(ulong)) return Expression.Call(s_toCelDecimalUint, arg);
-                if (arg.Type == typeof(double)) return Expression.Call(s_toCelDecimalDouble, arg);
-                if (arg.Type == typeof(string)) return Expression.Call(s_toCelDecimalString, arg);
-                return Expression.Call(s_toCelDecimalObject, BoxIfNeeded(arg));
+                if (arg.Type == typeof(double)) return Expression.Call(s_toCelDecimalDoubleWithSource, arg, sourceSite);
+                if (arg.Type == typeof(string)) return Expression.Call(s_toCelDecimalStringWithSource, arg, sourceSite);
+                return Expression.Call(s_toCelDecimalObjectWithSource, BoxIfNeeded(arg), sourceSite);
 
             case "string":
                 if (arg.Type == typeof(string)) return arg;
@@ -274,23 +275,23 @@ public static partial class CelCompiler
 
             case "bool":
                 if (arg.Type == typeof(bool)) return arg;
-                if (arg.Type == typeof(string)) return Expression.Call(s_toCelBoolString, arg);
-                return Expression.Call(s_toCelBoolObject, BoxIfNeeded(arg));
+                if (arg.Type == typeof(string)) return Expression.Call(s_toCelBoolStringWithSource, arg, sourceSite);
+                return Expression.Call(s_toCelBoolObjectWithSource, BoxIfNeeded(arg), sourceSite);
 
             case "bytes":
                 if (arg.Type == typeof(byte[])) return arg;
                 if (arg.Type == typeof(string)) return Expression.Call(s_toCelBytesString, arg);
-                return Expression.Call(s_toCelBytesObject, BoxIfNeeded(arg));
+                return Expression.Call(s_toCelBytesObjectWithSource, BoxIfNeeded(arg), sourceSite);
 
             case "duration":
                 if (arg.Type == typeof(TimeSpan)) return arg;
-                if (arg.Type == typeof(string)) return Expression.Call(s_toCelDurationString, arg);
-                return Expression.Call(s_toCelDurationObject, BoxIfNeeded(arg));
+                if (arg.Type == typeof(string)) return Expression.Call(s_toCelDurationStringWithSource, arg, sourceSite);
+                return Expression.Call(s_toCelDurationObjectWithSource, BoxIfNeeded(arg), sourceSite);
 
             case "timestamp":
                 if (arg.Type == typeof(DateTimeOffset)) return arg;
-                if (arg.Type == typeof(string)) return Expression.Call(s_toCelTimestampString, arg);
-                return Expression.Call(s_toCelTimestampObject, BoxIfNeeded(arg));
+                if (arg.Type == typeof(string)) return Expression.Call(s_toCelTimestampStringWithSource, arg, sourceSite);
+                return Expression.Call(s_toCelTimestampObjectWithSource, BoxIfNeeded(arg), sourceSite);
 
             default:
                 return null;
