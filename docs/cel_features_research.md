@@ -81,9 +81,8 @@ This group matters quickly for users embedding CEL in a real application.
 
 These are not part of the smallest CEL core, but `cel-go` users often perceive them as standard because they ship with the ecosystem.
 
-*   **`[~]` P1 / D1**: String extensions via opt-in extension bundles:
-    *   Implemented: `replace`, `split`, `join`, `substring`, `charAt`, `indexOf`, `lastIndexOf`, `trim`, `lowerAscii`, `upperAscii`
-    *   Still missing: `reverse`, `quote`, `format`
+*   **`[x]` P1 / D1**: String extensions via opt-in extension bundles:
+    *   Implemented: `replace`, `split`, `join`, `substring`, `charAt`, `indexOf`, `lastIndexOf`, `trim`, `lowerAscii`, `upperAscii`, `reverse`, `quote`, `format`
 *   **`[~]` P1 / D1**: Math extensions via opt-in extension bundles:
     *   Implemented: `greatest`, `least`
     *   Implemented floating-point helpers: `ceil`, `floor`, `round`, `trunc`, `abs`, `sign`, `isInf`, `isNaN`, `isFinite`, `sqrt`
@@ -91,10 +90,10 @@ These are not part of the smallest CEL core, but `cel-go` users often perceive t
 *   **`[~]` P1 / D1**: List extensions via opt-in extension bundles:
     *   Implemented: `flatten`, `slice`, `reverse`, `sort`, `sortBy`, `distinct`, `range`, `first`, `last`
     *   Sorting support is intentionally limited to documented sortable scalar values/keys in the first version
-*   **`[ ]` P2 / D1**: Set extensions:
+*   **`[x]` P2 / D1**: Set extensions:
     *   `contains`, `equivalent`, `intersects`
-*   **`[ ]` P2 / D1**: Regex extraction / replacement helpers beyond core `matches`.
-*   **`[ ]` P2 / D1**: Base64 helpers.
+*   **`[x]` P2 / D1**: Regex extraction / replacement helpers beyond core `matches`.
+*   **`[x]` P2 / D1**: Base64 helpers.
 *   **`[ ]` P2 / D2**: `cel.bind` and related binding helpers.
 
 ### Group 4: Optional and Higher-Level Language Features
@@ -126,8 +125,12 @@ These features matter most for policy engines, distributed filtering, and debugg
 *   **`[ ]` P1 / D4**: Residual AST generation for unresolved subexpressions.
 *   **`[ ]` P2 / D4**: Fine-grained unknown attribute patterns / partial activations.
 *   **`[ ]` P2 / D4**: Evaluation state tracking, exhaustive evaluation, and detailed runtime tracing.
-*   **`[ ]` P2 / D4**: Cost estimation, runtime cost tracking, and evaluation limits.
-*   **`[ ]` P2 / D3**: Context-aware evaluation, cancellation, timeout, and interrupt checks.
+*   **`[~]` P2 / D4**: Cost estimation, runtime cost tracking, and evaluation limits.
+    *   Implemented: runtime evaluation limits via `CelRuntimeOptions` for `MaxWork` and `MaxComprehensionDepth`.
+    *   Still missing: static cost estimation, richer runtime cost tracking, and broader work accounting coverage.
+*   **`[x]` P2 / D3**: Context-aware evaluation, cancellation, timeout, and interrupt checks.
+    *   Implemented: `CelRuntimeOptions` supports `CancellationToken`, overall `Timeout`, and regex-specific timeout control.
+    *   Remaining work is about robustness and attribution coverage, not basic availability.
 
 ### Group 6: Compiler / Embedding Ergonomics
 
@@ -262,7 +265,7 @@ Beyond language elements, `cel-go` provides a powerful API for integrating and c
     *   Dynamic resolution of custom Protobuf descriptors (`DeclareContextProto`, `TypeDescs`).
     *   Standard protobuf type libraries and helpers.
 *   **Execution Control**:
-    *   Context-aware evaluation with cancellation / timeout support (`ContextEval`).
+    *   Context-aware evaluation with cancellation / timeout support (`ContextEval` in `cel-go`; `CelRuntimeOptions` in `Cel.Compiled`).
     *   Interrupt checks for long-running evaluation such as deep comprehensions.
     *   Configurable evaluation behavior such as default UTC timezone and presence-test strictness.
 *   **Error Handling & Formatting**:
