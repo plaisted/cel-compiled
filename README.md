@@ -103,7 +103,7 @@ var allowed = program.Invoke(
 
 `Cel.Compiled` is designed for runtime speed. By compiling to delegates and minimizing allocations during evaluation, it substantially outperforms the other .NET CEL libraries in steady-state runtime benchmarks.
 
-Fresh benchmark run on `2026-03-16` from [Cel.Compiled.Benchmarks/Program.cs](Cel.Compiled.Benchmarks/Program.cs), using the `CelNetComparisonBenchmarks` suite on:
+Fresh benchmark run on `2026-03-20` from [Cel.Compiled.Benchmarks/Program.cs](Cel.Compiled.Benchmarks/Program.cs), using the `CelNetComparisonBenchmarks` suite on:
 
 - .NET SDK `10.0.104`
 - .NET runtime `10.0.4`
@@ -119,20 +119,20 @@ Steady-state warm execution after compilation:
 
 | Library | Mean | Relative to `Cel.Compiled` | Allocated |
 | --- | ---: | ---: | ---: |
-| Native C# | `7.46 ns` | `2.0x faster` | `0 B` |
-| `Cel.Compiled` | `15.54 ns` | `1.0x` | `72 B` |
-| `Cel.NET` | `376.81 ns` | `24.2x slower` | `1360 B` |
-| `Telus CEL` | `2.97 us` | `191.4x slower` | `8808 B` |
+| Native C# | `7.30 ns` | `1.3x faster` | `0 B` |
+| `Cel.Compiled` | `9.39 ns` | `1.0x` | `0 B` |
+| `Cel.NET` | `405.71 ns` | `43.2x slower` | `1360 B` |
+| `Telus CEL` | `3.03 us` | `322.7x slower` | `8808 B` |
 
 Build-and-run from scratch for the same three expressions:
 
 | Library | Mean | Relative to `Cel.Compiled` | Allocated |
 | --- | ---: | ---: | ---: |
-| `Cel.Compiled` | `513.07 us` | `1.0x` | `40,948 B` |
-| `Cel.NET` | `1.07 ms` | `2.1x slower` | `3,398,265 B` |
-| `Telus CEL` | `34.91 us` | `14.7x faster` | `124,528 B` |
+| `Cel.Compiled` | `678.73 us` | `1.0x` | `50,089 B` |
+| `Cel.NET` | `1.10 ms` | `1.6x slower` | `3,398,264 B` |
+| `Telus CEL` | `35.57 us` | `19.1x faster` | `124,528 B` |
 
-The important tradeoff is straightforward: `Cel.Compiled` pays more upfront compile cost than the most lightweight interpretive path, but once compiled it runs within about `2x` of the equivalent native C# and far ahead of the other measured .NET CEL libraries on this warm-path benchmark.
+The important tradeoff is straightforward: `Cel.Compiled` stays close to native C# on the hot path, but it still pays an upfront compile cost for that speed. On this benchmark it remains far ahead of `Cel.NET` during warm execution, while `Telus CEL` has the fastest build-and-run path among the compared CEL libraries.
 
 To reproduce the comparison:
 
