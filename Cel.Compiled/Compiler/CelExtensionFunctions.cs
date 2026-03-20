@@ -368,45 +368,13 @@ internal static class CelExtensionFunctions
     // --- Regex extensions ---
 
     public static CelOptional RegexExtract(string receiver, string pattern)
-    {
-        try
-        {
-            var match = Regex.Match(receiver, pattern);
-            if (!match.Success) return CelOptional.None;
-
-            return match.Groups.Count > 1
-                ? CelOptional.Of(match.Groups[1].Value)
-                : CelOptional.Of(match.Value);
-        }
-        catch (ArgumentException ex)
-        {
-            throw new CelRuntimeException("invalid_argument", $"regex.extract: invalid regex pattern. {ex.Message}");
-        }
-    }
+        => CelRuntimeHelpers.RegexExtract(receiver, pattern, runtimeContext: null);
 
     public static string[] RegexExtractAll(string receiver, string pattern)
-    {
-        try
-        {
-            return Regex.Matches(receiver, pattern).Select(m => m.Value).ToArray();
-        }
-        catch (ArgumentException ex)
-        {
-            throw new CelRuntimeException("invalid_argument", $"regex.extractAll: invalid regex pattern. {ex.Message}");
-        }
-    }
+        => CelRuntimeHelpers.RegexExtractAll(receiver, pattern, runtimeContext: null);
 
     public static string RegexReplace(string receiver, string pattern, string replacement)
-    {
-        try
-        {
-            return Regex.Replace(receiver, pattern, replacement);
-        }
-        catch (ArgumentException ex)
-        {
-            throw new CelRuntimeException("invalid_argument", $"regex.replace: invalid regex pattern. {ex.Message}");
-        }
-    }
+        => CelRuntimeHelpers.RegexReplace(receiver, pattern, replacement, runtimeContext: null);
 
     private static object? NormalizeFormatValue(object? value) => value switch
     {

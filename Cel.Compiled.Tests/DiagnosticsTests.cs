@@ -121,7 +121,7 @@ public class DiagnosticsTests
         var compiled = CelExpression.Compile<JsonElement>("missing");
         using var doc = JsonDocument.Parse("{}");
 
-        var ex = Assert.Throws<CelRuntimeException>(() => compiled(doc.RootElement));
+        var ex = Assert.Throws<CelRuntimeException>(() => compiled.Invoke(doc.RootElement));
 
         Assert.Equal("no_such_field", ex.ErrorCode);
         Assert.Equal("missing", ex.ExpressionText);
@@ -136,7 +136,7 @@ public class DiagnosticsTests
         var compiled = CelExpression.Compile<JsonElement>("name.contains(1)");
         using var doc = JsonDocument.Parse("""{"name":"abc"}""");
 
-        var ex = Assert.Throws<CelRuntimeException>(() => compiled(doc.RootElement));
+        var ex = Assert.Throws<CelRuntimeException>(() => compiled.Invoke(doc.RootElement));
 
         Assert.Equal("no_matching_overload", ex.ErrorCode);
         Assert.Equal("name.contains(1)", ex.ExpressionText);
@@ -151,7 +151,7 @@ public class DiagnosticsTests
         var compiled = CelExpression.Compile<JsonElement>("items[5]");
         using var doc = JsonDocument.Parse("""{"items":[1,2]}""");
 
-        var ex = Assert.Throws<CelRuntimeException>(() => compiled(doc.RootElement));
+        var ex = Assert.Throws<CelRuntimeException>(() => compiled.Invoke(doc.RootElement));
 
         Assert.Equal("index_out_of_bounds", ex.ErrorCode);
         Assert.Null(ex.ExpressionText);
@@ -220,7 +220,7 @@ public class DiagnosticsTests
         var compiled = CelExpression.Compile<JsonElement>("missing");
         using var doc = JsonDocument.Parse("{}");
 
-        var ex = Assert.Throws<CelRuntimeException>(() => compiled(doc.RootElement));
+        var ex = Assert.Throws<CelRuntimeException>(() => compiled.Invoke(doc.RootElement));
 
         var formatted = CelDiagnosticFormatter.Format(ex, CelDiagnosticStyle.CelStyle);
 
@@ -301,7 +301,7 @@ public class DiagnosticsTests
         var compiled = CelExpression.Compile<JsonElement>("no_field");
         using var doc = JsonDocument.Parse("{}");
 
-        var ex = Assert.Throws<CelRuntimeException>(() => compiled(doc.RootElement));
+        var ex = Assert.Throws<CelRuntimeException>(() => compiled.Invoke(doc.RootElement));
 
         Assert.Equal("no_such_field", ex.ErrorCode);
         Assert.Contains("no_field", ex.Message);

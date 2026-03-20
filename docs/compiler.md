@@ -7,14 +7,15 @@
   - `CelCompiler.Macros.cs`: macro lowering and comprehension planning
   - `CelCompiler.Operators.cs`: low-level index access, arithmetic/comparison/logical operators, shared helper utilities
 
-  The real compilation happens in `CompileUncached<TContext, TResult>` in `Cel.Compiled/Compiler/CelCompiler.cs`. It:
+  The real compilation happens in `CompileProgramUncached<TContext, TResult>` in `Cel.Compiled/Compiler/CelCompiler.cs`. It:
 
   1. Pushes diagnostic/source-map context.
-  2. Creates the lambda parameter context.
+  2. Creates the lambda parameters for the evaluation context and optional runtime context.
   3. Builds a CelBinderSet for the context type and options.
   4. Recursively lowers the AST via CompileNode(...).
   5. Converts the final expression to TResult if needed.
-  6. Wraps it in Expression.Lambda<Func<TContext, TResult>>(...).Compile().
+  6. Wraps it in `Expression.Lambda<Func<TContext, CelRuntimeContext?, TResult>>(...).Compile()`.
+  7. Returns a `CelProgram<TContext, TResult>` that exposes `Invoke(context)`, `Invoke(context, runtimeOptions)`, and `AsDelegate()`.
 
   `CompileNode(...)` in `Cel.Compiled/Compiler/CelCompiler.cs` is the main dispatcher:
 
@@ -60,6 +61,8 @@
     hasValue/value/or/orValue.
   - Custom functions: overload resolution is three-pass in `Cel.Compiled/Compiler/CelCompiler.Calls.cs`: exact match first, then
     binder-assisted coercion, then all-object fallback.
+  - Runtime safety: the compiler uses one lowering pipeline and one internal delegate shape. Runtime checks are emitted only at
+    meaningful checkpoints such as comprehension loops and regex-backed operations, not at every AST node.
 
   Macros are the most elaborate part. `all`/`exists`/`exists_one`/`map`/`filter` compile into explicit loop-shaped expression trees
   in `Cel.Compiled/Compiler/CelCompiler.Macros.cs`. The compiler:

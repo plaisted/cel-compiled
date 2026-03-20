@@ -37,32 +37,32 @@ public class CelGoReferenceScenarioTests
     [Fact]
     public void ReferenceFormatExtensionCaseEvaluatesAsExpected()
     {
-        var fn = CelExpression.Compile<object, string>(
+        var program = CelExpression.Compile<object, string>(
             "'formatted list: %s, size: %d'.format([['abc', 'cde'], 2])",
             new CelCompileOptions { FunctionRegistry = s_formatRegistry });
 
-        Assert.Equal("formatted list: [\"abc\", \"cde\"], size: 2", fn(new object()));
+        Assert.Equal("formatted list: [\"abc\", \"cde\"], size: 2", program.Invoke(new object()));
     }
 
     [Fact]
     public void DynamicCompileBaseArithmeticScenarioWorks()
     {
-        var fn = CelExpression.Compile<BaseArithmeticContext, long>("a + b", new CelCompileOptions { EnableCaching = false });
-        Assert.Equal(3L, fn(new BaseArithmeticContext()));
+        var program = CelExpression.Compile<BaseArithmeticContext, long>("a + b", new CelCompileOptions { EnableCaching = false });
+        Assert.Equal(3L, program.Invoke(new BaseArithmeticContext()));
     }
 
     [Fact]
     public void DynamicCompileExtendedEqualityScenarioWorks()
     {
-        var fn = CelExpression.Compile<ExtendedEqualityContext, bool>("x == y && y == z", new CelCompileOptions { EnableCaching = false });
-        Assert.True(fn(new ExtendedEqualityContext()));
+        var program = CelExpression.Compile<ExtendedEqualityContext, bool>("x == y && y == z", new CelCompileOptions { EnableCaching = false });
+        Assert.True(program.Invoke(new ExtendedEqualityContext()));
     }
 
     [Fact]
     public void DynamicCompileExtendedArithmeticScenarioWorks()
     {
-        var fn = CelExpression.Compile<ExtendedArithmeticContext, long>("x + y + z", new CelCompileOptions { EnableCaching = false });
-        Assert.Equal(6L, fn(new ExtendedArithmeticContext()));
+        var program = CelExpression.Compile<ExtendedArithmeticContext, long>("x + y + z", new CelCompileOptions { EnableCaching = false });
+        Assert.Equal(6L, program.Invoke(new ExtendedArithmeticContext()));
     }
 
     public sealed class StringValueContext
@@ -115,10 +115,10 @@ public class CelGoReferenceScenarioTests
     private static bool EvaluateBoolean(string expression, object context) =>
         context switch
         {
-            StringValueContext typed => CelExpression.Compile<StringValueContext, bool>(expression)(typed),
-            ListValueContext typed => CelExpression.Compile<ListValueContext, bool>(expression)(typed),
-            XContext typed => CelExpression.Compile<XContext, bool>(expression)(typed),
-            XListContext typed => CelExpression.Compile<XListContext, bool>(expression)(typed),
+            StringValueContext typed => CelExpression.Compile<StringValueContext, bool>(expression).Invoke(typed),
+            ListValueContext typed => CelExpression.Compile<ListValueContext, bool>(expression).Invoke(typed),
+            XContext typed => CelExpression.Compile<XContext, bool>(expression).Invoke(typed),
+            XListContext typed => CelExpression.Compile<XListContext, bool>(expression).Invoke(typed),
             _ => throw new InvalidOperationException($"Unsupported reference context type '{context.GetType().FullName}'.")
         };
 

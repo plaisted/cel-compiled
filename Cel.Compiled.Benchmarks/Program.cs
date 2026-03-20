@@ -246,7 +246,7 @@ public class CustomFunctionBenchmarks
 
     [Benchmark]
     public string StaticGlobalBuildAndRun() =>
-        CelExpression.Compile<JsonElement, string>("slug(name)", s_uncachedOptions)(s_jsonDocument.RootElement);
+        CelExpression.Compile<JsonElement, string>("slug(name)", s_uncachedOptions).Invoke(s_jsonDocument.RootElement);
 
     [Benchmark]
     public string StaticGlobalWarmRun() => s_staticGlobalWarm(s_jsonDocument.RootElement);
@@ -292,7 +292,7 @@ public class CelNetComparisonBenchmarks
     ];
 
     private readonly Func<object, bool>[] _compiledDelegates =
-        s_expressions.Select(expression => CelExpression.Compile<object, bool>(expression)).ToArray();
+        s_expressions.Select(expression => CelExpression.Compile<object, bool>(expression).AsDelegate()).ToArray();
 
     private readonly CelNetBridge _celNetWarm = new();
     private readonly TelusCelBridge _telusCelWarm = new();
@@ -302,7 +302,7 @@ public class CelNetComparisonBenchmarks
     {
         var result = false;
         foreach (var expression in s_expressions)
-            result ^= CelExpression.Compile<object, bool>(expression, new CelCompileOptions { EnableCaching = false })(s_testRecord);
+            result ^= CelExpression.Compile<object, bool>(expression, new CelCompileOptions { EnableCaching = false }).Invoke(s_testRecord);
         return result;
     }
 

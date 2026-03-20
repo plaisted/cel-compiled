@@ -13,18 +13,19 @@ namespace Cel.Compiled.Compiler;
 public static partial class CelCompiler
 {
     // Carries compilation context for CompileCall helpers, avoiding repeated parameter threading.
-    private readonly struct CallCompileContext(Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    private readonly struct CallCompileContext(Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
     {
         public readonly Expression ContextExpr = contextExpr;
+        public readonly Expression RuntimeContextExpr = runtimeContextExpr;
         public readonly CelBinderSet Binders = binders;
         public readonly IReadOnlyDictionary<string, Expression>? Scope = scope;
 
-        public Expression Compile(CelExpr expr) => CompileNode(expr, ContextExpr, Binders, Scope);
+        public Expression Compile(CelExpr expr) => CompileNode(expr, ContextExpr, RuntimeContextExpr, Binders, Scope);
     }
 
-    private static Expression CompileCall(CelCall call, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    private static Expression CompileCall(CelCall call, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
     {
-        var ctx = new CallCompileContext(contextExpr, binders, scope);
+        var ctx = new CallCompileContext(contextExpr, runtimeContextExpr, binders, scope);
 
         return TryCompileCallMacro(call, ctx)
             ?? TryCompileCallSpecialForm(call, ctx)
@@ -50,25 +51,25 @@ public static partial class CelCompiler
                 EnsureFeatureEnabled(ctx.Binders, CelFeatureFlags.Macros, "standard macros", call);
 
             if (call.Function == "all")
-                return CompileQuantifierMacro(call.Target, iterator.Name, call.Args[1], ctx.ContextExpr, ctx.Binders, ctx.Scope, MacroKind.All);
+                return CompileQuantifierMacro(call.Target, iterator.Name, call.Args[1], ctx.ContextExpr, ctx.RuntimeContextExpr, ctx.Binders, ctx.Scope, MacroKind.All);
 
             if (call.Function == "exists")
-                return CompileQuantifierMacro(call.Target, iterator.Name, call.Args[1], ctx.ContextExpr, ctx.Binders, ctx.Scope, MacroKind.Exists);
+                return CompileQuantifierMacro(call.Target, iterator.Name, call.Args[1], ctx.ContextExpr, ctx.RuntimeContextExpr, ctx.Binders, ctx.Scope, MacroKind.Exists);
 
             if (call.Function == "exists_one")
-                return CompileExistsOneMacro(call.Target, iterator.Name, call.Args[1], ctx.ContextExpr, ctx.Binders, ctx.Scope);
+                return CompileExistsOneMacro(call.Target, iterator.Name, call.Args[1], ctx.ContextExpr, ctx.RuntimeContextExpr, ctx.Binders, ctx.Scope);
 
             if (call.Function == "map")
-                return CompileMapMacro(call.Target, iterator.Name, null, call.Args[1], ctx.ContextExpr, ctx.Binders, ctx.Scope);
+                return CompileMapMacro(call.Target, iterator.Name, null, call.Args[1], ctx.ContextExpr, ctx.RuntimeContextExpr, ctx.Binders, ctx.Scope);
 
             if (call.Function == "filter")
-                return CompileFilterMacro(call.Target, iterator.Name, call.Args[1], ctx.ContextExpr, ctx.Binders, ctx.Scope);
+                return CompileFilterMacro(call.Target, iterator.Name, call.Args[1], ctx.ContextExpr, ctx.RuntimeContextExpr, ctx.Binders, ctx.Scope);
         }
 
         if (call.Target != null && call.Function == "map" && call.Args.Count == 3 && call.Args[0] is CelIdent filterIterator)
         {
             EnsureFeatureEnabled(ctx.Binders, CelFeatureFlags.Macros, "standard macros", call);
-            return CompileMapMacro(call.Target, filterIterator.Name, call.Args[1], call.Args[2], ctx.ContextExpr, ctx.Binders, ctx.Scope);
+            return CompileMapMacro(call.Target, filterIterator.Name, call.Args[1], call.Args[2], ctx.ContextExpr, ctx.RuntimeContextExpr, ctx.Binders, ctx.Scope);
         }
 
         return null;
@@ -115,7 +116,9 @@ public static partial class CelCompiler
                 "matches" => s_stringMatches,
                 _ => throw new InvalidOperationException()
             };
-            return Expression.Call(method, target, arg);
+            return call.Function == "matches"
+                ? Expression.Call(method, target, arg, ctx.RuntimeContextExpr)
+                : Expression.Call(method, target, arg);
         }
 
         var celMethod = call.Function switch
@@ -127,7 +130,9 @@ public static partial class CelCompiler
             _ => throw new InvalidOperationException()
         };
         var source = CelDiagnosticUtilities.GetSourceContextConstants(call);
-        return Expression.Call(celMethod, BoxIfNeeded(target), BoxIfNeeded(arg), source.ExpressionText, source.Start, source.End);
+        return call.Function == "matches"
+            ? Expression.Call(celMethod, BoxIfNeeded(target), BoxIfNeeded(arg), ctx.RuntimeContextExpr, source.ExpressionText, source.Start, source.End)
+            : Expression.Call(celMethod, BoxIfNeeded(target), BoxIfNeeded(arg), source.ExpressionText, source.Start, source.End);
     }
 
     private static Expression? TryCompileCallTemporalAccessor(CelCall call, CallCompileContext ctx)
@@ -141,7 +146,7 @@ public static partial class CelCompiler
             return CompileDurationAccessor(call.Function, target, call.Args, call);
 
         if (target.Type == typeof(DateTimeOffset) && IsTimestampAccessor(call.Function))
-            return CompileTimestampAccessor(call.Function, target, call.Args, ctx.ContextExpr, ctx.Binders, ctx.Scope, call);
+            return CompileTimestampAccessor(call.Function, target, call.Args, ctx.ContextExpr, ctx.RuntimeContextExpr, ctx.Binders, ctx.Scope, call);
 
         return null;
     }
@@ -335,7 +340,7 @@ public static partial class CelCompiler
 
         overloads = FilterFeatureEnabledOverloads(call, overloads, ctx.Binders);
         var args = call.Args.Select(a => ctx.Compile(a)).ToArray();
-        return ResolveAndEmitCustomCall(call, qualifiedName, overloads, args, ctx.Binders);
+        return ResolveAndEmitCustomCall(call, qualifiedName, overloads, args, ctx.RuntimeContextExpr, ctx.Binders);
     }
 
     private static Expression? TryCompileCallOptionalReceiver(CelCall call, CallCompileContext ctx)
@@ -356,7 +361,7 @@ public static partial class CelCompiler
             return Expression.Call(s_optionalValue, target);
 
         if (call.Function == "or" && call.Args.Count == 1)
-            return Expression.Call(s_optionalOr, target, EnsureOptionalArgument(call.Args[0], ctx.ContextExpr, ctx.Binders, ctx.Scope));
+            return Expression.Call(s_optionalOr, target, EnsureOptionalArgument(call.Args[0], ctx.ContextExpr, ctx.RuntimeContextExpr, ctx.Binders, ctx.Scope));
 
         if (call.Function == "orValue" && call.Args.Count == 1)
             return Expression.Call(s_optionalOrValue, target, BoxIfNeeded(ctx.Compile(call.Args[0])));
@@ -444,7 +449,7 @@ public static partial class CelCompiler
             allArgExprs[0] = target;
             Array.Copy(args, 0, allArgExprs, 1, args.Length);
 
-            return ResolveAndEmitCustomCall(call, call.Function, overloads, allArgExprs, ctx.Binders);
+            return ResolveAndEmitCustomCall(call, call.Function, overloads, allArgExprs, ctx.RuntimeContextExpr, ctx.Binders);
         }
         else
         {
@@ -455,7 +460,7 @@ public static partial class CelCompiler
 
             overloads = FilterFeatureEnabledOverloads(call, overloads, ctx.Binders);
             var args = call.Args.Select(a => ctx.Compile(a)).ToArray();
-            return ResolveAndEmitCustomCall(call, call.Function, overloads, args, ctx.Binders);
+            return ResolveAndEmitCustomCall(call, call.Function, overloads, args, ctx.RuntimeContextExpr, ctx.Binders);
         }
     }
 
@@ -500,14 +505,14 @@ public static partial class CelCompiler
     private static bool IsOptionalNoneCall(CelCall call) =>
         call.Target is CelIdent { Name: "optional" } && call.Function == "none" && call.Args.Count == 0;
 
-    private static Expression EnsureOptionalArgument(CelExpr expr, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    private static Expression EnsureOptionalArgument(CelExpr expr, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
     {
         EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support", expr);
 
-        if (TryCompileOptionalValue(expr, contextExpr, binders, scope, out var optional))
+        if (TryCompileOptionalValue(expr, contextExpr, runtimeContextExpr, binders, scope, out var optional))
             return optional.Expression;
 
-        var compiled = CompileNode(expr, contextExpr, binders, scope);
+        var compiled = CompileNode(expr, contextExpr, runtimeContextExpr, binders, scope);
         if (compiled.Type != typeof(CelOptional))
             throw CompilationError(expr, "Optional receiver function 'or' requires a CEL optional argument.");
 
@@ -549,6 +554,7 @@ public static partial class CelCompiler
         string functionName,
         IReadOnlyList<CelFunctionDescriptor> overloads,
         Expression[] arguments,
+        Expression runtimeContextExpr,
         CelBinderSet binders)
     {
         var argTypes = arguments.Select(a => a.Type).ToArray();
@@ -566,7 +572,7 @@ public static partial class CelCompiler
         }
 
         if (exactMatch != null)
-            return EmitCustomCall(exactMatch, arguments);
+            return EmitCustomCall(exactMatch, arguments, runtimeContextExpr);
 
         // Pass 2: binder-coerced match — try coercing arguments via binders to match a typed overload
         CelFunctionDescriptor? coercedMatch = null;
@@ -591,7 +597,7 @@ public static partial class CelCompiler
         }
 
         if (coercedMatch != null)
-            return EmitCustomCall(coercedMatch, coercedArgs!);
+            return EmitCustomCall(coercedMatch, coercedArgs!, runtimeContextExpr);
 
         // Pass 3: single object fallback — all parameters declared as object
         CelFunctionDescriptor? objectFallback = null;
@@ -609,7 +615,7 @@ public static partial class CelCompiler
         }
 
         if (objectFallback != null)
-            return EmitCustomCall(objectFallback, arguments);
+            return EmitCustomCall(objectFallback, arguments, runtimeContextExpr);
 
         throw NoMatchingOverload(sourceExpr, functionName, argTypes);
     }
@@ -654,7 +660,7 @@ public static partial class CelCompiler
         return result;
     }
 
-    private static Expression EmitCustomCall(CelFunctionDescriptor descriptor, Expression[] arguments)
+    private static Expression EmitCustomCall(CelFunctionDescriptor descriptor, Expression[] arguments, Expression runtimeContextExpr)
     {
         // Convert arguments to match parameter types if needed (e.g., boxing for object params)
         var convertedArgs = new Expression[arguments.Length];
@@ -665,6 +671,9 @@ public static partial class CelCompiler
             else
                 convertedArgs[i] = arguments[i];
         }
+
+        if (descriptor.Origin == CelFunctionOrigin.RegexExtension)
+            return EmitRegexExtensionCall(descriptor, convertedArgs, runtimeContextExpr);
 
         if (descriptor.Target != null)
         {
@@ -677,6 +686,17 @@ public static partial class CelCompiler
 
         // Static method call
         return Expression.Call(descriptor.Method, convertedArgs);
+    }
+
+    private static Expression EmitRegexExtensionCall(CelFunctionDescriptor descriptor, Expression[] arguments, Expression runtimeContextExpr)
+    {
+        return descriptor.FunctionName switch
+        {
+            "regex.extract" => Expression.Call(s_regexExtract, arguments[0], arguments[1], runtimeContextExpr),
+            "regex.extractAll" => Expression.Call(s_regexExtractAll, arguments[0], arguments[1], runtimeContextExpr),
+            "regex.replace" => Expression.Call(s_regexReplace, arguments[0], arguments[1], arguments[2], runtimeContextExpr),
+            _ => throw new InvalidOperationException($"Unsupported regex extension '{descriptor.FunctionName}'.")
+        };
     }
 
     private static bool IsTimestampAccessor(string function) => function is
@@ -702,6 +722,7 @@ public static partial class CelCompiler
         Expression target,
         IReadOnlyList<CelExpr> args,
         Expression contextExpr,
+        Expression runtimeContextExpr,
         CelBinderSet binders,
         IReadOnlyDictionary<string, Expression>? scope,
         CelExpr? sourceExpr)
@@ -712,7 +733,7 @@ public static partial class CelCompiler
         return args.Count switch
         {
             0 => Expression.Call(GetTimestampAccessorMethod(function, hasTimezone: false), target),
-            1 => CompileTimestampAccessorWithTimezone(function, target, args[0], contextExpr, binders, scope),
+            1 => CompileTimestampAccessorWithTimezone(function, target, args[0], contextExpr, runtimeContextExpr, binders, scope),
             _ => throw CompilationError(sourceExpr, $"Timestamp function '{function}' expects zero or one arguments.")
         };
     }
@@ -722,10 +743,11 @@ public static partial class CelCompiler
         Expression target,
         CelExpr timezoneExpr,
         Expression contextExpr,
+        Expression runtimeContextExpr,
         CelBinderSet binders,
         IReadOnlyDictionary<string, Expression>? scope)
     {
-        var timezone = CompileNode(timezoneExpr, contextExpr, binders, scope);
+        var timezone = CompileNode(timezoneExpr, contextExpr, runtimeContextExpr, binders, scope);
         if (timezone.Type != typeof(string))
             throw CompilationError(timezoneExpr, $"Timestamp function '{function}' timezone argument must be string.");
 

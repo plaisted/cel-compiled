@@ -2,13 +2,13 @@
 
 [![NuGet Version](https://img.shields.io/nuget/v/Cel.Compiled.svg)](https://www.nuget.org/packages/Cel.Compiled)
 
-`Cel.Compiled` is a high-performance .NET implementation of the [Common Expression Language (CEL)](https://github.com/google/cel-spec). It compiles CEL source text into optimized, reusable .NET delegates, making it ideal for high-frequency evaluation in rule engines, policy enforcement, and dynamic filtering.
+`Cel.Compiled` is a high-performance .NET implementation of the [Common Expression Language (CEL)](https://github.com/google/cel-spec). It compiles CEL source text into optimized, reusable `CelProgram<TContext, TResult>` objects, making it ideal for high-frequency evaluation in rule engines, policy enforcement, and dynamic filtering.
 
 It is designed for scenarios where expressions are compiled once and evaluated many times.
 
 ## Key Features
 
-- **High Performance**: Compiles to strongly-typed delegates for near-native execution speed.
+- **High Performance**: Compiles to reusable programs with an unrestricted delegate helper for near-native execution speed.
 - **Modern .NET**: Built for .NET 10+ with optimized memory usage.
 - **Broad Input Support**: Bind to POCOs, `JsonElement`, `JsonNode`, or custom type descriptors.
 - **Spec-Compliant**: Comprehensive support for CEL operators, functions, macros, and optional types.
@@ -41,10 +41,10 @@ using Cel.Compiled;
 var context = new { User = new { Age = 25, Status = "active" } };
 
 // 2. Compile once
-var fn = CelExpression.Compile<dynamic, bool>("User.Age >= 18 && User.Status == 'active'");
+var program = CelExpression.Compile<dynamic, bool>("User.Age >= 18 && User.Status == 'active'");
 
 // 3. Evaluate many times
-bool isAllowed = fn(context);
+bool isAllowed = program.Invoke(context);
 ```
 
 ### Using JSON Inputs
@@ -53,8 +53,8 @@ bool isAllowed = fn(context);
 using System.Text.Json;
 
 var json = JsonDocument.Parse("""{"age": 25, "status": "active"}""").RootElement;
-var fn = CelExpression.Compile<JsonElement, bool>("age >= 18 && status == 'active'");
-bool result = fn(json);
+var program = CelExpression.Compile<JsonElement, bool>("age >= 18 && status == 'active'");
+bool result = program.Invoke(json);
 ```
 
 ### Compile Options
@@ -74,10 +74,30 @@ var options = new CelCompileOptions
     FunctionRegistry = registry
 };
 
-var fn = CelExpression.Compile<JsonElement, bool>(
+var program = CelExpression.Compile<JsonElement, bool>(
     "name.trim().lowerAscii() == 'alice'",
     options);
 ```
+
+### Runtime Safety For Untrusted Inputs
+
+Use `Invoke(context, runtimeOptions)` when evaluating untrusted or multi-tenant expressions.
+
+```csharp
+var program = CelExpression.Compile<JsonElement, bool>("items.all(x, x > 0)");
+
+var allowed = program.Invoke(
+    json,
+    new CelRuntimeOptions
+    {
+        MaxWork = 10_000,
+        MaxComprehensionDepth = 4,
+        Timeout = TimeSpan.FromMilliseconds(100),
+        RegexTimeout = TimeSpan.FromMilliseconds(25)
+    });
+```
+
+`MaxWork` is intentionally narrow. It counts compiler-owned repeated-work checkpoints such as comprehensions and regex-backed operations, not every AST node or every CPU instruction.
 
 ## Performance
 
