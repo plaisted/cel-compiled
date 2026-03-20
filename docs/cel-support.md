@@ -209,9 +209,10 @@ Available flags:
 - `CelFeatureFlags.SetExtensions`
 - `CelFeatureFlags.Base64Extensions`
 - `CelFeatureFlags.RegexExtensions`
+- `CelFeatureFlags.JsonDecimalBinding`
 - `CelFeatureFlags.All`
 
-By default, `EnabledFeatures` is `CelFeatureFlags.All`, so existing callers see no behavior change.
+By default, `EnabledFeatures` is `CelFeatureFlags.All`, so existing callers see no behavior change. `CelFeatureFlags.JsonDecimalBinding` is opt-in and intentionally excluded from `CelFeatureFlags.All`; when enabled, binder-assisted coercion can surface JSON non-integer numbers as CLR `decimal` values for that compilation environment.
 
 Restrict comprehensions and optional syntax/helpers:
 
@@ -240,6 +241,22 @@ var options = new CelCompileOptions
 
 var fn = CelExpression.Compile<JsonElement, string>("wrap(name)", options); // allowed
 // name.trim() would fail compilation with a feature-disabled error
+```
+
+Opt into decimal-aware JSON number binding for one environment only:
+
+```csharp
+var registry = new CelFunctionRegistryBuilder()
+    .AddGlobalFunction("describePrice", (Func<decimal, string>)(value => value.ToString(CultureInfo.InvariantCulture)))
+    .Build();
+
+var options = new CelCompileOptions
+{
+    FunctionRegistry = registry,
+    EnabledFeatures = CelFeatureFlags.All | CelFeatureFlags.JsonDecimalBinding
+};
+
+var fn = CelExpression.Compile<JsonElement, string>("describePrice(price)", options);
 ```
 
 Restrictions are enforced during compilation for both source-string compilation and direct AST compilation. Disabled features fail with a structured `CelCompilationException` whose `ErrorCode` is `feature_disabled`.
@@ -447,6 +464,7 @@ fn(doc.RootElement); // "hahaha"
 ## Migration Notes
 
 - Numeric arithmetic is strict: mixed numeric types do not auto-promote. Use explicit conversions.
+- Decimal values are first-class runtime values. `decimal()` is available by default, decimal arithmetic/comparison accepts exact integer operands, and decimal/double boundaries still require explicit conversion.
 - List values are generally array-backed now instead of `List<T>`.
 - `&&` and `||` follow CEL error-absorption semantics rather than C# left-to-right exception behavior.
 - Binder behavior is unified across POCO, `JsonElement`, and `JsonNode`, and compile options can now control caching and binder selection.

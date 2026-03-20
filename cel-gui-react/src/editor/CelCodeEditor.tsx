@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
-import { autocompletion } from '@codemirror/autocomplete';
+import { acceptCompletion, autocompletion } from '@codemirror/autocomplete';
 import { linter } from '@codemirror/lint';
-import { Compartment } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { Compartment, Prec } from '@codemirror/state';
+import { EditorView, keymap } from '@codemirror/view';
 import { CelSchema, CelError } from '../types.ts';
 import { celLanguage } from './cel-language.ts';
 import { createCelCompletionSource } from './completion.ts';
@@ -36,6 +36,7 @@ export const CelCodeEditor: React.FC<CelCodeEditorProps> = ({
     () => [
       celLanguage,
       autocompletion({ override: [createCelCompletionSource(schema)] }),
+      Prec.highest(keymap.of([{ key: 'Tab', run: acceptCompletion }])),
       lintCompartment.current.of(linter(createCelLintSource([]))),
     ],
     [schema]
@@ -70,6 +71,7 @@ export const CelCodeEditor: React.FC<CelCodeEditorProps> = ({
       className={className}
       placeholder={placeholder}
       onCreateEditor={onCreateEditor}
+      indentWithTab={false}
       basicSetup={{
         lineNumbers: false,
         foldGutter: false,

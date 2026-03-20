@@ -181,4 +181,22 @@ public class BuiltinConversionTests
         Assert.Equal(CelType.Map, CelCompiler.Compile<JsonContext, CelType>(CelParser.Parse("type(field.obj)"))(ctx));
         Assert.Equal(CelType.Null, CelCompiler.Compile<JsonContext, CelType>(CelParser.Parse("type(field.n)"))(ctx));
     }
+
+    [Fact]
+    public void JsonElement_Type_Function_RespectsDecimalBindingFeatureFlag()
+    {
+        var json = "{\"d\": 1.25}";
+        var element = JsonDocument.Parse(json).RootElement;
+        var ctx = new JsonContext { field = element };
+
+        Assert.Equal(CelType.Double, CelCompiler.Compile<JsonContext, CelType>(CelParser.Parse("type(field.d)"))(ctx));
+
+        var enabledOptions = new CelCompileOptions
+        {
+            EnabledFeatures = CelFeatureFlags.All | CelFeatureFlags.JsonDecimalBinding,
+            EnableCaching = false
+        };
+
+        Assert.Equal(CelType.Decimal, CelCompiler.Compile<JsonContext, CelType>(CelParser.Parse("type(field.d)"), enabledOptions)(ctx));
+    }
 }

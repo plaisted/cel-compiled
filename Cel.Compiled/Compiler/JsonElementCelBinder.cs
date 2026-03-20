@@ -8,6 +8,8 @@ namespace Cel.Compiled.Compiler;
 
 internal sealed class JsonElementCelBinder : ICelBinder
 {
+    private readonly bool _bindNonIntegerNumbersAsDecimal;
+
     private static readonly MethodInfo s_getProperty =
         typeof(JsonElement).GetMethod(nameof(JsonElement.GetProperty), new[] { typeof(string) })!;
 
@@ -25,6 +27,9 @@ internal sealed class JsonElementCelBinder : ICelBinder
 
     private static readonly MethodInfo s_getDouble =
         typeof(JsonElement).GetMethod(nameof(JsonElement.GetDouble))!;
+
+    private static readonly MethodInfo s_getDecimal =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetJsonElementDecimal), new[] { typeof(JsonElement) })!;
 
     private static readonly MethodInfo s_getString =
         typeof(JsonElement).GetMethod(nameof(JsonElement.GetString), Type.EmptyTypes)!;
@@ -49,6 +54,11 @@ internal sealed class JsonElementCelBinder : ICelBinder
 
     private static readonly MethodInfo s_getJsonElementSize =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetJsonElementSize), new[] { typeof(JsonElement) })!;
+
+    public JsonElementCelBinder(bool bindNonIntegerNumbersAsDecimal)
+    {
+        _bindNonIntegerNumbersAsDecimal = bindNonIntegerNumbersAsDecimal;
+    }
 
     public bool CanBind(Type type) => type == typeof(JsonElement) || type == typeof(JsonDocument);
 
@@ -185,6 +195,12 @@ internal sealed class JsonElementCelBinder : ICelBinder
         if (targetType == typeof(double) || targetType == typeof(double?) || targetType == typeof(float) || targetType == typeof(float?))
         {
             coercedExpression = Expression.Call(element, s_getDouble);
+            return true;
+        }
+
+        if (_bindNonIntegerNumbersAsDecimal && (targetType == typeof(decimal) || targetType == typeof(decimal?)))
+        {
+            coercedExpression = Expression.Call(s_getDecimal, element);
             return true;
         }
 

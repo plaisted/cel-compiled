@@ -8,6 +8,8 @@ namespace Cel.Compiled.Compiler;
 
 internal sealed class JsonNodeCelBinder : ICelBinder
 {
+    private readonly bool _bindNonIntegerNumbersAsDecimal;
+
     private static readonly MethodInfo s_getJsonNodeProperty =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetJsonNodeProperty), new[] { typeof(JsonNode), typeof(string) })!;
 
@@ -41,11 +43,19 @@ internal sealed class JsonNodeCelBinder : ICelBinder
     private static readonly MethodInfo s_getJsonNodeDouble =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetJsonNodeDouble), new[] { typeof(JsonNode) })!;
 
+    private static readonly MethodInfo s_getJsonNodeDecimal =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetJsonNodeDecimal), new[] { typeof(JsonNode) })!;
+
     private static readonly MethodInfo s_getJsonNodeString =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetJsonNodeString), new[] { typeof(JsonNode) })!;
 
     private static readonly MethodInfo s_getJsonNodeBoolean =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetJsonNodeBoolean), new[] { typeof(JsonNode) })!;
+
+    public JsonNodeCelBinder(bool bindNonIntegerNumbersAsDecimal)
+    {
+        _bindNonIntegerNumbersAsDecimal = bindNonIntegerNumbersAsDecimal;
+    }
 
     public bool CanBind(Type type) => typeof(JsonNode).IsAssignableFrom(type);
 
@@ -152,6 +162,12 @@ internal sealed class JsonNodeCelBinder : ICelBinder
         if (targetType == typeof(double) || targetType == typeof(double?) || targetType == typeof(float) || targetType == typeof(float?))
         {
             coercedExpression = Expression.Call(s_getJsonNodeDouble, node);
+            return true;
+        }
+
+        if (_bindNonIntegerNumbersAsDecimal && (targetType == typeof(decimal) || targetType == typeof(decimal?)))
+        {
+            coercedExpression = Expression.Call(s_getJsonNodeDecimal, node);
             return true;
         }
 

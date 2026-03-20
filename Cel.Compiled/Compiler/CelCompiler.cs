@@ -178,6 +178,12 @@ public static partial class CelCompiler
     private static readonly MethodInfo s_containsNonGenericDictionaryKey =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ContainsDictionaryKey), new[] { typeof(IDictionary), typeof(object) })!;
 
+    private static readonly MethodInfo s_containsJsonElement =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ContainsJsonElement), new[] { typeof(JsonElement), typeof(object) })!;
+
+    private static readonly MethodInfo s_containsJsonNode =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ContainsJsonNode), new[] { typeof(JsonNode), typeof(object) })!;
+
     private static readonly MethodInfo s_concatReadOnlyLists =
         typeof(CelRuntimeHelpers).GetMethods().Single(method =>
             method.Name == nameof(CelRuntimeHelpers.ConcatReadOnlyLists) &&
@@ -202,11 +208,13 @@ public static partial class CelCompiler
     private static readonly MethodInfo s_toCelDoubleInt = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelDouble), new[] { typeof(long) })!;
     private static readonly MethodInfo s_toCelDoubleUint = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelDouble), new[] { typeof(ulong) })!;
     private static readonly MethodInfo s_toCelDoubleString = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelDouble), new[] { typeof(string) })!;
+    private static readonly MethodInfo s_toCelDoubleDecimal = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelDouble), new[] { typeof(decimal) })!;
     private static readonly MethodInfo s_toCelDoubleObject = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelDouble), new[] { typeof(object) })!;
 
     private static readonly MethodInfo s_toCelStringInt = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelString), new[] { typeof(long) })!;
     private static readonly MethodInfo s_toCelStringUint = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelString), new[] { typeof(ulong) })!;
     private static readonly MethodInfo s_toCelStringDouble = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelString), new[] { typeof(double) })!;
+    private static readonly MethodInfo s_toCelStringDecimal = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelString), new[] { typeof(decimal) })!;
     private static readonly MethodInfo s_toCelStringBool = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelString), new[] { typeof(bool) })!;
     private static readonly MethodInfo s_toCelStringBytes = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelString), new[] { typeof(byte[]) })!;
     private static readonly MethodInfo s_toCelStringTimestamp = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelString), new[] { typeof(DateTimeOffset) })!;
@@ -224,6 +232,12 @@ public static partial class CelCompiler
 
     private static readonly MethodInfo s_toCelTimestampString = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelTimestamp), new[] { typeof(string) })!;
     private static readonly MethodInfo s_toCelTimestampObject = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelTimestamp), new[] { typeof(object) })!;
+
+    private static readonly MethodInfo s_toCelDecimalInt = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelDecimal), new[] { typeof(long) })!;
+    private static readonly MethodInfo s_toCelDecimalUint = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelDecimal), new[] { typeof(ulong) })!;
+    private static readonly MethodInfo s_toCelDecimalDouble = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelDecimal), new[] { typeof(double) })!;
+    private static readonly MethodInfo s_toCelDecimalString = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelDecimal), new[] { typeof(string) })!;
+    private static readonly MethodInfo s_toCelDecimalObject = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelDecimal), new[] { typeof(object) })!;
 
     private static readonly MethodInfo s_addDurationDuration = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.AddDurationDuration), new[] { typeof(TimeSpan), typeof(TimeSpan) })!;
     private static readonly MethodInfo s_subtractDurationDuration = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.SubtractDurationDuration), new[] { typeof(TimeSpan), typeof(TimeSpan) })!;
@@ -253,7 +267,7 @@ public static partial class CelCompiler
     private static readonly MethodInfo s_getDurationSeconds = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetDurationSeconds), new[] { typeof(TimeSpan) })!;
     private static readonly MethodInfo s_getDurationMilliseconds = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.GetDurationMilliseconds), new[] { typeof(TimeSpan) })!;
 
-    private static readonly MethodInfo s_toCelTypeObject = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelType), new[] { typeof(object) })!;
+    private static readonly MethodInfo s_toCelTypeObject = typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelType), new[] { typeof(object), typeof(bool) })!;
 
     private static readonly MethodInfo s_optionalOf =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.OptionalOf), new[] { typeof(object) })!;

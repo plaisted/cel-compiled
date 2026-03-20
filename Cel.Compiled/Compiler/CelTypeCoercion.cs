@@ -1,5 +1,7 @@
 using System;
 using System.Linq.Expressions;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Cel.Compiled.Compiler;
 
@@ -21,6 +23,8 @@ internal static class CelTypeCoercion
         if (left.Type == right.Type)
             return (left, right);
 
+        (left, right) = NormalizeJsonDecimalOperands(left, right, binders);
+
         if (binders.TryCoerceValue(left, right.Type, out var leftCoerced))
             left = leftCoerced;
 
@@ -34,6 +38,42 @@ internal static class CelTypeCoercion
         }
 
         return (left, right);
+    }
+
+    private static (Expression Left, Expression Right) NormalizeJsonDecimalOperands(Expression left, Expression right, CelBinderSet binders)
+    {
+        if ((binders.EnabledFeatures & CelFeatureFlags.JsonDecimalBinding) == 0)
+            return (left, right);
+
+        if (IsJsonNumberCarrier(left.Type) && IsDecimalCompatibleType(right.Type) && binders.TryCoerceValue(left, typeof(decimal), out var leftDecimal))
+        {
+            left = leftDecimal;
+            right = PromoteIntegralToDecimal(right);
+        }
+        else if (IsJsonNumberCarrier(right.Type) && IsDecimalCompatibleType(left.Type) && binders.TryCoerceValue(right, typeof(decimal), out var rightDecimal))
+        {
+            right = rightDecimal;
+            left = PromoteIntegralToDecimal(left);
+        }
+
+        return (left, right);
+    }
+
+    private static bool IsJsonNumberCarrier(Type type) =>
+        type == typeof(JsonElement) || typeof(JsonNode).IsAssignableFrom(type);
+
+    private static bool IsDecimalCompatibleType(Type type) =>
+        type == typeof(decimal) || type == typeof(long) || type == typeof(ulong);
+
+    private static Expression PromoteIntegralToDecimal(Expression expr)
+    {
+        if (expr.Type == typeof(long))
+            return Expression.Convert(expr, typeof(decimal));
+
+        if (expr.Type == typeof(ulong))
+            return Expression.Call(typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelDecimal), new[] { typeof(ulong) })!, expr);
+
+        return expr;
     }
 
     /// <summary>

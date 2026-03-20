@@ -10,6 +10,7 @@ public enum CelType
     Int,
     Uint,
     Double,
+    Decimal,
     String,
     Bytes,
     Bool,
@@ -28,6 +29,7 @@ public static class CelTypeExtensions
         if (type == typeof(long)) return CelType.Int;
         if (type == typeof(ulong)) return CelType.Uint;
         if (type == typeof(double) || type == typeof(float)) return CelType.Double;
+        if (type == typeof(decimal)) return CelType.Decimal;
         if (type == typeof(string)) return CelType.String;
         if (type == typeof(byte[])) return CelType.Bytes;
         if (type == typeof(bool)) return CelType.Bool;

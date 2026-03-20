@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Cel.Compiled.Compiler;
 using Cel.Compiled.Parser;
 using Xunit;
@@ -365,6 +366,14 @@ public class ContainerTests
     }
 
     [Fact]
+    public void JsonElementScalarMembershipMatchesTypedDictionaryKeys()
+    {
+        using var document = JsonDocument.Parse("""{"field":"field"}""");
+        var result = Eval("""field in {'field': 10}""", document.RootElement);
+        Assert.Equal(true, result);
+    }
+
+    [Fact]
     public void MissingMapMembershipReturnsFalse()
     {
         var result = Eval("\"missing\" in Values", new ListContext());
@@ -408,6 +417,38 @@ public class ContainerTests
         var result = Eval("obj[\"name\"]", document.RootElement);
         Assert.IsType<JsonElement>(result);
         Assert.Equal("cel", ((JsonElement)result!).GetString());
+    }
+
+    [Fact]
+    public void JsonElementObjectMembershipChecksKeys()
+    {
+        using var document = JsonDocument.Parse("""{"obj":{"name":"cel"}}""");
+        var result = Eval("""'name' in obj""", document.RootElement);
+        Assert.Equal(true, result);
+    }
+
+    [Fact]
+    public void JsonElementArrayMembershipUsesCelEquality()
+    {
+        using var document = JsonDocument.Parse("""{"items":[1,2,3]}""");
+        var result = Eval("2u in items", document.RootElement);
+        Assert.Equal(true, result);
+    }
+
+    [Fact]
+    public void JsonNodeObjectMembershipChecksKeys()
+    {
+        var node = JsonNode.Parse("""{"obj":{"name":"cel"}}""")!;
+        var result = Eval("""'name' in obj""", node);
+        Assert.Equal(true, result);
+    }
+
+    [Fact]
+    public void JsonNodeArrayMembershipUsesCelEquality()
+    {
+        var node = JsonNode.Parse("""{"items":[1,2,3]}""")!;
+        var result = Eval("2u in items", node);
+        Assert.Equal(true, result);
     }
 
     [Fact]

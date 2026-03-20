@@ -204,8 +204,10 @@ public static partial class CelCompiler
         throw NoMatchingOverload(sourceExpr, "_[_]", operand.Type, index.Type);
     }
 
-    private static Expression CompileArithmetic(string function, Expression left, Expression right, CelExpr? sourceExpr)
+    private static Expression CompileArithmetic(string function, Expression left, Expression right, CelBinderSet binders, CelExpr? sourceExpr)
     {
+        (left, right) = CoerceJsonDecimalOperands(left, right, binders, function);
+
         if (function == "_+_" && left.Type == typeof(string) && right.Type == typeof(string))
         {
             return Expression.Call(s_stringConcat, left, right);
@@ -241,7 +243,15 @@ public static partial class CelCompiler
 
         if (left.Type != right.Type)
         {
-            throw NoMatchingOverload(sourceExpr, function, left.Type, right.Type);
+            if (TryPromoteDecimalOperands(left, right, out var promotedLeft, out var promotedRight))
+            {
+                left = promotedLeft;
+                right = promotedRight;
+            }
+            else
+            {
+                throw NoMatchingOverload(sourceExpr, function, left.Type, right.Type);
+            }
         }
 
         Type type = left.Type;
@@ -289,13 +299,28 @@ public static partial class CelCompiler
             return Expression.TryCatch(body, catches.ToArray());
         }
 
+        if (type == typeof(decimal))
+        {
+            var method = function switch
+            {
+                "_+_" => typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.AddDecimal), new[] { typeof(decimal), typeof(decimal) })!,
+                "_-_" => typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.SubtractDecimal), new[] { typeof(decimal), typeof(decimal) })!,
+                "_*_" => typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.MultiplyDecimal), new[] { typeof(decimal), typeof(decimal) })!,
+                "_/_" => typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DivideDecimal), new[] { typeof(decimal), typeof(decimal) })!,
+                "_%_" => typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ModuloDecimal), new[] { typeof(decimal), typeof(decimal) })!,
+                _ => throw new NotSupportedException($"Arithmetic operator {function} is not supported.")
+            };
+
+            return Expression.Call(method, left, right);
+        }
+
         throw NoMatchingOverload(sourceExpr, function, left.Type, right.Type);
     }
 
     private static Expression CompileUnaryMinus(Expression operand, CelExpr? sourceExpr)
     {
         Type type = operand.Type;
-        if (type == typeof(long) || type == typeof(double))
+        if (type == typeof(long) || type == typeof(double) || type == typeof(decimal))
         {
             if (type == typeof(long))
             {
@@ -307,14 +332,20 @@ public static partial class CelCompiler
                     )
                 );
             }
+
+            if (type == typeof(decimal))
+                return Expression.Call(typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.NegateDecimal), new[] { typeof(decimal) })!, operand);
+
             return Expression.Negate(operand);
         }
 
         throw NoMatchingOverload(sourceExpr, "-_", type);
     }
 
-    private static Expression EqualsExpr(Expression left, Expression right, CelExpr? sourceExpr = null)
+    private static Expression EqualsExpr(Expression left, Expression right, CelBinderSet binders, CelExpr? sourceExpr = null)
     {
+        (left, right) = CoerceJsonDecimalOperands(left, right, binders, "_==_");
+
         // 1. Null checks
         if (IsNullConstant(left) && IsNullConstant(right)) return Expression.Constant(true);
         
@@ -342,6 +373,11 @@ public static partial class CelCompiler
                 return Expression.Equal(left, right);
             }
 
+            if (left.Type == typeof(decimal))
+            {
+                return Expression.Equal(left, right);
+            }
+
             if (left.Type.IsPrimitive || left.Type.IsEnum || left.Type == typeof(string))
             {
                 // Double needs special handling for NaN in CEL (NaN != NaN)
@@ -355,7 +391,7 @@ public static partial class CelCompiler
         }
 
         // 3. Cross-type numeric specialization
-        var numericTypes = new[] { typeof(long), typeof(ulong), typeof(double) };
+        var numericTypes = new[] { typeof(long), typeof(ulong), typeof(double), typeof(decimal) };
         if (numericTypes.Contains(left.Type) && numericTypes.Contains(right.Type))
         {
             var method = typeof(CelRuntimeHelpers).GetMethod("NumericEquals", new[] { left.Type, right.Type });
@@ -376,17 +412,19 @@ public static partial class CelCompiler
             Expression.Convert(right, typeof(object)));
     }
 
-    private static Expression CompareExpr(string function, Expression left, Expression right, CelExpr? sourceExpr)
+    private static Expression CompareExpr(string function, Expression left, Expression right, CelBinderSet binders, CelExpr? sourceExpr)
     {
+        (left, right) = CoerceJsonDecimalOperands(left, right, binders, function);
+
         Expression cmpExpr;
 
         // 1. Same-type primitives (long, ulong, double)
-        if (left.Type == right.Type && (left.Type == typeof(long) || left.Type == typeof(ulong) || left.Type == typeof(double)))
+        if (left.Type == right.Type && (left.Type == typeof(long) || left.Type == typeof(ulong) || left.Type == typeof(double) || left.Type == typeof(decimal)))
         {
-            // Double needs NumericCompare for NaN handling (throws)
-            if (left.Type == typeof(double))
+            // Double and decimal use helper methods for CEL-specific behavior.
+            if (left.Type == typeof(double) || left.Type == typeof(decimal))
             {
-                cmpExpr = Expression.Call(typeof(CelRuntimeHelpers).GetMethod("NumericCompare", new[] { typeof(double), typeof(double) })!, left, right);
+                cmpExpr = Expression.Call(typeof(CelRuntimeHelpers).GetMethod("NumericCompare", new[] { left.Type, right.Type })!, left, right);
             }
             else
             {
@@ -510,7 +548,107 @@ public static partial class CelCompiler
         );
     }
 
-    private static bool IsNumericType(Type t) => t == typeof(long) || t == typeof(ulong) || t == typeof(double);
+    private static bool IsNumericType(Type t) => t == typeof(long) || t == typeof(ulong) || t == typeof(double) || t == typeof(decimal);
+
+    private static (Expression Left, Expression Right) CoerceJsonDecimalOperands(Expression left, Expression right, CelBinderSet binders, string function)
+    {
+        var bindNonIntegerNumbersAsDecimal = Expression.Constant((binders.EnabledFeatures & CelFeatureFlags.JsonDecimalBinding) != 0);
+
+        if (left.Type == typeof(decimal) && IsJsonNumberCarrier(right.Type))
+        {
+            right = Expression.Call(
+                typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.CoerceJsonNumericToDecimalForOperator), new[] { typeof(object), typeof(bool), typeof(string), typeof(Type) })!,
+                BoxIfNeeded(right),
+                bindNonIntegerNumbersAsDecimal,
+                Expression.Constant(function),
+                Expression.Constant(typeof(decimal)));
+        }
+        else if (right.Type == typeof(decimal) && IsJsonNumberCarrier(left.Type))
+        {
+            left = Expression.Call(
+                typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.CoerceJsonNumericToDecimalForOperator), new[] { typeof(object), typeof(bool), typeof(string), typeof(Type) })!,
+                BoxIfNeeded(left),
+                bindNonIntegerNumbersAsDecimal,
+                Expression.Constant(function),
+                Expression.Constant(typeof(decimal)));
+        }
+        else if ((left.Type == typeof(long) || left.Type == typeof(ulong)) && IsJsonNumberCarrier(right.Type))
+        {
+            left = PromoteIntegralToDecimal(left);
+            right = Expression.Call(
+                typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.CoerceJsonNumericToDecimalForOperator), new[] { typeof(object), typeof(bool), typeof(string), typeof(Type) })!,
+                BoxIfNeeded(right),
+                bindNonIntegerNumbersAsDecimal,
+                Expression.Constant(function),
+                Expression.Constant(left.Type));
+        }
+        else if ((right.Type == typeof(long) || right.Type == typeof(ulong)) && IsJsonNumberCarrier(left.Type))
+        {
+            right = PromoteIntegralToDecimal(right);
+            left = Expression.Call(
+                typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.CoerceJsonNumericToDecimalForOperator), new[] { typeof(object), typeof(bool), typeof(string), typeof(Type) })!,
+                BoxIfNeeded(left),
+                bindNonIntegerNumbersAsDecimal,
+                Expression.Constant(function),
+                Expression.Constant(right.Type));
+        }
+
+        return (left, right);
+    }
+
+    private static bool IsJsonNumberCarrier(Type type) =>
+        type == typeof(JsonElement) || typeof(JsonNode).IsAssignableFrom(type);
+
+    private static bool TryPromoteDecimalOperands(Expression left, Expression right, out Expression promotedLeft, out Expression promotedRight)
+    {
+        promotedLeft = left;
+        promotedRight = right;
+
+        if (left.Type == typeof(decimal))
+        {
+            if (right.Type == typeof(long))
+            {
+                promotedRight = Expression.Convert(right, typeof(decimal));
+                return true;
+            }
+
+            if (right.Type == typeof(ulong))
+            {
+                promotedRight = Expression.Call(typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelDecimal), new[] { typeof(ulong) })!, right);
+                return true;
+            }
+
+            return false;
+        }
+
+        if (right.Type == typeof(decimal))
+        {
+            if (left.Type == typeof(long))
+            {
+                promotedLeft = Expression.Convert(left, typeof(decimal));
+                return true;
+            }
+
+            if (left.Type == typeof(ulong))
+            {
+                promotedLeft = Expression.Call(typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelDecimal), new[] { typeof(ulong) })!, left);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static Expression PromoteIntegralToDecimal(Expression expression)
+    {
+        if (expression.Type == typeof(long))
+            return Expression.Convert(expression, typeof(decimal));
+
+        if (expression.Type == typeof(ulong))
+            return Expression.Call(typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ToCelDecimal), new[] { typeof(ulong) })!, expression);
+
+        return expression;
+    }
 
     private static bool IsNullConstant(Expression expr)
     {

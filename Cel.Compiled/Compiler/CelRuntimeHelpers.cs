@@ -180,6 +180,7 @@ internal static class CelRuntimeHelpers
                 long l => l == (long)right,
                 ulong ul => ul == (ulong)right,
                 double d => NumericEquals(d, (double)right),
+                decimal d => NumericEquals(d, (decimal)right),
                 bool b => b == (bool)right,
                 string s => s.Equals((string)right),
                 byte[] bytes => bytes.SequenceEqual((byte[])right),
@@ -196,10 +197,14 @@ internal static class CelRuntimeHelpers
             {
                 (long l, ulong ul) => NumericEquals(l, ul),
                 (long l, double d) => NumericEquals(l, d),
+                (long l, decimal d) => NumericEquals(l, d),
                 (ulong ul, long l) => NumericEquals(ul, l),
                 (ulong ul, double d) => NumericEquals(ul, d),
+                (ulong ul, decimal d) => NumericEquals(ul, d),
                 (double d, long l) => NumericEquals(d, l),
                 (double d, ulong ul) => NumericEquals(d, ul),
+                (decimal d, long l) => NumericEquals(d, l),
+                (decimal d, ulong ul) => NumericEquals(d, ul),
                 _ => false
             };
         }
@@ -228,6 +233,7 @@ internal static class CelRuntimeHelpers
             JsonValueKind.Number => NormalizeJsonNumber(
                 () => element.TryGetInt64(out var i) ? i : null,
                 () => element.TryGetUInt64(out var u) ? u : null,
+                () => element.TryGetDecimal(out var d) ? d : null,
                 () => element.GetDouble()),
             // very costly, need to look into improvements here to avoid
             // but the whole dictionary compares are pretty ugly
@@ -250,18 +256,22 @@ internal static class CelRuntimeHelpers
             JsonValue value => NormalizeJsonNumber(
                 () => value.TryGetValue<long>(out var i) ? i : null,
                 () => value.TryGetValue<ulong>(out var u) ? u : null,
+                () => value.TryGetValue<decimal>(out var d) ? d : null,
                 () => value.GetValue<double>()),
             _ => node
         };
     }
 
-    private static object NormalizeJsonNumber(Func<long?> getInt64, Func<ulong?> getUInt64, Func<double> getDouble)
+    private static object NormalizeJsonNumber(Func<long?> getInt64, Func<ulong?> getUInt64, Func<decimal?> getDecimal, Func<double> getDouble)
     {
         if (getInt64() is long int64Value)
             return int64Value;
 
         if (getUInt64() is ulong uint64Value)
             return uint64Value;
+
+        if (getDecimal() is decimal decimalValue)
+            return decimalValue;
 
         return getDouble();
     }
@@ -377,7 +387,7 @@ internal static class CelRuntimeHelpers
         return true;
     }
 
-    private static bool IsNumeric(object o) => o is long or ulong or double;
+    private static bool IsNumeric(object o) => o is long or ulong or double or decimal;
 
     public static int CelCompare(object? left, object? right)
     {
@@ -394,6 +404,7 @@ internal static class CelRuntimeHelpers
                 long l => l.CompareTo((long)right),
                 ulong ul => ul.CompareTo((ulong)right),
                 double d => NumericCompare(d, (double)right),
+                decimal d => NumericCompare(d, (decimal)right),
                 string s => string.Compare(s, (string)right, StringComparison.Ordinal),
                 byte[] bytes => BytesCompare(bytes, (byte[])right),
                 DateTimeOffset dto => dto.CompareTo((DateTimeOffset)right),
@@ -408,10 +419,14 @@ internal static class CelRuntimeHelpers
             {
                 (long l, ulong ul) => NumericCompare(l, ul),
                 (long l, double d) => NumericCompare(l, d),
+                (long l, decimal d) => NumericCompare(l, d),
                 (ulong ul, long l) => NumericCompare(ul, l),
                 (ulong ul, double d) => NumericCompare(ul, d),
+                (ulong ul, decimal d) => NumericCompare(ul, d),
                 (double d, long l) => NumericCompare(d, l),
                 (double d, ulong ul) => NumericCompare(d, ul),
+                (decimal d, long l) => NumericCompare(d, l),
+                (decimal d, ulong ul) => NumericCompare(d, ul),
                 _ => throw CelRuntimeException.NoMatchingOverload("_<_", leftType, rightType)
             };
         }
@@ -462,6 +477,10 @@ internal static class CelRuntimeHelpers
     public static bool NumericEquals(ulong left, long right) => NumericEquals(right, left);
     public static bool NumericEquals(double left, long right) => NumericEquals(right, left);
     public static bool NumericEquals(double left, ulong right) => NumericEquals(right, left);
+    public static bool NumericEquals(long left, decimal right) => left == right;
+    public static bool NumericEquals(ulong left, decimal right) => left == right;
+    public static bool NumericEquals(decimal left, long right) => left == right;
+    public static bool NumericEquals(decimal left, ulong right) => left == right;
 
     public static bool NumericEquals(long left, long right) => left == right;
     public static bool NumericEquals(ulong left, ulong right) => left == right;
@@ -471,6 +490,7 @@ internal static class CelRuntimeHelpers
         if (double.IsNaN(left) || double.IsNaN(right)) return false;
         return left == right;
     }
+    public static bool NumericEquals(decimal left, decimal right) => left == right;
 
     public static int NumericCompare(long left, ulong right)
     {
@@ -513,6 +533,10 @@ internal static class CelRuntimeHelpers
     public static int NumericCompare(ulong left, long right) => -NumericCompare(right, left);
     public static int NumericCompare(double left, long right) => -NumericCompare(right, left);
     public static int NumericCompare(double left, ulong right) => -NumericCompare(right, left);
+    public static int NumericCompare(long left, decimal right) => decimal.Compare(left, right);
+    public static int NumericCompare(ulong left, decimal right) => decimal.Compare(left, right);
+    public static int NumericCompare(decimal left, long right) => decimal.Compare(left, right);
+    public static int NumericCompare(decimal left, ulong right) => decimal.Compare(left, right);
 
     public static int NumericCompare(long left, long right) => left.CompareTo(right);
     public static int NumericCompare(ulong left, ulong right) => left.CompareTo(right);
@@ -520,6 +544,87 @@ internal static class CelRuntimeHelpers
     {
         if (double.IsNaN(left) || double.IsNaN(right)) throw CelRuntimeException.NoMatchingOverload("_<_", typeof(double), typeof(double));
         return left.CompareTo(right);
+    }
+    public static int NumericCompare(decimal left, decimal right) => left.CompareTo(right);
+
+    public static decimal AddDecimal(decimal left, decimal right)
+    {
+        try
+        {
+            return left + right;
+        }
+        catch (OverflowException)
+        {
+            throw new CelRuntimeException("overflow", "Arithmetic overflow during '_+_' operation.");
+        }
+    }
+
+    public static decimal SubtractDecimal(decimal left, decimal right)
+    {
+        try
+        {
+            return left - right;
+        }
+        catch (OverflowException)
+        {
+            throw new CelRuntimeException("overflow", "Arithmetic overflow during '_-_' operation.");
+        }
+    }
+
+    public static decimal MultiplyDecimal(decimal left, decimal right)
+    {
+        try
+        {
+            return left * right;
+        }
+        catch (OverflowException)
+        {
+            throw new CelRuntimeException("overflow", "Arithmetic overflow during '_*_' operation.");
+        }
+    }
+
+    public static decimal DivideDecimal(decimal left, decimal right)
+    {
+        try
+        {
+            return left / right;
+        }
+        catch (DivideByZeroException)
+        {
+            throw new CelRuntimeException("division_by_zero", "Division by zero.");
+        }
+        catch (OverflowException)
+        {
+            throw new CelRuntimeException("overflow", "Arithmetic overflow during '_/_' operation.");
+        }
+    }
+
+    public static decimal ModuloDecimal(decimal left, decimal right)
+    {
+        try
+        {
+            return left % right;
+        }
+        catch (DivideByZeroException)
+        {
+            throw new CelRuntimeException("division_by_zero", "Division by zero.");
+        }
+        catch (OverflowException)
+        {
+            throw new CelRuntimeException("overflow", "Arithmetic overflow during '_%_' operation.");
+        }
+    }
+
+    public static decimal NegateDecimal(decimal value)
+    {
+        try
+        {
+            return -value;
+        }
+        catch (OverflowException)
+        {
+            throw new CelRuntimeException("overflow", "Arithmetic overflow during '-_' operation.");
+        }
     }
 
     /// <summary>
@@ -661,7 +766,13 @@ internal static class CelRuntimeHelpers
     public static bool ContainsDictionaryKey<TKey, TValue>(IDictionary<TKey, TValue> dictionary, object? key)
         where TKey : notnull
     {
-        return key is TKey typedKey && dictionary.ContainsKey(typedKey);
+        foreach (var candidate in dictionary.Keys)
+        {
+            if (CelEquals(candidate, key))
+                return true;
+        }
+
+        return false;
     }
 
     public static TValue GetReadOnlyDictionaryValue<TKey, TValue>(IReadOnlyDictionary<TKey, TValue> dictionary, TKey key)
@@ -676,7 +787,13 @@ internal static class CelRuntimeHelpers
     public static bool ContainsReadOnlyDictionaryKey<TKey, TValue>(IReadOnlyDictionary<TKey, TValue> dictionary, object? key)
         where TKey : notnull
     {
-        return key is TKey typedKey && dictionary.ContainsKey(typedKey);
+        foreach (var candidate in dictionary.Keys)
+        {
+            if (CelEquals(candidate, key))
+                return true;
+        }
+
+        return false;
     }
 
     public static object? GetDictionaryValue(IDictionary dictionary, object key)
@@ -715,7 +832,77 @@ internal static class CelRuntimeHelpers
 
     public static bool ContainsDictionaryKey(IDictionary dictionary, object? key)
     {
-        return key != null && dictionary.Contains(key);
+        foreach (DictionaryEntry entry in dictionary)
+        {
+            if (CelEquals(entry.Key, key))
+                return true;
+        }
+
+        return false;
+    }
+
+    public static bool ContainsJsonElement(JsonElement haystack, object? needle)
+    {
+        return haystack.ValueKind switch
+        {
+            JsonValueKind.Array => ContainsJsonElementArray(haystack, needle),
+            JsonValueKind.Object => ContainsJsonElementObject(haystack, needle),
+            _ => throw CelRuntimeException.NoMatchingOverload("@in", typeof(JsonElement), typeof(JsonElement))
+        };
+    }
+
+    public static bool ContainsJsonNode(JsonNode? haystack, object? needle)
+    {
+        return haystack switch
+        {
+            JsonArray array => ContainsJsonNodeArray(array, needle),
+            JsonObject obj => ContainsJsonNodeObject(obj, needle),
+            _ => throw CelRuntimeException.NoMatchingOverload("@in", haystack?.GetType() ?? typeof(JsonNode), typeof(JsonNode))
+        };
+    }
+
+    private static bool ContainsJsonElementArray(JsonElement haystack, object? needle)
+    {
+        foreach (var item in haystack.EnumerateArray())
+        {
+            if (CelEquals(item, needle))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool ContainsJsonElementObject(JsonElement haystack, object? needle)
+    {
+        foreach (var property in haystack.EnumerateObject())
+        {
+            if (CelEquals(property.Name, needle))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool ContainsJsonNodeArray(JsonArray haystack, object? needle)
+    {
+        foreach (var item in haystack)
+        {
+            if (CelEquals(item, needle))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool ContainsJsonNodeObject(JsonObject haystack, object? needle)
+    {
+        foreach (var property in haystack)
+        {
+            if (CelEquals(property.Key, needle))
+                return true;
+        }
+
+        return false;
     }
 
     public static long GetJsonElementSize(JsonElement element)
@@ -730,7 +917,7 @@ internal static class CelRuntimeHelpers
 
     public static long GetStringSize(string value) => value.EnumerateRunes().LongCount();
 
-    public static CelType ToCelType(object? value)
+    public static CelType ToCelType(object? value, bool bindJsonNonIntegerNumbersAsDecimal)
     {
         if (value is null)
             return CelType.Null;
@@ -747,6 +934,7 @@ internal static class CelRuntimeHelpers
                 JsonValueKind.String => CelType.String,
                 JsonValueKind.Number => element.TryGetInt64(out _) ? CelType.Int :
                                         element.TryGetUInt64(out _) ? CelType.Uint :
+                                        bindJsonNonIntegerNumbersAsDecimal && element.TryGetDecimal(out _) ? CelType.Decimal :
                                         CelType.Double,
                 JsonValueKind.Array => CelType.List,
                 JsonValueKind.Object => CelType.Map,
@@ -760,7 +948,7 @@ internal static class CelRuntimeHelpers
             {
                 JsonObject => CelType.Map,
                 JsonArray => CelType.List,
-                JsonValue jsonValue => GetJsonNodeValueType(jsonValue),
+                JsonValue jsonValue => GetJsonNodeValueType(jsonValue, bindJsonNonIntegerNumbersAsDecimal),
                 _ => CelType.Unknown
             };
         }
@@ -797,6 +985,12 @@ internal static class CelRuntimeHelpers
         if (value is long l) return l;
         if (value is ulong ul) return ToCelInt(ul);
         if (value is double d) return ToCelInt(d);
+        if (value is decimal dec)
+        {
+            if (dec < long.MinValue || dec >= 9223372036854775808m)
+                throw new CelRuntimeException("overflow", "decimal value out of range for int()");
+            return checked((long)decimal.Truncate(dec));
+        }
         if (value is string s) return ToCelInt(s);
         if (value is bool b) return ToCelInt(b);
         if (value is DateTimeOffset timestamp) return ToCelInt(timestamp);
@@ -844,6 +1038,12 @@ internal static class CelRuntimeHelpers
         if (value is ulong ul) return ul;
         if (value is long l) return ToCelUint(l);
         if (value is double d) return ToCelUint(d);
+        if (value is decimal dec)
+        {
+            if (dec < 0 || dec >= 18446744073709551616m)
+                throw new CelRuntimeException("overflow", "decimal value out of range for uint()");
+            return checked((ulong)decimal.Truncate(dec));
+        }
         if (value is string s) return ToCelUint(s);
         if (value is bool b) return ToCelUint(b);
         if (value is uint ui) return ui;
@@ -864,6 +1064,7 @@ internal static class CelRuntimeHelpers
 
     public static double ToCelDouble(long value) => (double)value;
     public static double ToCelDouble(ulong value) => (double)value;
+    public static double ToCelDouble(decimal value) => (double)value;
     public static double ToCelDouble(string value)
     {
         if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result))
@@ -876,6 +1077,7 @@ internal static class CelRuntimeHelpers
         if (value is double d) return d;
         if (value is long l) return ToCelDouble(l);
         if (value is ulong ul) return ToCelDouble(ul);
+        if (value is decimal dec) return ToCelDouble(dec);
         if (value is string s) return ToCelDouble(s);
         if (value is float f) return f;
         if (value is int i) return i;
@@ -895,6 +1097,7 @@ internal static class CelRuntimeHelpers
     public static string ToCelString(long value) => value.ToString(CultureInfo.InvariantCulture);
     public static string ToCelString(ulong value) => value.ToString(CultureInfo.InvariantCulture) + "u";
     public static string ToCelString(double value) => value.ToString("G", CultureInfo.InvariantCulture);
+    public static string ToCelString(decimal value) => value.ToString(CultureInfo.InvariantCulture);
     public static string ToCelString(bool value) => value ? "true" : "false";
     public static string ToCelString(byte[] value) => Encoding.UTF8.GetString(value);
     public static string ToCelString(DateTimeOffset value)
@@ -920,7 +1123,58 @@ internal static class CelRuntimeHelpers
         if (value == null) return "null";
         if (value is DateTimeOffset timestamp) return ToCelString(timestamp);
         if (value is TimeSpan duration) return ToCelString(duration);
+        if (value is decimal dec) return ToCelString(dec);
         return value.ToString() ?? "";
+    }
+
+    public static decimal ToCelDecimal(long value) => value;
+    public static decimal ToCelDecimal(ulong value) => value;
+
+    public static decimal ToCelDecimal(double value)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value))
+            throw new CelRuntimeException("invalid_argument", "double value must be finite for decimal()");
+
+        try
+        {
+            return (decimal)value;
+        }
+        catch (OverflowException)
+        {
+            throw new CelRuntimeException("overflow", "double value out of range for decimal()");
+        }
+    }
+
+    public static decimal ToCelDecimal(string value)
+    {
+        if (decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result))
+            return result;
+
+        throw new CelRuntimeException("invalid_argument", $"invalid string for decimal(): {value}");
+    }
+
+    public static decimal ToCelDecimal(object? value)
+    {
+        if (value is decimal dec) return dec;
+        if (value is long l) return ToCelDecimal(l);
+        if (value is ulong ul) return ToCelDecimal(ul);
+        if (value is double d) return ToCelDecimal(d);
+        if (value is string s) return ToCelDecimal(s);
+        if (value is int i) return i;
+        if (value is uint ui) return ui;
+        if (value is JsonElement e)
+        {
+            return e.ValueKind switch
+            {
+                JsonValueKind.Number => GetJsonElementDecimal(e),
+                JsonValueKind.String => ToCelDecimal(e.GetString()!),
+                _ => throw new CelRuntimeException("invalid_argument", $"cannot convert JsonElement kind {e.ValueKind} to decimal")
+            };
+        }
+        if (value is JsonNode node)
+            return GetJsonNodeDecimal(node);
+
+        throw new CelRuntimeException("no_matching_overload", $"decimal() not supported for type {value?.GetType().Name ?? "null"}");
     }
 
     public static bool ToCelBool(string value)
@@ -1325,6 +1579,17 @@ internal static class CelRuntimeHelpers
         return node?.GetValue<double>() ?? throw new InvalidOperationException("Cannot read double from null JsonNode.");
     }
 
+    public static decimal GetJsonNodeDecimal(JsonNode? node)
+    {
+        if (node is null)
+            throw new InvalidOperationException("Cannot read decimal from null JsonNode.");
+
+        if (node is JsonValue value && value.TryGetValue<decimal>(out var result))
+            return result;
+
+        return ToCelDecimal(node.ToJsonString());
+    }
+
     public static string? GetJsonNodeString(JsonNode? node)
     {
         return node is null ? null : node.GetValue<string>();
@@ -1335,12 +1600,13 @@ internal static class CelRuntimeHelpers
         return node?.GetValue<bool>() ?? throw new InvalidOperationException("Cannot read bool from null JsonNode.");
     }
 
-    private static CelType GetJsonNodeValueType(JsonValue value)
+    private static CelType GetJsonNodeValueType(JsonValue value, bool bindJsonNonIntegerNumbersAsDecimal)
     {
         if (value.TryGetValue<bool>(out _)) return CelType.Bool;
         if (value.TryGetValue<string>(out _)) return CelType.String;
         if (value.TryGetValue<long>(out _)) return CelType.Int;
         if (value.TryGetValue<ulong>(out _)) return CelType.Uint;
+        if (bindJsonNonIntegerNumbersAsDecimal && value.TryGetValue<decimal>(out _)) return CelType.Decimal;
         if (value.TryGetValue<double>(out _)) return CelType.Double;
         return CelType.Unknown;
     }
@@ -1387,6 +1653,61 @@ internal static class CelRuntimeHelpers
             throw NoSuchFieldWithSource(propertyName, expressionText, start, end);
 
         return property;
+    }
+
+    public static decimal GetJsonElementDecimal(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Number)
+            throw new CelRuntimeException("invalid_argument", $"cannot convert JsonElement kind {element.ValueKind} to decimal");
+
+        if (element.TryGetDecimal(out var value))
+            return value;
+
+        return ToCelDecimal(element.GetRawText());
+    }
+
+    public static decimal CoerceJsonNumericToDecimalForOperator(object value, bool bindNonIntegerNumbersAsDecimal, string functionName, Type otherType)
+    {
+        return value switch
+        {
+            JsonElement element => CoerceJsonElementNumericToDecimalForOperator(element, bindNonIntegerNumbersAsDecimal, functionName, otherType),
+            JsonNode node => CoerceJsonNodeNumericToDecimalForOperator(node, bindNonIntegerNumbersAsDecimal, functionName, otherType),
+            _ => throw CelRuntimeException.NoMatchingOverload(functionName, value?.GetType() ?? typeof(object), otherType)
+        };
+    }
+
+    private static decimal CoerceJsonElementNumericToDecimalForOperator(JsonElement element, bool bindNonIntegerNumbersAsDecimal, string functionName, Type otherType)
+    {
+        if (element.ValueKind != JsonValueKind.Number)
+            throw CelRuntimeException.NoMatchingOverload(functionName, typeof(JsonElement), otherType);
+
+        if (element.TryGetInt64(out var int64Value))
+            return int64Value;
+
+        if (element.TryGetUInt64(out var uint64Value))
+            return uint64Value;
+
+        if (bindNonIntegerNumbersAsDecimal)
+            return GetJsonElementDecimal(element);
+
+        throw CelRuntimeException.NoMatchingOverload(functionName, typeof(JsonElement), otherType);
+    }
+
+    private static decimal CoerceJsonNodeNumericToDecimalForOperator(JsonNode node, bool bindNonIntegerNumbersAsDecimal, string functionName, Type otherType)
+    {
+        if (node is not JsonValue value)
+            throw CelRuntimeException.NoMatchingOverload(functionName, typeof(JsonNode), otherType);
+
+        if (value.TryGetValue<long>(out var int64Value))
+            return int64Value;
+
+        if (value.TryGetValue<ulong>(out var uint64Value))
+            return uint64Value;
+
+        if (bindNonIntegerNumbersAsDecimal)
+            return GetJsonNodeDecimal(node);
+
+        throw CelRuntimeException.NoMatchingOverload(functionName, typeof(JsonNode), otherType);
     }
 
     public static string[] GetJsonElementPropertyNames(JsonElement element)

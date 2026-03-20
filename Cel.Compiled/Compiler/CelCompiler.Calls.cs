@@ -211,7 +211,7 @@ public static partial class CelCompiler
     }
 
     private static readonly System.Collections.Generic.HashSet<string> s_conversionFunctions =
-        new() { "int", "uint", "double", "string", "bool", "bytes", "duration", "timestamp" };
+        new() { "int", "uint", "double", "decimal", "string", "bool", "bytes", "duration", "timestamp" };
 
     private static Expression? TryCompileCallConversion(CelCall call, CallCompileContext ctx)
     {
@@ -243,14 +243,24 @@ public static partial class CelCompiler
                 if (arg.Type == typeof(double)) return arg;
                 if (arg.Type == typeof(long)) return Expression.Call(s_toCelDoubleInt, arg);
                 if (arg.Type == typeof(ulong)) return Expression.Call(s_toCelDoubleUint, arg);
+                if (arg.Type == typeof(decimal)) return Expression.Call(s_toCelDoubleDecimal, arg);
                 if (arg.Type == typeof(string)) return Expression.Call(s_toCelDoubleString, arg);
                 return Expression.Call(s_toCelDoubleObject, BoxIfNeeded(arg));
+
+            case "decimal":
+                if (arg.Type == typeof(decimal)) return arg;
+                if (arg.Type == typeof(long)) return Expression.Call(s_toCelDecimalInt, arg);
+                if (arg.Type == typeof(ulong)) return Expression.Call(s_toCelDecimalUint, arg);
+                if (arg.Type == typeof(double)) return Expression.Call(s_toCelDecimalDouble, arg);
+                if (arg.Type == typeof(string)) return Expression.Call(s_toCelDecimalString, arg);
+                return Expression.Call(s_toCelDecimalObject, BoxIfNeeded(arg));
 
             case "string":
                 if (arg.Type == typeof(string)) return arg;
                 if (arg.Type == typeof(long)) return Expression.Call(s_toCelStringInt, arg);
                 if (arg.Type == typeof(ulong)) return Expression.Call(s_toCelStringUint, arg);
                 if (arg.Type == typeof(double)) return Expression.Call(s_toCelStringDouble, arg);
+                if (arg.Type == typeof(decimal)) return Expression.Call(s_toCelStringDecimal, arg);
                 if (arg.Type == typeof(bool)) return Expression.Call(s_toCelStringBool, arg);
                 if (arg.Type == typeof(byte[])) return Expression.Call(s_toCelStringBytes, arg);
                 if (arg.Type == typeof(DateTimeOffset)) return Expression.Call(s_toCelStringTimestamp, arg);
@@ -288,7 +298,8 @@ public static partial class CelCompiler
             return null;
 
         var arg = ctx.Compile(call.Args[0]);
-        return Expression.Call(s_toCelTypeObject, BoxIfNeeded(arg));
+        var bindJsonNonIntegerNumbersAsDecimal = (ctx.Binders.EnabledFeatures & CelFeatureFlags.JsonDecimalBinding) != 0;
+        return Expression.Call(s_toCelTypeObject, BoxIfNeeded(arg), Expression.Constant(bindJsonNonIntegerNumbersAsDecimal));
     }
 
     private static Expression? TryCompileCallOptionalGlobal(CelCall call, CallCompileContext ctx)
@@ -384,10 +395,10 @@ public static partial class CelCompiler
 
             return call.Function switch
             {
-                "_+_" or "_-_" or "_*_" or "_/_" or "_%_" => CompileArithmetic(call.Function, left, right, call),
-                "_==_" => EqualsExpr(left, right, call),
-                "_!=_" => Expression.Not(EqualsExpr(left, right, call)),
-                "_<_" or "_<=_" or "_>_" or "_>=_" => CompareExpr(call.Function, left, right, call),
+                "_+_" or "_-_" or "_*_" or "_/_" or "_%_" => CompileArithmetic(call.Function, left, right, ctx.Binders, call),
+                "_==_" => EqualsExpr(left, right, ctx.Binders, call),
+                "_!=_" => Expression.Not(EqualsExpr(left, right, ctx.Binders, call)),
+                "_<_" or "_<=_" or "_>_" or "_>=_" => CompareExpr(call.Function, left, right, ctx.Binders, call),
                 "_&&_" => CompileLogicalAnd(left, right),
                 "_||_" => CompileLogicalOr(left, right),
                 _ => throw new InvalidOperationException($"Unrecognized binary operator '{call.Function}'.")
@@ -480,7 +491,7 @@ public static partial class CelCompiler
 
     private static bool IsKnownBuiltinFunction(string function) => function is
         "size" or "contains" or "startsWith" or "endsWith" or "matches" or
-        "int" or "uint" or "double" or "string" or "bool" or "bytes" or
+        "int" or "uint" or "double" or "decimal" or "string" or "bool" or "bytes" or
         "duration" or "timestamp" or "type" or "has";
 
     private static bool IsOptionalOfCall(CelCall call) =>

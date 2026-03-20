@@ -56,6 +56,22 @@ public static partial class CelCompiler
     {
         var boxedNeedle = BoxIfNeeded(needle);
 
+        if (haystack.Type == typeof(JsonElement))
+        {
+            return Expression.Call(
+                s_containsJsonElement,
+                haystack,
+                boxedNeedle);
+        }
+
+        if (typeof(JsonNode).IsAssignableFrom(haystack.Type))
+        {
+            return Expression.Call(
+                s_containsJsonNode,
+                Expression.Convert(haystack, typeof(JsonNode)),
+                boxedNeedle);
+        }
+
         if (haystack.Type.IsArray && haystack.Type.GetArrayRank() == 1)
         {
             return Expression.Call(

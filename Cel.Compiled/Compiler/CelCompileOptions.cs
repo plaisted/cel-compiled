@@ -55,6 +55,7 @@ public enum CelFeatureFlags
     SetExtensions = 1 << 5,
     Base64Extensions = 1 << 6,
     RegexExtensions = 1 << 7,
+    JsonDecimalBinding = 1 << 8,
     All = Macros | OptionalSupport | StringExtensions | ListExtensions | MathExtensions | SetExtensions | Base64Extensions | RegexExtensions
 }
 

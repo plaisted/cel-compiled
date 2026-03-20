@@ -65,6 +65,20 @@ public class CustomFunctionIntegrationTests
         Assert.Equal("[Alice]", fn(doc.RootElement));
     }
 
+    [Fact]
+    public void BinderCoercedFunctionArgumentsWorkForJsonAndPocoInputs()
+    {
+        var registry = new CelFunctionRegistryBuilder()
+            .AddGlobalFunction("wrap", typeof(CustomFunctionIntegrationTests).GetMethod(nameof(WrapBrackets))!)
+            .Build();
+
+        var options = new CelCompileOptions { FunctionRegistry = registry, EnableCaching = false };
+        using var doc = JsonDocument.Parse("""{"name":"Alice"}""");
+
+        Assert.Equal("[Alice]", CelCompiler.Compile<JsonElement, string>("wrap(name)", options)(doc.RootElement));
+        Assert.Equal("[Alice]", CelCompiler.Compile<PocoStringInput, string>("wrap(x)", options)(new PocoStringInput { x = "Alice" }));
+    }
+
     // --- Successful receiver-style calls ---
 
     [Fact]

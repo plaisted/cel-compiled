@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -9,8 +10,6 @@ namespace Cel.Compiled.Compiler;
 internal sealed class CelBinderSet
 {
     private static readonly ICelBinder s_pocoBinder = new PocoCelBinder();
-    private static readonly ICelBinder s_jsonElementBinder = new JsonElementCelBinder();
-    private static readonly ICelBinder s_jsonNodeBinder = new JsonNodeCelBinder();
 
     private readonly ICelBinder _rootBinder;
     private readonly ICelBinder[] _binders;
@@ -27,9 +26,12 @@ internal sealed class CelBinderSet
 
     public static CelBinderSet Create(Type contextType, CelBinderMode binderMode = CelBinderMode.Auto, CelFunctionRegistry? functionRegistry = null, CelTypeRegistry? typeRegistry = null, CelFeatureFlags enabledFeatures = CelFeatureFlags.All)
     {
+        var bindJsonNonIntegerNumbersAsDecimal = (enabledFeatures & CelFeatureFlags.JsonDecimalBinding) != 0;
+        var jsonElementBinder = new JsonElementCelBinder(bindJsonNonIntegerNumbersAsDecimal);
+        var jsonNodeBinder = new JsonNodeCelBinder(bindJsonNonIntegerNumbersAsDecimal);
         var binders = typeRegistry is null
-            ? new[] { s_jsonElementBinder, s_jsonNodeBinder, s_pocoBinder }
-            : new ICelBinder[] { s_jsonElementBinder, s_jsonNodeBinder, new DescriptorCelBinder(typeRegistry), s_pocoBinder };
+            ? new[] { jsonElementBinder, jsonNodeBinder, s_pocoBinder }
+            : new ICelBinder[] { jsonElementBinder, jsonNodeBinder, new DescriptorCelBinder(typeRegistry), s_pocoBinder };
 
         return new CelBinderSet(SelectRootBinder(contextType, binderMode, typeRegistry, binders), binders)
         {
@@ -113,16 +115,16 @@ internal sealed class CelBinderSet
             return s_pocoBinder;
 
         if (binderMode == CelBinderMode.JsonElement)
-            return s_jsonElementBinder;
+            return binders.First(static binder => binder is JsonElementCelBinder);
 
         if (binderMode == CelBinderMode.JsonNode)
-            return s_jsonNodeBinder;
+            return binders.First(static binder => binder is JsonNodeCelBinder);
 
         if (contextType == typeof(JsonElement) || contextType == typeof(JsonDocument))
-            return s_jsonElementBinder;
+            return binders.First(static binder => binder is JsonElementCelBinder);
 
         if (typeof(JsonNode).IsAssignableFrom(contextType))
-            return s_jsonNodeBinder;
+            return binders.First(static binder => binder is JsonNodeCelBinder);
 
         if (typeRegistry != null)
         {
