@@ -628,12 +628,35 @@ public static partial class CelCompiler
     }
 
     private static CelCompilationException NoMatchingOverload(CelExpr? expr, string functionName, params Type[] argumentTypes) =>
+        NoMatchingOverload(expr, functionName, argumentTypes, null);
+
+    private static CelCompilationException NoMatchingOverload(CelExpr? expr, string functionName, IReadOnlyList<Type> argumentTypes, Exception? innerException) =>
         CompilationError(
             expr,
-            CelCompilationException.NoMatchingOverload(functionName, argumentTypes).Message,
+            CelCompilationException.NoMatchingOverload(functionName, argumentTypes.ToArray()).Message,
             "no_matching_overload",
             functionName,
-            argumentTypes);
+            argumentTypes,
+            innerException);
+
+    private static string GetOperatorDisplayName(string functionName) => functionName switch
+    {
+        "_&&_" => "&&",
+        "_||_" => "||",
+        "_==_" => "==",
+        "_!=_" => "!=",
+        "_<_" => "<",
+        "_<=_" => "<=",
+        "_>_" => ">",
+        "_>=_" => ">=",
+        "_+_" => "+",
+        "_-_" => "-",
+        "_*_" => "*",
+        "_/_" => "/",
+        "_%_" => "%",
+        "!_" => "!",
+        _ => functionName
+    };
 
     private static CelCompilationException AmbiguousOverload(CelExpr? expr, string functionName, params Type[] argumentTypes) =>
         CompilationError(

@@ -753,6 +753,10 @@ internal class CelParser
         var token = Consume();
         switch (token.Type)
         {
+            case CelTokenType.EOF when token.Position == 0:
+                throw new CelParseException("Expression is empty", token.Position, token.EndPosition);
+            case CelTokenType.EOF:
+                throw new CelParseException("Unexpected end of input", token.Position, token.EndPosition);
             case CelTokenType.Bool: expr = Track(new CelConstant((bool)token.Value!), token.Position, token.EndPosition); break;
             case CelTokenType.Int: expr = Track(new CelConstant((long)token.Value!), token.Position, token.EndPosition); break;
             case CelTokenType.UInt: expr = Track(new CelConstant((ulong)token.Value!), token.Position, token.EndPosition); break;
@@ -785,7 +789,7 @@ internal class CelParser
                 Expect(CelTokenType.RParen);
                 break;
             default:
-                throw new CelParseException($"Unexpected token {token.Type}", token.Position, token.EndPosition);
+                throw new CelParseException($"Unexpected token {DescribeActualToken(token)}", token.Position, token.EndPosition);
         }
 
         while (true)
@@ -885,9 +889,85 @@ internal class CelParser
     {
         var token = Consume();
         if (token.Type != type)
-            throw new CelParseException($"Expected {type} but got {token.Type}", token.Position, token.EndPosition);
+            throw new CelParseException(BuildExpectedTokenMessage(type, token), token.Position, token.EndPosition);
         return token;
     }
+
+    private static string BuildExpectedTokenMessage(CelTokenType expectedType, CelToken actualToken)
+    {
+        if (expectedType == CelTokenType.EOF)
+        {
+            return $"Unexpected {DescribeActualToken(actualToken)} after expression";
+        }
+
+        if (actualToken.Type == CelTokenType.EOF)
+        {
+            return $"Expected {DescribeExpectedToken(expectedType)} but reached end of input";
+        }
+
+        return $"Expected {DescribeExpectedToken(expectedType)} but got {DescribeActualToken(actualToken)}";
+    }
+
+    private static string DescribeExpectedToken(CelTokenType type) => type switch
+    {
+        CelTokenType.EOF => "end of input",
+        _ => DescribeTokenType(type)
+    };
+
+    private static string DescribeActualToken(CelToken token) => token.Type switch
+    {
+        CelTokenType.Ident => "identifier",
+        CelTokenType.Int => "integer literal",
+        CelTokenType.UInt => "unsigned integer literal",
+        CelTokenType.Double => "double literal",
+        CelTokenType.String => "string literal",
+        CelTokenType.Bytes => "bytes literal",
+        CelTokenType.Bool => "boolean literal",
+        CelTokenType.Null => "'null'",
+        CelTokenType.EOF => "end of input",
+        _ => DescribeTokenType(token.Type)
+    };
+
+    private static string DescribeTokenType(CelTokenType type) => type switch
+    {
+        CelTokenType.Dot => "'.'",
+        CelTokenType.LParen => "'('",
+        CelTokenType.RParen => "')'",
+        CelTokenType.LBracket => "'['",
+        CelTokenType.RBracket => "']'",
+        CelTokenType.LBrace => "'{'",
+        CelTokenType.RBrace => "'}'",
+        CelTokenType.Comma => "','",
+        CelTokenType.Colon => "':'",
+        CelTokenType.Question => "'?'",
+        CelTokenType.Plus => "'+'",
+        CelTokenType.Minus => "'-'",
+        CelTokenType.Mul => "'*'",
+        CelTokenType.Div => "'/'",
+        CelTokenType.Mod => "'%'",
+        CelTokenType.Equal => "'=='",
+        CelTokenType.NotEqual => "'!='",
+        CelTokenType.Less => "'<'",
+        CelTokenType.LessEqual => "'<='",
+        CelTokenType.Greater => "'>'",
+        CelTokenType.GreaterEqual => "'>='",
+        CelTokenType.And => "'&&'",
+        CelTokenType.Or => "'||'",
+        CelTokenType.Not => "'!'",
+        CelTokenType.In => "'in'",
+        CelTokenType.Reserved => "reserved word",
+        CelTokenType.None => "token",
+        CelTokenType.Ident => "identifier",
+        CelTokenType.Int => "integer literal",
+        CelTokenType.UInt => "unsigned integer literal",
+        CelTokenType.Double => "double literal",
+        CelTokenType.String => "string literal",
+        CelTokenType.Bytes => "bytes literal",
+        CelTokenType.Bool => "boolean literal",
+        CelTokenType.Null => "'null'",
+        CelTokenType.EOF => "end of input",
+        _ => type.ToString()
+    };
 
     private CelToken Consume() => _tokens[_pos++];
 

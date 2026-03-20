@@ -399,16 +399,23 @@ public static partial class CelCompiler
             var right = ctx.Compile(call.Args[1]);
             (left, right) = CelTypeCoercion.NormalizeOperands(left, right, ctx.Binders);
 
-            return call.Function switch
+            try
             {
-                "_+_" or "_-_" or "_*_" or "_/_" or "_%_" => CompileArithmetic(call.Function, left, right, ctx.Binders, call),
-                "_==_" => EqualsExpr(left, right, ctx.Binders, call),
-                "_!=_" => Expression.Not(EqualsExpr(left, right, ctx.Binders, call)),
-                "_<_" or "_<=_" or "_>_" or "_>=_" => CompareExpr(call.Function, left, right, ctx.Binders, call),
-                "_&&_" => CompileLogicalAnd(left, right),
-                "_||_" => CompileLogicalOr(left, right),
-                _ => throw new InvalidOperationException($"Unrecognized binary operator '{call.Function}'.")
-            };
+                return call.Function switch
+                {
+                    "_+_" or "_-_" or "_*_" or "_/_" or "_%_" => CompileArithmetic(call.Function, left, right, ctx.Binders, call),
+                    "_==_" => EqualsExpr(left, right, ctx.Binders, call),
+                    "_!=_" => Expression.Not(EqualsExpr(left, right, ctx.Binders, call)),
+                    "_<_" or "_<=_" or "_>_" or "_>=_" => CompareExpr(call.Function, left, right, ctx.Binders, call),
+                    "_&&_" => CompileLogicalAnd(left, right),
+                    "_||_" => CompileLogicalOr(left, right),
+                    _ => throw new InvalidOperationException($"Unrecognized binary operator '{call.Function}'.")
+                };
+            }
+            catch (ArgumentException ex) when (call.Function is "_&&_" or "_||_")
+            {
+                throw NoMatchingOverload(call, GetOperatorDisplayName(call.Function), new[] { left.Type, right.Type }, ex);
+            }
         }
 
         if (call.Args.Count == 1 && IsUnaryOperator(call.Function))

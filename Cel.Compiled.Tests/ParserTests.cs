@@ -63,6 +63,27 @@ public class ParserTests
     }
 
     [Fact]
+    public void EmptyExpressionProducesExplicitMessage()
+    {
+        var ex = Assert.Throws<CelParseException>(() => CelParser.Parse(string.Empty));
+
+        Assert.Equal("Expression is empty", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("1 + )", "Unexpected token ')'")]
+    [InlineData("(1 + 2", "Expected ')' but reached end of input")]
+    [InlineData("[1, 2", "Expected ']' but reached end of input")]
+    [InlineData("{'a' 1}", "Expected ':' but got integer literal")]
+    [InlineData("42 field", "Unexpected identifier after expression")]
+    public void ParseErrorsUseUserFacingTokenDescriptions(string input, string expectedMessage)
+    {
+        var ex = Assert.Throws<CelParseException>(() => CelParser.Parse(input));
+
+        Assert.Equal(expectedMessage, ex.Message);
+    }
+
+    [Fact]
     public void ParseHexTokenType()
     {
         var tokens = new CelLexer("0xFF").Tokenize();
@@ -407,10 +428,10 @@ public class ParserTests
     }
 
     [Fact]
-    public void ParseErrorIncludesTokenName()
+    public void ParseErrorIncludesUserFacingTokenDescription()
     {
         var ex = Assert.Throws<CelParseException>(() => CelParser.Parse("[1"));
-        Assert.Contains("Expected RBracket but got EOF", ex.Message);
+        Assert.Contains("Expected ']' but reached end of input", ex.Message);
     }
 
     [Fact]

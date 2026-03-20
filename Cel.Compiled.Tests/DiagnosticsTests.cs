@@ -53,6 +53,15 @@ public class DiagnosticsTests
     }
 
     [Fact]
+    public void EmptyExpressionCompileFailureUsesExplicitMessage()
+    {
+        var ex = Assert.Throws<CelCompilationException>(() => CelExpression.Compile<object>(string.Empty));
+
+        Assert.Equal("parse_error", ex.ErrorCode);
+        Assert.Equal("Expression is empty", ex.Message);
+    }
+
+    [Fact]
     public void PublicCompileFailureIncludesStructuredSourceLocation()
     {
         var registry = new CelFunctionRegistryBuilder()
@@ -72,6 +81,21 @@ public class DiagnosticsTests
         Assert.Equal(new CelSourceSpan(0, 12), ex.SourceSpan);
         Assert.Equal(1, ex.Line);
         Assert.Equal(1, ex.Column);
+    }
+
+    [Fact]
+    public void InvalidLogicalOperandTypesAreWrappedInCompilationException()
+    {
+        var ex = Assert.Throws<CelCompilationException>(() =>
+            CelExpression.Compile<object>("1 + (true && 'hello')", new CelCompileOptions { EnableCaching = false }));
+
+        Assert.Equal("no_matching_overload", ex.ErrorCode);
+        Assert.Contains("&&", ex.Message);
+        Assert.Equal("1 + (true && 'hello')", ex.ExpressionText);
+        Assert.Equal(new CelSourceSpan(5, 20), ex.SourceSpan);
+        Assert.Equal(1, ex.Line);
+        Assert.Equal(6, ex.Column);
+        Assert.IsType<ArgumentException>(ex.InnerException);
     }
 
     [Fact]
