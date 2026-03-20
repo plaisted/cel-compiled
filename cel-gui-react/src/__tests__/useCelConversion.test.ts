@@ -60,4 +60,44 @@ describe('useCelConversion', () => {
 
     consoleWarnSpy.mockRestore();
   });
+
+  it('prunes incomplete blank rules before converting to source', async () => {
+    const toCelString = vi.fn().mockResolvedValue('a == 1');
+    const { result } = renderHook(() => useCelConversion({ toCelString, toGuiModel: vi.fn() }));
+
+    const node: CelGuiNode = {
+      type: 'group',
+      combinator: 'and',
+      not: false,
+      rules: [
+        { type: 'rule', field: 'a', operator: '==', value: 1 },
+        { type: 'rule', field: '', operator: '==', value: '' },
+      ],
+    };
+
+    const source = await act(async () => await result.current.convertToSource(node));
+
+    expect(source).toBe('a == 1');
+    expect(toCelString).toHaveBeenCalledWith(
+      {
+        type: 'group',
+        combinator: 'and',
+        not: false,
+        rules: [{ type: 'rule', field: 'a', operator: '==', value: 1 }],
+      },
+      undefined
+    );
+  });
+
+  it('returns an empty string when conversion input collapses after sanitizing', async () => {
+    const toCelString = vi.fn();
+    const { result } = renderHook(() => useCelConversion({ toCelString, toGuiModel: vi.fn() }));
+
+    const source = await act(async () =>
+      await result.current.convertToSource({ type: 'rule', field: '', operator: '==', value: '' })
+    );
+
+    expect(source).toBe('');
+    expect(toCelString).not.toHaveBeenCalled();
+  });
 });

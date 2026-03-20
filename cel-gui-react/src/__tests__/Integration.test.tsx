@@ -58,10 +58,10 @@ describe('Integration Test: Expression Building', () => {
     // but CelExpressionBuilder also works uncontrolled. Let's just use DOM interactions
     // since it manages internal state when not fully controlled!
     const selects = screen.getAllByRole('combobox');
-    const ruleFieldSelect = selects[0]; // natural layout uses a button for combinator, so 0 is rule field
+    const ruleFieldSelect = selects[1];
     fireEvent.change(ruleFieldSelect, { target: { value: 'user.age' } });
 
-    const ruleOperatorSelect = screen.getAllByRole('combobox')[1];
+    const ruleOperatorSelect = screen.getAllByRole('combobox')[2];
     fireEvent.change(ruleOperatorSelect, { target: { value: '>=' } });
 
     const ruleValueInput = screen.getByPlaceholderText('value');

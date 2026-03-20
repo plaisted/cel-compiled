@@ -167,6 +167,33 @@ describe('CelExpressionBuilder', () => {
     expect(onPrettyChange).toHaveBeenCalledWith(true);
   });
 
+  it('applies root className and style props', () => {
+    render(
+      <CelExpressionBuilder
+        defaultValue={defaultNode}
+        className="custom-builder"
+        style={{ marginTop: '12px' }}
+      />
+    );
+
+    const root = document.querySelector('.cel-builder') as HTMLElement;
+    expect(root).toHaveClass('custom-builder');
+    expect(root).toHaveStyle({ marginTop: '12px' });
+  });
+
+  it('maps theme props to root CSS variables', () => {
+    render(
+      <CelExpressionBuilder
+        defaultValue={defaultNode}
+        theme={{ primary: '#123456', radiusMd: '20px' }}
+      />
+    );
+
+    const root = document.querySelector('.cel-builder') as HTMLElement;
+    expect(root.style.getPropertyValue('--cel-primary')).toBe('#123456');
+    expect(root.style.getPropertyValue('--cel-radius-md')).toBe('20px');
+  });
+
   it('re-formats source immediately when pretty print is toggled in source mode', async () => {
     const conversion = {
       toCelString: vi.fn().mockResolvedValue('a == 1'),

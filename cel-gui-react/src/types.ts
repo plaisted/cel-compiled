@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+
 export type CelGuiNodeType = 'group' | 'rule' | 'macro' | 'advanced';
 
 export interface CelGuiBaseNode {
@@ -80,6 +82,39 @@ export interface CelError {
   severity?: 'error' | 'warning' | 'info';
 }
 
+export interface CelThemeTokens {
+  surface: string;
+  surfaceLow: string;
+  surfaceMid: string;
+  surfaceHigh: string;
+  surfaceHighest: string;
+  surfaceCard: string;
+  surfaceCardSolid: string;
+  text: string;
+  textMuted: string;
+  textSoft: string;
+  outline: string;
+  outlineStrong: string;
+  primary: string;
+  primaryDim: string;
+  primarySoft: string;
+  secondary: string;
+  secondarySoft: string;
+  tertiary: string;
+  danger: string;
+  dangerSoft: string;
+  success: string;
+  inverseSurface: string;
+  inversePrimary: string;
+  radiusSm: string;
+  radius: string;
+  radiusMd: string;
+  shadowAmbient: string;
+  shadowSoft: string;
+  transition: string;
+  ring: string;
+}
+
 export interface CelExpressionBuilderProps {
   defaultValue?: CelGuiNode;
   value?: CelGuiNode;
@@ -93,4 +128,7 @@ export interface CelExpressionBuilderProps {
   conversion?: CelConversionOptions;
   schema?: CelSchema;
   errors?: CelError[];
+  className?: string;
+  style?: CSSProperties;
+  theme?: Partial<CelThemeTokens>;
 }

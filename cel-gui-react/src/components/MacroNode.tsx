@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react';
-import { CelGuiNode, CelGuiMacro } from '../types.ts';
+import { CelFieldDefinition, CelGuiNode, CelGuiMacro } from '../types.ts';
 import { useCelSchema } from '../context/CelSchemaContext.tsx';
 import { useCelBuilder } from '../context/CelBuilderContext.tsx';
 import { flattenFields, groupFields } from '../utils/fieldUtils.ts';
@@ -9,6 +9,34 @@ export interface MacroNodeProps {
   onChange: (node: CelGuiNode) => void;
   onRemove?: () => void;
   readOnly?: boolean;
+}
+
+function getFieldTypeBadge(type?: CelFieldDefinition['type']): string {
+  switch (type) {
+    case 'number':
+      return '#';
+    case 'boolean':
+      return 'T/F';
+    case 'string':
+      return 'Abc';
+    case 'duration':
+      return 'Dur';
+    case 'timestamp':
+      return 'Time';
+    case 'bytes':
+      return 'Bin';
+    case 'list':
+      return '[]';
+    case 'map':
+      return '{}';
+    default:
+      return '...';
+  }
+}
+
+function getFieldOptionLabel(field: { label?: string; name: string; type?: CelFieldDefinition['type'] }) {
+  const label = field.label || field.name;
+  return field.type ? `${label} (${getFieldTypeBadge(field.type)})` : label;
 }
 
 export const MacroNode: React.FC<MacroNodeProps> = ({
@@ -26,7 +54,12 @@ export const MacroNode: React.FC<MacroNodeProps> = ({
     [schema]
   );
 
-  const groupedFields = useMemo(() => groupFields(allFields), [allFields]);
+  const selectableFields = useMemo(
+    () => allFields.filter((field) => !field.children?.length),
+    [allFields]
+  );
+
+  const groupedFields = useMemo(() => groupFields(selectableFields), [selectableFields]);
 
   const handleFieldChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
@@ -48,14 +81,14 @@ export const MacroNode: React.FC<MacroNodeProps> = ({
             <option value="">Select field...</option>
             {groupedFields.ungrouped.map((f) => (
               <option key={f.name} value={f.name}>
-                {f.label || f.name}
+                {getFieldOptionLabel(f)}
               </option>
             ))}
             {Object.entries(groupedFields.groups).map(([groupName, fields]) => (
               <optgroup key={groupName} label={groupName}>
                 {fields.map((f) => (
                   <option key={f.name} value={f.name}>
-                    {f.label || f.name}
+                    {getFieldOptionLabel(f)}
                   </option>
                 ))}
               </optgroup>
