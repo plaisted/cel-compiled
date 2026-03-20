@@ -49,9 +49,9 @@ Introduce a unified environment abstraction for declaring variables, constants, 
 
 Today, `Cel.Compiled` uses `TContext` plus `CelCompileOptions`, which is lightweight and pragmatic, but it does not provide a single declarative model comparable to `cel-go`'s `Env`. That becomes the main structural limitation once users want richer validation, policy authoring workflows, or reusable compilation environments. If static checking remains on the roadmap, this is the natural prerequisite.
 
-### Comprehensive Runtime Error Attribution — P1 / D2
+### ~~Comprehensive Runtime Error Attribution — P1 / D2~~ Done
 
-Common semantic compile failures now surface deliberate CEL-style messages with dedicated error codes (`invalid_argument`, `undeclared_reference`), and a public `CelDiagnosticStyle.CelStyle` formatting mode renders concise `cel-go`-style `ERROR: <input>:line:col:` output. The remaining gap is extending source attribution to *all* runtime failure paths — some runtime errors (e.g., `index_out_of_bounds` in certain positions) still lack source spans. Closing this fully is important for production debuggability and should land before lower-value surface-area additions.
+Compiler-owned runtime failures from source-text workflows now preserve source-aware metadata across indexing, conversions, arithmetic faults, timestamp/duration helpers, and formatted diagnostics. Remaining attribution limits are now explicitly about failures originating inside custom delegates or external helper code, rather than compiler-owned runtime paths.
 
 ### `cel.bind` — P1 / D2
 

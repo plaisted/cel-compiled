@@ -13,12 +13,40 @@ namespace Cel.Compiled.Compiler;
 
 internal static class CelRuntimeHelpers
 {
+    private static CelRuntimeException WithSource(CelRuntimeException exception, CelRuntimeSourceSite site)
+    {
+        if (!site.HasSource)
+            return exception;
+
+        return CelRuntimeException.WithSource(exception, site.ExpressionText, site.SourceSpan);
+    }
+
     private static CelRuntimeException WithSource(CelRuntimeException exception, string? expressionText, int start, int end)
     {
         if (string.IsNullOrEmpty(expressionText) || start < 0 || end < start)
             return exception;
 
         return CelRuntimeException.WithSource(exception, expressionText, new CelSourceSpan(start, end));
+    }
+
+    private static CelRuntimeException NoMatchingOverloadWithSource(string function, CelRuntimeSourceSite site, params Type[] argumentTypes) =>
+        WithSource(CelRuntimeException.NoMatchingOverload(function, argumentTypes), site);
+
+    private static CelRuntimeException NoMatchingOverloadForValuesWithSource(string function, CelRuntimeSourceSite site, params object?[] argumentValues) =>
+        WithSource(CelRuntimeException.NoMatchingOverloadForValues(function, argumentValues), site);
+
+    private static CelRuntimeException NoSuchFieldWithSource(string fieldName, CelRuntimeSourceSite site) =>
+        WithSource(CelRuntimeException.NoSuchField(fieldName), site);
+
+    private static CelRuntimeException IndexOutOfBoundsWithSource(long index, CelRuntimeSourceSite site) =>
+        WithSource(CelRuntimeException.IndexOutOfBounds(index), site);
+
+    private static CelRuntimeException RuntimeErrorWithSource(string errorCode, string message, CelRuntimeSourceSite site, Exception? innerException = null)
+    {
+        var exception = innerException is null
+            ? new CelRuntimeException(errorCode, message)
+            : new CelRuntimeException(errorCode, message, innerException);
+        return WithSource(exception, site);
     }
 
     private static CelRuntimeException NoMatchingOverloadWithSource(string function, string? expressionText, int start, int end, params Type[] argumentTypes) =>
@@ -577,6 +605,12 @@ internal static class CelRuntimeHelpers
         }
     }
 
+    public static decimal AddDecimal(decimal left, decimal right, CelRuntimeSourceSite site)
+    {
+        try { return left + right; }
+        catch (OverflowException) { throw RuntimeErrorWithSource("overflow", "Arithmetic overflow during '_+_' operation.", site); }
+    }
+
     public static decimal SubtractDecimal(decimal left, decimal right)
     {
         try
@@ -589,6 +623,12 @@ internal static class CelRuntimeHelpers
         }
     }
 
+    public static decimal SubtractDecimal(decimal left, decimal right, CelRuntimeSourceSite site)
+    {
+        try { return left - right; }
+        catch (OverflowException) { throw RuntimeErrorWithSource("overflow", "Arithmetic overflow during '_-_' operation.", site); }
+    }
+
     public static decimal MultiplyDecimal(decimal left, decimal right)
     {
         try
@@ -599,6 +639,12 @@ internal static class CelRuntimeHelpers
         {
             throw new CelRuntimeException("overflow", "Arithmetic overflow during '_*_' operation.");
         }
+    }
+
+    public static decimal MultiplyDecimal(decimal left, decimal right, CelRuntimeSourceSite site)
+    {
+        try { return left * right; }
+        catch (OverflowException) { throw RuntimeErrorWithSource("overflow", "Arithmetic overflow during '_*_' operation.", site); }
     }
 
     public static decimal DivideDecimal(decimal left, decimal right)
@@ -617,6 +663,13 @@ internal static class CelRuntimeHelpers
         }
     }
 
+    public static decimal DivideDecimal(decimal left, decimal right, CelRuntimeSourceSite site)
+    {
+        try { return left / right; }
+        catch (DivideByZeroException) { throw RuntimeErrorWithSource("division_by_zero", "Division by zero.", site); }
+        catch (OverflowException) { throw RuntimeErrorWithSource("overflow", "Arithmetic overflow during '_/_' operation.", site); }
+    }
+
     public static decimal ModuloDecimal(decimal left, decimal right)
     {
         try
@@ -633,6 +686,13 @@ internal static class CelRuntimeHelpers
         }
     }
 
+    public static decimal ModuloDecimal(decimal left, decimal right, CelRuntimeSourceSite site)
+    {
+        try { return left % right; }
+        catch (DivideByZeroException) { throw RuntimeErrorWithSource("division_by_zero", "Division by zero.", site); }
+        catch (OverflowException) { throw RuntimeErrorWithSource("overflow", "Arithmetic overflow during '_%_' operation.", site); }
+    }
+
     public static decimal NegateDecimal(decimal value)
     {
         try
@@ -643,6 +703,12 @@ internal static class CelRuntimeHelpers
         {
             throw new CelRuntimeException("overflow", "Arithmetic overflow during '-_' operation.");
         }
+    }
+
+    public static decimal NegateDecimal(decimal value, CelRuntimeSourceSite site)
+    {
+        try { return -value; }
+        catch (OverflowException) { throw RuntimeErrorWithSource("overflow", "Arithmetic overflow during '-_' operation.", site); }
     }
 
     /// <summary>
@@ -691,15 +757,38 @@ internal static class CelRuntimeHelpers
         throw new CelRuntimeException("overflow", $"Arithmetic overflow during '{op}' operation.");
     }
 
+    public static T ThrowArithmeticOverflow<T>(string op, CelRuntimeSourceSite site)
+    {
+        throw RuntimeErrorWithSource("overflow", $"Arithmetic overflow during '{op}' operation.", site);
+    }
+
     public static T ThrowDivideByZero<T>()
     {
         throw new CelRuntimeException("division_by_zero", "Division by zero.");
+    }
+
+    public static T ThrowDivideByZero<T>(CelRuntimeSourceSite site)
+    {
+        throw RuntimeErrorWithSource("division_by_zero", "Division by zero.", site);
+    }
+
+    public static DateTimeOffset ThrowTimestampOutOfRange(CelRuntimeSourceSite site)
+    {
+        throw RuntimeErrorWithSource("overflow", "timestamp result out of range", site);
     }
 
     public static T GetArrayElement<T>(T[] array, long index)
     {
         if ((ulong)index >= (ulong)array.LongLength)
             throw CelRuntimeException.IndexOutOfBounds(index);
+
+        return array[index];
+    }
+
+    public static T GetArrayElement<T>(T[] array, long index, CelRuntimeSourceSite site)
+    {
+        if ((ulong)index >= (ulong)array.LongLength)
+            throw IndexOutOfBoundsWithSource(index, site);
 
         return array[index];
     }
@@ -712,10 +801,26 @@ internal static class CelRuntimeHelpers
         return list[(int)index];
     }
 
+    public static T GetListElement<T>(IList<T> list, long index, CelRuntimeSourceSite site)
+    {
+        if ((ulong)index >= (ulong)list.Count)
+            throw IndexOutOfBoundsWithSource(index, site);
+
+        return list[(int)index];
+    }
+
     public static T GetReadOnlyListElement<T>(IReadOnlyList<T> list, long index)
     {
         if ((ulong)index >= (ulong)list.Count)
             throw CelRuntimeException.IndexOutOfBounds(index);
+
+        return list[(int)index];
+    }
+
+    public static T GetReadOnlyListElement<T>(IReadOnlyList<T> list, long index, CelRuntimeSourceSite site)
+    {
+        if ((ulong)index >= (ulong)list.Count)
+            throw IndexOutOfBoundsWithSource(index, site);
 
         return list[(int)index];
     }
@@ -757,6 +862,14 @@ internal static class CelRuntimeHelpers
     {
         if ((ulong)index >= (ulong)list.Count)
             throw CelRuntimeException.IndexOutOfBounds(index);
+
+        return list[(int)index];
+    }
+
+    public static object? GetListElement(IList list, long index, CelRuntimeSourceSite site)
+    {
+        if ((ulong)index >= (ulong)list.Count)
+            throw IndexOutOfBoundsWithSource(index, site);
 
         return list[(int)index];
     }
@@ -1026,6 +1139,126 @@ internal static class CelRuntimeHelpers
             };
         }
         throw new CelRuntimeException("no_matching_overload", $"int() not supported for type {value?.GetType().Name ?? "null"}");
+    }
+
+    public static long ToCelInt(ulong value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelInt(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static long ToCelInt(double value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelInt(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static long ToCelInt(string value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelInt(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static long ToCelInt(object? value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelInt(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static ulong ToCelUint(long value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelUint(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static ulong ToCelUint(double value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelUint(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static ulong ToCelUint(string value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelUint(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static ulong ToCelUint(object? value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelUint(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static double ToCelDouble(string value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelDouble(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static double ToCelDouble(object? value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelDouble(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static decimal ToCelDecimal(double value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelDecimal(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static decimal ToCelDecimal(string value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelDecimal(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static decimal ToCelDecimal(object? value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelDecimal(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static bool ToCelBool(string value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelBool(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static bool ToCelBool(object? value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelBool(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static byte[] ToCelBytes(object? value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelBytes(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static TimeSpan ToCelDuration(string value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelDuration(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static TimeSpan ToCelDuration(object? value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelDuration(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static DateTimeOffset ToCelTimestamp(string value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelTimestamp(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
+    }
+
+    public static DateTimeOffset ToCelTimestamp(object? value, CelRuntimeSourceSite site)
+    {
+        try { return ToCelTimestamp(value); }
+        catch (CelRuntimeException ex) { throw WithSource(ex, site); }
     }
 
     public static ulong ToCelUint(long value)
@@ -1318,6 +1551,14 @@ internal static class CelRuntimeHelpers
     }
 
     public static DateTimeOffset AddDurationTimestamp(TimeSpan left, DateTimeOffset right) => AddTimestampDuration(right, left);
+
+    public static DateTimeOffset EnsureTimestampInRange(DateTimeOffset value, CelRuntimeSourceSite site)
+    {
+        if (value < DateTimeOffset.MinValue || value > DateTimeOffset.MaxValue)
+            throw RuntimeErrorWithSource("overflow", "timestamp result out of range", site);
+
+        return value;
+    }
 
     public static TimeSpan AddDurationDuration(TimeSpan left, TimeSpan right)
     {
@@ -1639,7 +1880,7 @@ internal static class CelRuntimeHelpers
             throw NoMatchingOverloadWithSource("_[_]", expressionText, start, end, typeof(JsonNode), typeof(long));
 
         if ((ulong)index >= (ulong)array.Count)
-            throw CelRuntimeException.IndexOutOfBounds(index);
+            throw IndexOutOfBoundsWithSource(index, new CelRuntimeSourceSite(expressionText, start, end));
 
         return array[(int)index];
     }
@@ -1718,7 +1959,7 @@ internal static class CelRuntimeHelpers
             throw NoMatchingOverloadWithSource("_[_]", expressionText, start, end, typeof(JsonElement), typeof(long));
 
         if ((ulong)index >= (ulong)element.GetArrayLength())
-            throw CelRuntimeException.IndexOutOfBounds(index);
+            throw IndexOutOfBoundsWithSource(index, new CelRuntimeSourceSite(expressionText, start, end));
 
         return element[(int)index];
     }

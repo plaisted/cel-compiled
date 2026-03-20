@@ -22,10 +22,12 @@ public static partial class CelCompiler
             if (index.Type != typeof(long))
                 throw NoMatchingOverload(sourceExpr, "_[_]", operand.Type, index.Type);
 
+            var sourceSite = CelDiagnosticUtilities.GetRuntimeSourceSiteConstant(sourceExpr);
             return Expression.Call(
-                s_getArrayElement.MakeGenericMethod(operand.Type.GetElementType()!),
+                s_getArrayElementWithSource.MakeGenericMethod(operand.Type.GetElementType()!),
                 operand,
-                index);
+                index,
+                sourceSite);
         }
 
         if (TryGetGenericInterface(operand.Type, typeof(IDictionary<,>), out var dictionaryInterface))
@@ -75,10 +77,12 @@ public static partial class CelCompiler
             if (index.Type != typeof(long))
                 throw NoMatchingOverload(sourceExpr, "_[_]", operand.Type, index.Type);
 
+            var sourceSite = CelDiagnosticUtilities.GetRuntimeSourceSiteConstant(sourceExpr);
             return Expression.Call(
-                s_getGenericListElement.MakeGenericMethod(listInterface.GetGenericArguments()[0]),
+                s_getGenericListElementWithSource.MakeGenericMethod(listInterface.GetGenericArguments()[0]),
                 Expression.Convert(operand, listInterface),
-                index);
+                index,
+                sourceSite);
         }
 
         if (TryGetGenericInterface(operand.Type, typeof(IReadOnlyList<>), out var readOnlyListInterface))
@@ -86,10 +90,12 @@ public static partial class CelCompiler
             if (index.Type != typeof(long))
                 throw NoMatchingOverload(sourceExpr, "_[_]", operand.Type, index.Type);
 
+            var sourceSite = CelDiagnosticUtilities.GetRuntimeSourceSiteConstant(sourceExpr);
             return Expression.Call(
-                s_getReadOnlyListElement.MakeGenericMethod(readOnlyListInterface.GetGenericArguments()[0]),
+                s_getReadOnlyListElementWithSource.MakeGenericMethod(readOnlyListInterface.GetGenericArguments()[0]),
                 Expression.Convert(operand, readOnlyListInterface),
-                index);
+                index,
+                sourceSite);
         }
 
         if (typeof(IList).IsAssignableFrom(operand.Type))
@@ -97,10 +103,12 @@ public static partial class CelCompiler
             if (index.Type != typeof(long))
                 throw NoMatchingOverload(sourceExpr, "_[_]", operand.Type, index.Type);
 
+            var sourceSite = CelDiagnosticUtilities.GetRuntimeSourceSiteConstant(sourceExpr);
             return Expression.Call(
-                s_getNonGenericListElement,
+                s_getNonGenericListElementWithSource,
                 Expression.Convert(operand, typeof(IList)),
-                index);
+                index,
+                sourceSite);
         }
 
         throw NoMatchingOverload(sourceExpr, "_[_]", operand.Type, index.Type);
@@ -223,9 +231,9 @@ public static partial class CelCompiler
             if (function == "_+_")
             {
                 if (left.Type == typeof(DateTimeOffset) && right.Type == typeof(TimeSpan))
-                    return WrapTimestampArithmetic(Expression.Add(left, right));
+                    return WrapTimestampArithmetic(Expression.Add(left, right), sourceExpr);
                 if (left.Type == typeof(TimeSpan) && right.Type == typeof(DateTimeOffset))
-                    return WrapTimestampArithmetic(Expression.Add(right, left));
+                    return WrapTimestampArithmetic(Expression.Add(right, left), sourceExpr);
                 if (left.Type == typeof(TimeSpan) && right.Type == typeof(TimeSpan))
                     return Expression.Call(s_addDurationDuration, left, right);
             }
@@ -234,7 +242,7 @@ public static partial class CelCompiler
                 if (left.Type == typeof(DateTimeOffset) && right.Type == typeof(DateTimeOffset))
                     return Expression.Subtract(left, right);
                 if (left.Type == typeof(DateTimeOffset) && right.Type == typeof(TimeSpan))
-                    return WrapTimestampArithmetic(Expression.Subtract(left, right));
+                    return WrapTimestampArithmetic(Expression.Subtract(left, right), sourceExpr);
                 if (left.Type == typeof(TimeSpan) && right.Type == typeof(TimeSpan))
                     return Expression.Call(s_subtractDurationDuration, left, right);
             }
@@ -270,6 +278,7 @@ public static partial class CelCompiler
 
         if (type == typeof(long) || type == typeof(ulong))
         {
+            var sourceSite = CelDiagnosticUtilities.GetRuntimeSourceSiteConstant(sourceExpr);
             Expression body = function switch
             {
                 "_+_" => Expression.AddChecked(left, right),
@@ -285,14 +294,14 @@ public static partial class CelCompiler
             {
                 catches.Add(Expression.Catch(
                     typeof(OverflowException),
-                    Expression.Call(s_throwArithmeticOverflow.MakeGenericMethod(type), Expression.Constant(function))
+                    Expression.Call(s_throwArithmeticOverflowWithSource.MakeGenericMethod(type), Expression.Constant(function), sourceSite)
                 ));
             }
             if (function is "_/_" or "_%_")
             {
                 catches.Add(Expression.Catch(
                     typeof(DivideByZeroException),
-                    Expression.Call(s_throwDivideByZero.MakeGenericMethod(type))
+                    Expression.Call(s_throwDivideByZeroWithSource.MakeGenericMethod(type), sourceSite)
                 ));
             }
 
@@ -301,17 +310,18 @@ public static partial class CelCompiler
 
         if (type == typeof(decimal))
         {
+            var sourceSite = CelDiagnosticUtilities.GetRuntimeSourceSiteConstant(sourceExpr);
             var method = function switch
             {
-                "_+_" => typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.AddDecimal), new[] { typeof(decimal), typeof(decimal) })!,
-                "_-_" => typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.SubtractDecimal), new[] { typeof(decimal), typeof(decimal) })!,
-                "_*_" => typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.MultiplyDecimal), new[] { typeof(decimal), typeof(decimal) })!,
-                "_/_" => typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DivideDecimal), new[] { typeof(decimal), typeof(decimal) })!,
-                "_%_" => typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ModuloDecimal), new[] { typeof(decimal), typeof(decimal) })!,
+                "_+_" => typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.AddDecimal), new[] { typeof(decimal), typeof(decimal), typeof(CelRuntimeSourceSite) })!,
+                "_-_" => typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.SubtractDecimal), new[] { typeof(decimal), typeof(decimal), typeof(CelRuntimeSourceSite) })!,
+                "_*_" => typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.MultiplyDecimal), new[] { typeof(decimal), typeof(decimal), typeof(CelRuntimeSourceSite) })!,
+                "_/_" => typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DivideDecimal), new[] { typeof(decimal), typeof(decimal), typeof(CelRuntimeSourceSite) })!,
+                "_%_" => typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ModuloDecimal), new[] { typeof(decimal), typeof(decimal), typeof(CelRuntimeSourceSite) })!,
                 _ => throw new NotSupportedException($"Arithmetic operator {function} is not supported.")
             };
 
-            return Expression.Call(method, left, right);
+            return Expression.Call(method, left, right, sourceSite);
         }
 
         throw NoMatchingOverload(sourceExpr, function, left.Type, right.Type);
@@ -324,17 +334,21 @@ public static partial class CelCompiler
         {
             if (type == typeof(long))
             {
+                var sourceSite = CelDiagnosticUtilities.GetRuntimeSourceSiteConstant(sourceExpr);
                 return Expression.TryCatch(
                     Expression.NegateChecked(operand),
                     Expression.Catch(
                         typeof(OverflowException),
-                        Expression.Call(s_throwArithmeticOverflow.MakeGenericMethod(type), Expression.Constant("-_"))
+                        Expression.Call(s_throwArithmeticOverflowWithSource.MakeGenericMethod(type), Expression.Constant("-_"), sourceSite)
                     )
                 );
             }
 
             if (type == typeof(decimal))
-                return Expression.Call(typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.NegateDecimal), new[] { typeof(decimal) })!, operand);
+                return Expression.Call(
+                    typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.NegateDecimal), new[] { typeof(decimal), typeof(CelRuntimeSourceSite) })!,
+                    operand,
+                    CelDiagnosticUtilities.GetRuntimeSourceSiteConstant(sourceExpr));
 
             return Expression.Negate(operand);
         }
@@ -488,20 +502,14 @@ public static partial class CelCompiler
 
     private static bool IsTimestampOrDurationType(Type type) => type == typeof(DateTimeOffset) || type == typeof(TimeSpan);
 
-    private static Expression WrapTimestampArithmetic(Expression body)
+    private static Expression WrapTimestampArithmetic(Expression body, CelExpr? sourceExpr)
     {
+        var sourceSite = CelDiagnosticUtilities.GetRuntimeSourceSiteConstant(sourceExpr);
         return Expression.TryCatch(
-            Expression.Call(s_ensureTimestampInRange, body),
+            Expression.Call(s_ensureTimestampInRangeWithSource, body, sourceSite),
             Expression.Catch(
                 typeof(ArgumentOutOfRangeException),
-                Expression.Throw(
-                    Expression.New(
-                        typeof(CelRuntimeException).GetConstructor(new[] { typeof(string), typeof(string), typeof(string), typeof(CelSourceSpan?) })!,
-                        Expression.Constant("overflow"),
-                        Expression.Constant("timestamp result out of range"),
-                        Expression.Constant(null, typeof(string)),
-                        Expression.Constant(null, typeof(CelSourceSpan?))),
-                    typeof(DateTimeOffset))));
+                Expression.Call(s_throwTimestampOutOfRange, sourceSite)));
     }
 
     private static Expression CompileLogicalAnd(Expression left, Expression right)

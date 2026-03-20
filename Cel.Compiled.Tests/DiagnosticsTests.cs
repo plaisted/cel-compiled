@@ -146,7 +146,7 @@ public class DiagnosticsTests
     }
 
     [Fact]
-    public void RuntimeIndexOutOfBoundsRemainsUnattributedWhenUnsupported()
+    public void RuntimeJsonIndexOutOfBoundsIncludesStructuredSourceLocation()
     {
         var compiled = CelExpression.Compile<JsonElement>("items[5]");
         using var doc = JsonDocument.Parse("""{"items":[1,2]}""");
@@ -154,10 +154,57 @@ public class DiagnosticsTests
         var ex = Assert.Throws<CelRuntimeException>(() => compiled.Invoke(doc.RootElement));
 
         Assert.Equal("index_out_of_bounds", ex.ErrorCode);
-        Assert.Null(ex.ExpressionText);
-        Assert.Null(ex.SourceSpan);
-        Assert.Null(ex.Line);
-        Assert.Null(ex.Column);
+        Assert.Equal("items[5]", ex.ExpressionText);
+        Assert.Equal(new CelSourceSpan(0, 8), ex.SourceSpan);
+        Assert.Equal(1, ex.Line);
+        Assert.Equal(1, ex.Column);
+    }
+
+    [Fact]
+    public void RuntimeListIndexOutOfBoundsHighlightsFailingSubexpression()
+    {
+        var compiled = CelExpression.Compile<object>("([1, 2])[5]");
+
+        var ex = Assert.Throws<CelRuntimeException>(() => compiled.Invoke(new object()));
+
+        Assert.Equal("index_out_of_bounds", ex.ErrorCode);
+        Assert.Equal("([1, 2])[5]", ex.ExpressionText);
+        Assert.Equal(new CelSourceSpan(1, 11), ex.SourceSpan);
+        Assert.Equal(1, ex.Line);
+        Assert.Equal(2, ex.Column);
+    }
+
+    [Fact]
+    public void RuntimeConversionFailureHighlightsNestedSubexpression()
+    {
+        var compiled = CelExpression.Compile<object>("size([int('abc')])");
+
+        var ex = Assert.Throws<CelRuntimeException>(() => compiled.Invoke(new object()));
+
+        Assert.Equal("invalid_argument", ex.ErrorCode);
+        Assert.Equal("size([int('abc')])", ex.ExpressionText);
+        Assert.Equal(new CelSourceSpan(6, 16), ex.SourceSpan);
+        Assert.Equal(1, ex.Line);
+        Assert.Equal(7, ex.Column);
+    }
+
+    [Fact]
+    public void RuntimeTimestampOverflowHighlightsArithmeticSubexpression()
+    {
+        var compiled = CelExpression.Compile<TimestampDurationTests.ArithmeticContext, DateTimeOffset>("ts + dur");
+        var context = new TimestampDurationTests.ArithmeticContext
+        {
+            ts = DateTimeOffset.MaxValue,
+            dur = TimeSpan.FromSeconds(1)
+        };
+
+        var ex = Assert.Throws<CelRuntimeException>(() => compiled.Invoke(context));
+
+        Assert.Equal("overflow", ex.ErrorCode);
+        Assert.Equal("ts + dur", ex.ExpressionText);
+        Assert.Equal(new CelSourceSpan(0, 8), ex.SourceSpan);
+        Assert.Equal(1, ex.Line);
+        Assert.Equal(1, ex.Column);
     }
 
     [Fact]
