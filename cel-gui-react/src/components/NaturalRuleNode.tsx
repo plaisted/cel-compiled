@@ -114,7 +114,9 @@ export const NaturalRuleNode: React.FC<NaturalRuleNodeProps> = ({
   const schema = useCelSchema();
   const { readOnly } = useCelBuilder();
   const [isEditing, setIsEditing] = useState(() => !isRuleCollapsible(node));
+  const [isTouched, setIsTouched] = useState(false);
   const [originalNode, setOriginalNode] = useState<CelGuiRule | null>(null);
+  const valueInputRef = React.useRef<HTMLInputElement>(null);
 
   const allFields = useMemo(
     () => (schema?.fields ? flattenFields(schema.fields) : []),
@@ -156,6 +158,8 @@ export const NaturalRuleNode: React.FC<NaturalRuleNodeProps> = ({
         value: getDefaultValueForFieldType(nextField?.type),
         operator: nextOperator,
       });
+      // Small delay to allow react to render the new value chip before focusing
+      setTimeout(() => valueInputRef.current?.focus(), 10);
     },
     [allFields, node, onChange]
   );
@@ -175,10 +179,15 @@ export const NaturalRuleNode: React.FC<NaturalRuleNodeProps> = ({
       } else if (currentField?.type === 'boolean') {
         newValue = e.target.checked;
       }
+      setIsTouched(true);
       onChange({ ...node, value: newValue });
     },
     [currentField?.type, node, onChange]
   );
+
+  const handleValueBlur = useCallback(() => {
+    setIsTouched(true);
+  }, []);
 
   const handleBooleanPredicateChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -204,30 +213,47 @@ export const NaturalRuleNode: React.FC<NaturalRuleNodeProps> = ({
       return null;
     }
 
+    const getPlaceholder = () => {
+      if (node.operator === 'in') return 'Enter multiple values...';
+      switch (currentField?.type) {
+        case 'number': return 'Enter number...';
+        case 'string': return 'Enter text...';
+        case 'duration': return 'Enter duration (e.g. 1h, 30m)...';
+        case 'timestamp': return 'Enter date (YYYY-MM-DD)...';
+        default: return 'Enter value...';
+      }
+    };
+
+    const isInvalid = isTouched && !hasValue(node.value);
+
     if (node.operator === 'in') {
       const displayValue = Array.isArray(node.value)
         ? node.value.join(', ')
         : String(node.value || '');
       return (
         <input
+          ref={valueInputRef}
           type="text"
           value={displayValue}
           onChange={handleListValueChange}
-          placeholder="val1, val2…"
+          onBlur={handleValueBlur}
+          placeholder={getPlaceholder()}
           disabled={readOnly}
-          className="cel-rule__chip cel-rule__chip--value"
+          className={`cel-rule__chip cel-rule__chip--value${isInvalid ? ' cel-rule__chip--invalid' : ''}`}
         />
       );
     }
 
     return (
       <input
+        ref={valueInputRef}
         type={currentField?.type === 'number' ? 'number' : 'text'}
         value={node.value === undefined ? '' : node.value}
         onChange={handleValueChange}
-        placeholder="value"
+        onBlur={handleValueBlur}
+        placeholder={getPlaceholder()}
         disabled={readOnly}
-        className="cel-rule__chip cel-rule__chip--value"
+        className={`cel-rule__chip cel-rule__chip--value${isInvalid ? ' cel-rule__chip--invalid' : ''}`}
       />
     );
   };

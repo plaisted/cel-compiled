@@ -47,7 +47,9 @@ export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({
 }) => {
   const { readOnly } = useCelBuilder();
 
-  const [lastAddedId, setLastAddedId] = useState<string | null>(null);
+  const [lastAddedId, setLastAddedId] = useState<string | null>(
+    () => (node.metadata?.lastAddedId as string | undefined) ?? null
+  );
   const [isLogicMenuOpen, setIsLogicMenuOpen] = useState(false);
   const prevLengthRef = useRef(node.rules.length);
   const nodeContainersRef = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -56,7 +58,7 @@ export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({
   const logicListboxId = useId();
   const [focusTarget, setFocusTarget] = useState<
     { type: 'node'; id: string } | { type: 'addButton' } | null
-  >(null);
+  >(() => (node.metadata?.lastAddedId ? { type: 'node', id: node.metadata.lastAddedId as string } : null));
 
   useEffect(() => {
     if (node.rules.length < prevLengthRef.current) {
@@ -131,12 +133,25 @@ export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({
       if (!targetNode) return;
 
       const groupId = crypto.randomUUID();
+      const newRuleId = crypto.randomUUID();
+
+      const newRule: CelGuiRule = {
+        type: 'rule',
+        id: newRuleId,
+        field: '',
+        operator: '==',
+        value: '',
+      };
+
       const wrappedGroup: CelGuiGroup = {
         type: 'group',
         id: groupId,
         combinator: 'and',
         not: false,
-        rules: [targetNode],
+        rules: [targetNode, newRule],
+        metadata: {
+          lastAddedId: newRuleId,
+        },
       };
 
       const newRules = [...node.rules];
@@ -255,7 +270,7 @@ export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({
         </div>
       </div>
 
-      <div className="cel-group__rules cel-group__rules--natural">
+      <div className={`cel-group__rules cel-group__rules--natural${!readOnly ? ' cel-group__rules--has-add' : ''}`}>
         {node.rules.length === 0 ? (
           <div className="cel-group__empty-natural">No conditions yet</div>
         ) : (
