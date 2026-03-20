@@ -156,6 +156,7 @@ describe('7.2 Rule aria-label', () => {
       </CelBuilderProvider>
     );
 
+    fireEvent.click(screen.getByRole('button', { name: 'Edit condition: user.tags contains admin' }));
     const operatorSelect = screen.getAllByRole('combobox')[1];
     const labels = Array.from(operatorSelect.querySelectorAll('option')).map((option) => option.textContent);
 
@@ -183,6 +184,7 @@ describe('7.2 Rule aria-label', () => {
       </CelBuilderProvider>
     );
 
+    fireEvent.click(screen.getByRole('button', { name: 'Edit condition: user.active is true' }));
     const selects = screen.getAllByRole('combobox');
     expect(selects).toHaveLength(2);
     const predicateOptions = Array.from(selects[1].querySelectorAll('option')).map((option) => option.textContent);
@@ -249,7 +251,7 @@ describe('7.3 Group control aria-labels', () => {
     expect(screen.getByRole('button', { name: 'Remove group' })).toBeInTheDocument();
   });
 
-  it('logic mode selector has aria-label="Rule matching mode"', () => {
+  it('logic mode selector trigger has aria-label="Rule matching mode"', () => {
     render(
       <CelBuilderProvider>
         <NaturalGroupNode
@@ -258,14 +260,14 @@ describe('7.3 Group control aria-labels', () => {
         />
       </CelBuilderProvider>
     );
-    expect(screen.getByRole('combobox', { name: 'Rule matching mode' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Rule matching mode' })).toBeInTheDocument();
   });
 });
 
 // ─── 7.4  Focus moves to new rule's field selector after add-rule ─────────────
 
 describe('7.4 Focus management after add-rule', () => {
-  it('moves focus to the new rule field input after clicking + condition', async () => {
+  it('moves focus to the new rule field input after clicking Add condition', async () => {
     const defaultGroup: CelGuiGroup = {
       type: 'group',
       combinator: 'and',
@@ -281,7 +283,7 @@ describe('7.4 Focus management after add-rule', () => {
       <CelExpressionBuilder defaultValue={defaultGroup} conversion={conversion} />
     );
 
-    fireEvent.click(screen.getByText('+ condition'));
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
 
     await waitFor(() => {
       const fieldInput = screen.getByPlaceholderText('field');

@@ -2,6 +2,7 @@ import React, { Suspense, useCallback } from 'react';
 import { CelGuiNode, CelGuiAdvanced } from '../types.ts';
 import { useCelSchema } from '../context/CelSchemaContext.tsx';
 import { useCelBuilder } from '../context/CelBuilderContext.tsx';
+import { DeleteIcon } from './DeleteIcon.tsx';
 
 const CelCodeEditor = React.lazy(() => import('../editor/CelCodeEditor.tsx'));
 
@@ -45,9 +46,10 @@ export const AdvancedNode: React.FC<AdvancedNodeProps> = ({
         <button
           type="button"
           className="cel-advanced__remove"
+          aria-label="Remove condition"
           onClick={onRemove}
         >
-          ×
+          <DeleteIcon />
         </button>
       )}
     </div>

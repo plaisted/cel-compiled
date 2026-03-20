@@ -3,6 +3,7 @@ import { CelFieldDefinition, CelGuiNode, CelGuiMacro } from '../types.ts';
 import { useCelSchema } from '../context/CelSchemaContext.tsx';
 import { useCelBuilder } from '../context/CelBuilderContext.tsx';
 import { flattenFields, groupFields } from '../utils/fieldUtils.ts';
+import { DeleteIcon } from './DeleteIcon.tsx';
 
 export interface MacroNodeProps {
   node: CelGuiMacro;
@@ -106,8 +107,8 @@ export const MacroNode: React.FC<MacroNodeProps> = ({
       </div>
 
       {!readOnly && onRemove && (
-        <button type="button" className="cel-macro__remove" onClick={onRemove}>
-          ×
+        <button type="button" className="cel-macro__remove" onClick={onRemove} aria-label="Remove condition">
+          <DeleteIcon />
         </button>
       )}
     </div>

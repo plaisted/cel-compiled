@@ -9,14 +9,16 @@ export interface NodeRendererProps {
   node: CelGuiNode;
   onChange: (node: CelGuiNode) => void;
   onRemove?: () => void;
+  onPromote?: () => void;
+  depth?: number;
 }
 
 export const NodeRenderer: React.FC<NodeRendererProps> = (props) => {
-  const { node } = props;
+  const { node, depth = 0 } = props;
 
   switch (node.type) {
     case 'group':
-      return <NaturalGroupNode {...props} node={node} />;
+      return <NaturalGroupNode {...props} node={node} depth={depth} />;
     case 'rule':
       return <NaturalRuleNode {...props} node={node} />;
     case 'macro':

@@ -45,7 +45,7 @@ describe('Integration Test: Expression Building', () => {
     render(<CelExpressionBuilder schema={schema} defaultValue={defaultGroup} onChange={onChange} />);
 
     // Add a rule
-    fireEvent.click(screen.getByText('+ condition'));
+    fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
     expect(onChange).toHaveBeenCalled();
 
     // Get the latest node from onChange
@@ -58,17 +58,17 @@ describe('Integration Test: Expression Building', () => {
     // but CelExpressionBuilder also works uncontrolled. Let's just use DOM interactions
     // since it manages internal state when not fully controlled!
     const selects = screen.getAllByRole('combobox');
-    const ruleFieldSelect = selects[1];
+    const ruleFieldSelect = selects[0];
     fireEvent.change(ruleFieldSelect, { target: { value: 'user.age' } });
 
-    const ruleOperatorSelect = screen.getAllByRole('combobox')[2];
+    const ruleOperatorSelect = screen.getAllByRole('combobox')[1];
     fireEvent.change(ruleOperatorSelect, { target: { value: '>=' } });
 
     const ruleValueInput = screen.getByPlaceholderText('value');
     fireEvent.change(ruleValueInput, { target: { value: '18' } });
 
-    // Add a nested group
-    fireEvent.click(screen.getByText('+ group'));
+    // Promote the condition into a nested group that preserves the condition
+    fireEvent.click(screen.getByRole('button', { name: 'Create group from condition' }));
 
     // Check final emitted structure
     const finalNode = onChange.mock.calls[onChange.mock.calls.length - 1][0] as CelGuiGroup;
@@ -79,16 +79,17 @@ describe('Integration Test: Expression Building', () => {
       not: false,
       rules: [
         {
-          type: 'rule',
-          field: 'user.age',
-          operator: '>=',
-          value: 18,
-        },
-        {
           type: 'group',
           combinator: 'and',
           not: false,
-          rules: [],
+          rules: [
+            {
+              type: 'rule',
+              field: 'user.age',
+              operator: '>=',
+              value: 18,
+            },
+          ],
         }
       ]
     });
@@ -98,7 +99,7 @@ describe('Integration Test: Expression Building', () => {
     const deserialized = JSON.parse(serialized);
 
     expect(deserialized.type).toBe('group');
-    expect(deserialized.rules[0].field).toBe('user.age');
-    expect(deserialized.rules[0].value).toBe(18);
+    expect(deserialized.rules[0].rules[0].field).toBe('user.age');
+    expect(deserialized.rules[0].rules[0].value).toBe(18);
   });
 });

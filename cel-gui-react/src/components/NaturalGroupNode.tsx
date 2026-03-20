@@ -1,20 +1,29 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { CelGuiGroup, CelGuiNode, CelGuiRule } from '../types.ts';
 import { useCelBuilder } from '../context/CelBuilderContext.tsx';
 import { NodeRenderer } from './NodeRenderer.tsx';
+import { DeleteIcon } from './DeleteIcon.tsx';
 
 export interface NaturalGroupNodeProps {
   node: CelGuiGroup;
   onChange: (node: CelGuiNode) => void;
   onRemove?: () => void;
+  depth?: number;
 }
 
 const GROUP_LOGIC_OPTIONS = [
-  { value: 'and:false', label: 'All rules match', combinator: 'and', not: false },
-  { value: 'or:false', label: 'Any rule matches', combinator: 'or', not: false },
-  { value: 'and:true', label: 'No rules match', combinator: 'and', not: true },
-  { value: 'or:true', label: 'Not all rules match', combinator: 'or', not: true },
+  { value: 'and:false', label: 'all', combinator: 'and', not: false },
+  { value: 'or:false', label: 'any', combinator: 'or', not: false },
+  { value: 'and:true', label: 'none', combinator: 'and', not: true },
+  { value: 'or:true', label: 'not all', combinator: 'or', not: true },
 ] as const;
+
+function getLogicModeWord(combinator: string, not: boolean): string {
+  if (not && combinator === 'and') return 'none';
+  if (not && combinator === 'or') return 'not all';
+  if (combinator === 'or') return 'any';
+  return 'all';
+}
 
 function getGroupAriaLabel(combinator: string, not: boolean): string {
   if (not && combinator === 'and') return 'No rules match';
@@ -30,13 +39,21 @@ function getGroupSummaryLabel(combinator: string, not: boolean): string {
   return 'All rules match';
 }
 
-export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({ node, onChange, onRemove }) => {
+export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({
+  node,
+  onChange,
+  onRemove,
+  depth = 0,
+}) => {
   const { readOnly } = useCelBuilder();
 
   const [lastAddedId, setLastAddedId] = useState<string | null>(null);
+  const [isLogicMenuOpen, setIsLogicMenuOpen] = useState(false);
   const prevLengthRef = useRef(node.rules.length);
   const nodeContainersRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const addRuleButtonRef = useRef<HTMLButtonElement>(null);
+  const logicMenuRef = useRef<HTMLDivElement>(null);
+  const logicListboxId = useId();
   const [focusTarget, setFocusTarget] = useState<
     { type: 'node'; id: string } | { type: 'addButton' } | null
   >(null);
@@ -64,10 +81,34 @@ export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({ node, onChan
     setFocusTarget(null);
   }, [focusTarget]);
 
-  const handleLogicModeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    const next = GROUP_LOGIC_OPTIONS.find((option) => option.value === e.target.value);
+  useEffect(() => {
+    if (!isLogicMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!logicMenuRef.current?.contains(event.target as Node)) {
+        setIsLogicMenuOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsLogicMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isLogicMenuOpen]);
+
+  const handleSelectLogicMode = useCallback((value: string) => {
+    const next = GROUP_LOGIC_OPTIONS.find((option) => option.value === value);
     if (!next) return;
     onChange({ ...node, combinator: next.combinator, not: next.not });
+    setIsLogicMenuOpen(false);
   }, [node, onChange]);
 
   const handleAddRule = useCallback(() => {
@@ -84,19 +125,27 @@ export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({ node, onChan
     onChange({ ...node, rules: [...node.rules, newRule] });
   }, [node, onChange]);
 
-  const handleAddGroup = useCallback(() => {
-    const id = crypto.randomUUID();
-    const newGroup: CelGuiGroup = {
-      type: 'group',
-      id,
-      combinator: 'and',
-      not: false,
-      rules: [],
-    };
-    setLastAddedId(id);
-    setFocusTarget({ type: 'node', id });
-    onChange({ ...node, rules: [...node.rules, newGroup] });
-  }, [node, onChange]);
+  const handlePromoteRule = useCallback(
+    (index: number) => {
+      const targetNode = node.rules[index];
+      if (!targetNode) return;
+
+      const groupId = crypto.randomUUID();
+      const wrappedGroup: CelGuiGroup = {
+        type: 'group',
+        id: groupId,
+        combinator: 'and',
+        not: false,
+        rules: [targetNode],
+      };
+
+      const newRules = [...node.rules];
+      newRules[index] = wrappedGroup;
+      setFocusTarget({ type: 'node', id: groupId });
+      onChange({ ...node, rules: newRules });
+    },
+    [node, onChange]
+  );
 
   const handleRuleChange = useCallback(
     (index: number, updatedNode: CelGuiNode) => {
@@ -125,6 +174,8 @@ export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({ node, onChan
   const combinatorLabel = getGroupSummaryLabel(node.combinator, !!node.not);
   const ariaLabel = getGroupAriaLabel(node.combinator, !!node.not);
   const logicModeValue = `${node.combinator}:${!!node.not}`;
+  const logicModeWord = getLogicModeWord(node.combinator, !!node.not);
+  const isRootGroup = depth === 0;
 
   return (
     <div
@@ -135,46 +186,61 @@ export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({ node, onChan
       <div className="cel-group__natural-header">
         <div className="cel-group__natural-badges">
           {!readOnly ? (
-            <label className="cel-group__logic-selector">
-              <select
-                value={logicModeValue}
-                onChange={handleLogicModeChange}
+            <div className="cel-group__logic-selector" ref={logicMenuRef}>
+              {isRootGroup && <span className="cel-group__logic-prefix">if</span>}
+              <button
+                type="button"
                 className={`cel-group__combinator-toggle cel-group__combinator-toggle--${node.combinator}${node.not ? ' cel-group__combinator-toggle--not' : ''}`}
                 aria-label="Rule matching mode"
+                aria-haspopup="listbox"
+                aria-expanded={isLogicMenuOpen}
+                aria-controls={logicListboxId}
                 title="Choose how this group should match rules"
+                onClick={() => setIsLogicMenuOpen((open) => !open)}
               >
-                {GROUP_LOGIC_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+                {logicModeWord}
+              </button>
+              {isLogicMenuOpen && (
+                <div className="cel-group__logic-menu">
+                  <ul
+                    id={logicListboxId}
+                    className="cel-group__logic-options"
+                    role="listbox"
+                    aria-label="Rule matching mode options"
+                  >
+                    {GROUP_LOGIC_OPTIONS.map((option) => (
+                      <li key={option.value}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={option.value === logicModeValue}
+                          className={`cel-group__logic-option${
+                            option.value === logicModeValue ? ' cel-group__logic-option--selected' : ''
+                          }`}
+                          onClick={() => handleSelectLogicMode(option.value)}
+                        >
+                          {option.label}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {isRootGroup && <span className="cel-group__logic-suffix">match</span>}
+            </div>
           ) : (
-            <span
-              className={`cel-group__combinator-toggle cel-group__combinator-toggle--${node.combinator}${node.not ? ' cel-group__combinator-toggle--not' : ''} cel-group__combinator-toggle--readonly`}
-            >
-              {combinatorLabel}
+            <span className="cel-group__logic-selector cel-group__logic-selector--readonly">
+              {isRootGroup && <span className="cel-group__logic-prefix">if</span>}
+              <span
+                className={`cel-group__combinator-toggle cel-group__combinator-toggle--${node.combinator}${node.not ? ' cel-group__combinator-toggle--not' : ''} cel-group__combinator-toggle--readonly`}
+              >
+                {logicModeWord}
+              </span>
+              {isRootGroup && <span className="cel-group__logic-suffix">match</span>}
             </span>
           )}
         </div>
         <div className="cel-group__header-right">
-          {!readOnly && (
-            <>
-              <button
-                ref={addRuleButtonRef}
-                type="button"
-                className="cel-group__add-rule"
-                onClick={handleAddRule}
-              >
-                + condition
-              </button>
-              <span className="cel-group__actions-sep" aria-hidden="true">·</span>
-              <button type="button" className="cel-group__add-group" onClick={handleAddGroup}>
-                + group
-              </button>
-            </>
-          )}
           {!readOnly && onRemove && (
             <button
               type="button"
@@ -183,7 +249,7 @@ export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({ node, onChan
               onClick={onRemove}
               title="Remove group"
             >
-              ×
+              <DeleteIcon />
             </button>
           )}
         </div>
@@ -207,11 +273,30 @@ export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({ node, onChan
                 node={rule}
                 onChange={(updated) => handleRuleChange(index, updated)}
                 onRemove={() => handleRemoveRule(index)}
+                onPromote={rule.type === 'rule' ? () => handlePromoteRule(index) : undefined}
+                depth={depth + 1}
               />
             </div>
           ))
         )}
       </div>
+
+      {!readOnly && (
+        <div
+          className={`cel-group__add-anchor${node.rules.length > 0 ? ' cel-group__add-anchor--connected' : ''}`}
+        >
+          <button
+            ref={addRuleButtonRef}
+            type="button"
+            className="cel-group__add-rule"
+            aria-label="Add condition"
+            title="Add condition"
+            onClick={handleAddRule}
+          >
+            +
+          </button>
+        </div>
+      )}
     </div>
   );
 };
