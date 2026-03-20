@@ -151,7 +151,7 @@ BenchmarkDotNet writes detailed reports to `BenchmarkDotNet.Artifacts/results/`.
 - **Collections**: `list`, `map`, `in` operator, indexing
 - **Macros**: `all`, `exists`, `exists_one`, `map`, `filter`
 - **Optional safe-navigation**: `obj.?field`, `list[?index]`, `map[?key]`
-- **Standard Extensions**: String, Math, and List extension bundles
+- **Standard Extensions**: String, Math, List, Set, Base64, and Regex extension bundles
 
 ## Major Differences And Current Gaps
 
@@ -162,8 +162,10 @@ BenchmarkDotNet writes detailed reports to `BenchmarkDotNet.Artifacts/results/`.
 - **Runtime-first design**: the library is strongest when you compile once and reuse delegates. It is less optimized for one-off evaluation or tooling workflows built around checked AST inspection.
 - **No portable compiled-expression serialization**: compiled delegates are cached in-process, but there is no `cel-go`-style serialized checked-expression or compiled-plan format that can be saved and reloaded across processes.
 - **Partial evaluation and residualization are not implemented**: unknown propagation, residual AST generation, and richer evaluation-state tooling are still gaps.
-- **Some `cel-go` extension/library areas remain incomplete**: the shipped string, list, and math bundles cover a useful subset, but broader parity is still incomplete.
+- **Some `cel-go` extension/library areas remain incomplete**: the shipped string, list, set, base64, and regex bundles cover the common surface, but math bitwise helpers and a few advanced areas still remain.
 - **Optional support is intentionally scoped**: the core optional navigation and helper subset is implemented, but optional aggregate literal entries and broader helper parity are still narrower than `cel-go`.
+- **Regex behavior is platform-based rather than exact RE2 parity**: the runtime uses the .NET regex engine and documents CEL-facing behavior, but it does not aim for byte-for-byte RE2 compatibility.
+- **Runtime safety controls exist but are intentionally narrow**: `CelRuntimeOptions` provides cancellation, timeout, regex timeout, work limits, and comprehension-depth limits, but `MaxWork` is a practical checkpoint-based budget rather than full instruction-level metering.
 
 Some of these may be addressed in the future but the focus is on providing a fast, reliable CEL runtime for .NET.
 

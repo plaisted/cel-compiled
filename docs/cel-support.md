@@ -6,6 +6,7 @@
 - `int` as CLR `long`
 - `uint` as CLR `ulong`
 - `double`
+- `decimal`
 - `string`
 - `bytes` as `byte[]`
 - `null`
@@ -14,6 +15,7 @@
 - `timestamp` as `DateTimeOffset`
 - `duration` as `TimeSpan`
 - `type` as the internal `CelType` enum
+- `dyn` as CEL's dynamic type conversion surface
 
 ## Supported Operators
 
@@ -28,7 +30,7 @@
 
 ## Supported Functions
 
-- Conversions: `int`, `uint`, `double`, `string`, `bool`, `bytes`, `timestamp`, `duration`, `type`
+- Conversions: `int`, `uint`, `double`, `decimal`, `string`, `bool`, `bytes`, `timestamp`, `duration`, `type`, `dyn`
 - String: `contains`, `startsWith`, `endsWith`, `matches`, `size`
 - General: `size`, `has`
 - Optional: `optional.of`, `optional.none`, `hasValue`, `value`, `or`, `orValue`
@@ -49,6 +51,20 @@
 - `JsonElement` / `JsonDocument`
 - `JsonNode` / `JsonObject`
 - Registered CLR-backed type descriptors via `CelTypeRegistry`
+
+## Runtime Safety
+
+Evaluate untrusted or multi-tenant expressions through `Invoke(context, runtimeOptions)`.
+
+Available runtime controls:
+
+- `MaxWork`
+- `MaxComprehensionDepth`
+- `Timeout`
+- `RegexTimeout`
+- `CancellationToken`
+
+These controls are intentionally practical rather than instruction-perfect. In particular, `MaxWork` is a checkpoint-based budget over compiler-owned repeated-work paths such as comprehensions and regex-backed operations, not a count of every AST node or CPU instruction.
 
 ## Optional Values
 
@@ -458,7 +474,7 @@ fn(doc.RootElement); // "hahaha"
 - Cross-runtime checked-environment parity is not complete: some heterogeneous numeric comparisons that `Cel.Compiled` evaluates at runtime are rejected by the current `cel-go` harness during checked compilation.
 - The initial optional implementation intentionally covers field/index navigation and the core helper set only. Aggregate-literal optional entries/elements and broader `cel-go` optional helpers are still out of scope.
 - Extension libraries are opt-in through `CelFunctionRegistryBuilder`; they are not injected into the default environment automatically.
-- The initial extension-library release is a curated subset rather than full `cel-go ext` parity.
+- The shipped extension bundles cover the common string/list/set/base64/regex surface, but full `cel-go ext` parity is still incomplete, notably around math bitwise helpers and some advanced areas.
 - `sort()` and `sortBy()` currently support sortable scalar values/keys only and fail clearly for unsupported structures.
 - `greatest()` and `least()` currently ship focused overloads for the supported numeric argument shapes rather than open-ended variadic dispatch.
 
