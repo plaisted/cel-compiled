@@ -114,9 +114,9 @@ app.MapPost("/api/cel/evaluate", async (HttpContext context) =>
 
     try
     {
-        var fn = CelExpression.Compile<JsonDocument>(expression);
+        var program = CelExpression.Compile<JsonDocument>(expression);
         using var document = JsonDocument.Parse(contextEl.GetRawText());
-        var result = fn(document);
+        var result = program.Invoke(document);
 
         var typeName = result switch
         {

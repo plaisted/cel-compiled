@@ -27,10 +27,10 @@ public class PublicApiSurfaceTests
     [Fact]
     public void CelExpressionCompileUsesPrimaryPublicPath()
     {
-        var fn = CelExpression.Compile<JsonElement, string>("string(age)");
+        var program = CelExpression.Compile<JsonElement, string>("string(age)");
         var doc = JsonDocument.Parse("""{"age":30}""");
 
-        Assert.Equal("30", fn(doc.RootElement));
+        Assert.Equal("30", program.Invoke(doc.RootElement));
     }
 
     [Fact]
@@ -95,14 +95,14 @@ public class PublicApiSurfaceTests
             .Build();
 
         var options = new CelCompileOptions { FunctionRegistry = registry, EnableCaching = false };
-        var globalFn = CelExpression.Compile<JsonElement, string>("slug(title)", options);
-        var receiverFn = CelExpression.Compile<JsonElement, string>("word.repeat(count)", options);
+        var globalProgram = CelExpression.Compile<JsonElement, string>("slug(title)", options);
+        var receiverProgram = CelExpression.Compile<JsonElement, string>("word.repeat(count)", options);
 
         var globalDoc = JsonDocument.Parse("""{"title":"Hello World"}""");
         var receiverDoc = JsonDocument.Parse("""{"word":"ha","count":3}""");
 
-        Assert.Equal("hello-world", globalFn(globalDoc.RootElement));
-        Assert.Equal("hahaha", receiverFn(receiverDoc.RootElement));
+        Assert.Equal("hello-world", globalProgram.Invoke(globalDoc.RootElement));
+        Assert.Equal("hahaha", receiverProgram.Invoke(receiverDoc.RootElement));
     }
 
     public static string ToSlug(string input) => input.ToLowerInvariant().Replace(' ', '-');

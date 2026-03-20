@@ -12,24 +12,24 @@ namespace Cel.Compiled.Compiler;
 
 public static partial class CelCompiler
 {
-    private static Expression CompileIndex(CelIndex index, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    private static Expression CompileIndex(CelIndex index, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
     {
         if (index.IsOptional)
         {
             EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support", index);
-            return CompileOptionalIndex(index, contextExpr, binders, scope).Expression;
+            return CompileOptionalIndex(index, contextExpr, runtimeContextExpr, binders, scope).Expression;
         }
 
-        var operand = CompileNode(index.Operand, contextExpr, binders, scope);
-        var indexExpr = CompileNode(index.Index, contextExpr, binders, scope);
+        var operand = CompileNode(index.Operand, contextExpr, runtimeContextExpr, binders, scope);
+        var indexExpr = CompileNode(index.Index, contextExpr, runtimeContextExpr, binders, scope);
         return CompileIndexAccess(operand, indexExpr, binders, index);
     }
 
-    private static CompiledOptional CompileOptionalIndex(CelIndex index, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    private static CompiledOptional CompileOptionalIndex(CelIndex index, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
     {
-        if (TryCompileOptionalValue(index.Operand, contextExpr, binders, scope, out var operandOptional))
+        if (TryCompileOptionalValue(index.Operand, contextExpr, runtimeContextExpr, binders, scope, out var operandOptional))
         {
-            var compiledIndex = CompileNode(index.Index, contextExpr, binders, scope);
+            var compiledIndex = CompileNode(index.Index, contextExpr, runtimeContextExpr, binders, scope);
             var optionalVar = Expression.Variable(typeof(CelOptional), "optional");
             var valueVar = Expression.Variable(operandOptional.ValueType, "optionalValue");
             var innerOptional = CompileOptionalIndexAccess(valueVar, compiledIndex, binders, index);
@@ -47,8 +47,8 @@ public static partial class CelCompiler
             return new CompiledOptional(optionalExpression, innerOptional.ValueType);
         }
 
-        var operand = CompileNode(index.Operand, contextExpr, binders, scope);
-        var indexExpr = CompileNode(index.Index, contextExpr, binders, scope);
+        var operand = CompileNode(index.Operand, contextExpr, runtimeContextExpr, binders, scope);
+        var indexExpr = CompileNode(index.Index, contextExpr, runtimeContextExpr, binders, scope);
         return CompileOptionalIndexAccess(operand, indexExpr, binders, index);
     }
 

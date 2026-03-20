@@ -17,14 +17,15 @@ public static partial class CelCompiler
         string iteratorName,
         CelExpr predicateExpr,
         Expression contextExpr,
+        Expression runtimeContextExpr,
         CelBinderSet binders,
         IReadOnlyDictionary<string, Expression>? scope,
         MacroKind kind)
     {
-        var target = CompileNode(targetExpr, contextExpr, binders, scope);
+        var target = CompileNode(targetExpr, contextExpr, runtimeContextExpr, binders, scope);
         var sourceVar = Expression.Variable(target.Type, "macroSource");
-        var body = TryCompileDynamicQuantifierMacro(sourceVar, targetExpr, iteratorName, predicateExpr, contextExpr, binders, scope, kind)
-            ?? BuildQuantifierMacroBody(CreateComprehensionPlan(sourceVar, targetExpr), iteratorName, predicateExpr, contextExpr, binders, scope, kind);
+        var body = TryCompileDynamicQuantifierMacro(sourceVar, targetExpr, iteratorName, predicateExpr, contextExpr, runtimeContextExpr, binders, scope, kind)
+            ?? BuildQuantifierMacroBody(CreateComprehensionPlan(sourceVar, targetExpr), iteratorName, predicateExpr, contextExpr, runtimeContextExpr, binders, scope, kind);
 
         return Expression.Block(
             typeof(bool),
@@ -38,13 +39,14 @@ public static partial class CelCompiler
         string iteratorName,
         CelExpr predicateExpr,
         Expression contextExpr,
+        Expression runtimeContextExpr,
         CelBinderSet binders,
         IReadOnlyDictionary<string, Expression>? scope)
     {
-        var target = CompileNode(targetExpr, contextExpr, binders, scope);
+        var target = CompileNode(targetExpr, contextExpr, runtimeContextExpr, binders, scope);
         var sourceVar = Expression.Variable(target.Type, "macroSource");
-        var body = TryCompileDynamicExistsOneMacro(sourceVar, targetExpr, iteratorName, predicateExpr, contextExpr, binders, scope)
-            ?? BuildExistsOneMacroBody(CreateComprehensionPlan(sourceVar, targetExpr), iteratorName, predicateExpr, contextExpr, binders, scope);
+        var body = TryCompileDynamicExistsOneMacro(sourceVar, targetExpr, iteratorName, predicateExpr, contextExpr, runtimeContextExpr, binders, scope)
+            ?? BuildExistsOneMacroBody(CreateComprehensionPlan(sourceVar, targetExpr), iteratorName, predicateExpr, contextExpr, runtimeContextExpr, binders, scope);
 
         return Expression.Block(
             typeof(bool),
@@ -59,13 +61,14 @@ public static partial class CelCompiler
         CelExpr? predicateExpr,
         CelExpr transformExpr,
         Expression contextExpr,
+        Expression runtimeContextExpr,
         CelBinderSet binders,
         IReadOnlyDictionary<string, Expression>? scope)
     {
-        var target = CompileNode(targetExpr, contextExpr, binders, scope);
+        var target = CompileNode(targetExpr, contextExpr, runtimeContextExpr, binders, scope);
         var sourceVar = Expression.Variable(target.Type, "macroSource");
-        var body = TryCompileDynamicMapMacro(sourceVar, targetExpr, iteratorName, predicateExpr, transformExpr, contextExpr, binders, scope)
-            ?? BuildMapMacroBody(CreateComprehensionPlan(sourceVar, targetExpr), iteratorName, predicateExpr, transformExpr, contextExpr, binders, scope);
+        var body = TryCompileDynamicMapMacro(sourceVar, targetExpr, iteratorName, predicateExpr, transformExpr, contextExpr, runtimeContextExpr, binders, scope)
+            ?? BuildMapMacroBody(CreateComprehensionPlan(sourceVar, targetExpr), iteratorName, predicateExpr, transformExpr, contextExpr, runtimeContextExpr, binders, scope);
 
         return Expression.Block(
             body.Type,
@@ -79,13 +82,14 @@ public static partial class CelCompiler
         string iteratorName,
         CelExpr predicateExpr,
         Expression contextExpr,
+        Expression runtimeContextExpr,
         CelBinderSet binders,
         IReadOnlyDictionary<string, Expression>? scope)
     {
-        var target = CompileNode(targetExpr, contextExpr, binders, scope);
+        var target = CompileNode(targetExpr, contextExpr, runtimeContextExpr, binders, scope);
         var sourceVar = Expression.Variable(target.Type, "macroSource");
-        var body = TryCompileDynamicFilterMacro(sourceVar, targetExpr, iteratorName, predicateExpr, contextExpr, binders, scope)
-            ?? BuildFilterMacroBody(CreateComprehensionPlan(sourceVar, targetExpr), iteratorName, predicateExpr, contextExpr, binders, scope);
+        var body = TryCompileDynamicFilterMacro(sourceVar, targetExpr, iteratorName, predicateExpr, contextExpr, runtimeContextExpr, binders, scope)
+            ?? BuildFilterMacroBody(CreateComprehensionPlan(sourceVar, targetExpr), iteratorName, predicateExpr, contextExpr, runtimeContextExpr, binders, scope);
 
         return Expression.Block(
             body.Type,
@@ -99,6 +103,7 @@ public static partial class CelCompiler
         string iteratorName,
         CelExpr predicateExpr,
         Expression contextExpr,
+        Expression runtimeContextExpr,
         CelBinderSet binders,
         IReadOnlyDictionary<string, Expression>? scope,
         MacroKind kind)
@@ -111,7 +116,7 @@ public static partial class CelCompiler
         var breakLabel = Expression.Label("macroBreak");
 
         var predicateScope = ExtendScope(scope, iteratorName, itemVar);
-        var predicate = CompileNode(predicateExpr, contextExpr, binders, predicateScope);
+        var predicate = CompileNode(predicateExpr, contextExpr, runtimeContextExpr, binders, predicateScope);
         if (predicate.Type != typeof(bool))
             throw CompilationError(predicateExpr, $"Comprehension predicate for '{kind.ToString().ToLowerInvariant()}' must return bool.");
 
@@ -128,6 +133,7 @@ public static partial class CelCompiler
         var loopBody = Expression.IfThenElse(
             Expression.LessThan(indexVar, plan.CountExpression),
             Expression.Block(
+                Expression.Call(s_runtimeChargeWork, runtimeContextExpr, Expression.Constant(1L)),
                 Expression.Assign(itemVar, plan.ReadItem(indexVar)),
                 Expression.Assign(currentVar, WrapInBoolResult(predicate)),
                 Expression.IfThenElse(
@@ -151,11 +157,15 @@ public static partial class CelCompiler
         expressions.Add(Expression.Assign(indexVar, Expression.Constant(0)));
         expressions.Add(Expression.Assign(resultVar, Expression.Constant(kind == MacroKind.All)));
         expressions.Add(Expression.Assign(errorVar, Expression.Constant(null, typeof(CelError))));
-        expressions.Add(Expression.Loop(loopBody, breakLabel));
-        expressions.Add(Expression.IfThen(
-            finalErrorCondition,
-            Expression.Throw(Expression.Call(errorVar, s_celErrorToException))));
-        expressions.Add(resultVar);
+        expressions.Add(Expression.Call(s_runtimeEnterComprehension, runtimeContextExpr));
+        expressions.Add(Expression.TryFinally(
+            Expression.Block(
+                Expression.Loop(loopBody, breakLabel),
+                Expression.IfThen(
+                    finalErrorCondition,
+                    Expression.Throw(Expression.Call(errorVar, s_celErrorToException))),
+                resultVar),
+            Expression.Call(s_runtimeExitComprehension, runtimeContextExpr)));
 
         return Expression.Block(typeof(bool), variables, expressions);
     }
@@ -165,6 +175,7 @@ public static partial class CelCompiler
         string iteratorName,
         CelExpr predicateExpr,
         Expression contextExpr,
+        Expression runtimeContextExpr,
         CelBinderSet binders,
         IReadOnlyDictionary<string, Expression>? scope)
     {
@@ -174,13 +185,14 @@ public static partial class CelCompiler
         var breakLabel = Expression.Label("existsOneBreak");
 
         var predicateScope = ExtendScope(scope, iteratorName, itemVar);
-        var predicate = CompileNode(predicateExpr, contextExpr, binders, predicateScope);
+        var predicate = CompileNode(predicateExpr, contextExpr, runtimeContextExpr, binders, predicateScope);
         if (predicate.Type != typeof(bool))
             throw CompilationError(predicateExpr, "Comprehension predicate for 'exists_one' must return bool.");
 
         var loopBody = Expression.IfThenElse(
             Expression.LessThan(indexVar, plan.CountExpression),
             Expression.Block(
+                Expression.Call(s_runtimeChargeWork, runtimeContextExpr, Expression.Constant(1L)),
                 Expression.Assign(itemVar, plan.ReadItem(indexVar)),
                 Expression.IfThen(
                     predicate,
@@ -199,8 +211,12 @@ public static partial class CelCompiler
         expressions.AddRange(plan.Initializers);
         expressions.Add(Expression.Assign(indexVar, Expression.Constant(0)));
         expressions.Add(Expression.Assign(countVar, Expression.Constant(0)));
-        expressions.Add(Expression.Loop(loopBody, breakLabel));
-        expressions.Add(Expression.Equal(countVar, Expression.Constant(1)));
+        expressions.Add(Expression.Call(s_runtimeEnterComprehension, runtimeContextExpr));
+        expressions.Add(Expression.TryFinally(
+            Expression.Block(
+                Expression.Loop(loopBody, breakLabel),
+                Expression.Equal(countVar, Expression.Constant(1))),
+            Expression.Call(s_runtimeExitComprehension, runtimeContextExpr)));
 
         return Expression.Block(typeof(bool), variables, expressions);
     }
@@ -211,6 +227,7 @@ public static partial class CelCompiler
         CelExpr? predicateExpr,
         CelExpr transformExpr,
         Expression contextExpr,
+        Expression runtimeContextExpr,
         CelBinderSet binders,
         IReadOnlyDictionary<string, Expression>? scope)
     {
@@ -221,12 +238,12 @@ public static partial class CelCompiler
         Expression? predicate = null;
         if (predicateExpr != null)
         {
-            predicate = CompileNode(predicateExpr, contextExpr, binders, itemScope);
+            predicate = CompileNode(predicateExpr, contextExpr, runtimeContextExpr, binders, itemScope);
             if (predicate.Type != typeof(bool))
                 throw CompilationError(predicateExpr, "Comprehension predicate for 'map' must return bool.");
         }
 
-        var transform = CompileNode(transformExpr, contextExpr, binders, itemScope);
+        var transform = CompileNode(transformExpr, contextExpr, runtimeContextExpr, binders, itemScope);
         var resultType = transform.Type;
         var breakLabel = Expression.Label("mapBreak");
 
@@ -236,6 +253,7 @@ public static partial class CelCompiler
             var loopBody = Expression.IfThenElse(
                 Expression.LessThan(indexVar, plan.CountExpression),
                 Expression.Block(
+                    Expression.Call(s_runtimeChargeWork, runtimeContextExpr, Expression.Constant(1L)),
                     Expression.Assign(itemVar, plan.ReadItem(indexVar)),
                     Expression.Assign(Expression.ArrayAccess(resultVar, indexVar), transform),
                     Expression.PostIncrementAssign(indexVar)),
@@ -248,8 +266,12 @@ public static partial class CelCompiler
             expressions.AddRange(plan.Initializers);
             expressions.Add(Expression.Assign(indexVar, Expression.Constant(0)));
             expressions.Add(Expression.Assign(resultVar, Expression.NewArrayBounds(resultType, plan.CountExpression)));
-            expressions.Add(Expression.Loop(loopBody, breakLabel));
-            expressions.Add(resultVar);
+            expressions.Add(Expression.Call(s_runtimeEnterComprehension, runtimeContextExpr));
+            expressions.Add(Expression.TryFinally(
+                Expression.Block(
+                    Expression.Loop(loopBody, breakLabel),
+                    resultVar),
+                Expression.Call(s_runtimeExitComprehension, runtimeContextExpr)));
 
             return Expression.Block(resultType.MakeArrayType(), variables, expressions);
         }
@@ -261,6 +283,7 @@ public static partial class CelCompiler
         var loopBodyFiltered = Expression.IfThenElse(
             Expression.LessThan(indexVar, plan.CountExpression),
             Expression.Block(
+                Expression.Call(s_runtimeChargeWork, runtimeContextExpr, Expression.Constant(1L)),
                 Expression.Assign(itemVar, plan.ReadItem(indexVar)),
                 Expression.IfThen(predicate, Expression.Call(listVar, addMethod, transform)),
                 Expression.PostIncrementAssign(indexVar)),
@@ -273,8 +296,12 @@ public static partial class CelCompiler
         expressionsFiltered.AddRange(plan.Initializers);
         expressionsFiltered.Add(Expression.Assign(indexVar, Expression.Constant(0)));
         expressionsFiltered.Add(Expression.Assign(listVar, Expression.New(listType)));
-        expressionsFiltered.Add(Expression.Loop(loopBodyFiltered, breakLabel));
-        expressionsFiltered.Add(Expression.Call(listVar, toArrayMethod));
+        expressionsFiltered.Add(Expression.Call(s_runtimeEnterComprehension, runtimeContextExpr));
+        expressionsFiltered.Add(Expression.TryFinally(
+            Expression.Block(
+                Expression.Loop(loopBodyFiltered, breakLabel),
+                Expression.Call(listVar, toArrayMethod)),
+            Expression.Call(s_runtimeExitComprehension, runtimeContextExpr)));
 
         return Expression.Block(resultType.MakeArrayType(), variablesFiltered, expressionsFiltered);
     }
@@ -284,13 +311,14 @@ public static partial class CelCompiler
         string iteratorName,
         CelExpr predicateExpr,
         Expression contextExpr,
+        Expression runtimeContextExpr,
         CelBinderSet binders,
         IReadOnlyDictionary<string, Expression>? scope)
     {
         var itemVar = Expression.Variable(plan.ItemType, iteratorName);
         var indexVar = Expression.Variable(typeof(int), "i");
         var itemScope = ExtendScope(scope, iteratorName, itemVar);
-        var predicate = CompileNode(predicateExpr, contextExpr, binders, itemScope);
+        var predicate = CompileNode(predicateExpr, contextExpr, runtimeContextExpr, binders, itemScope);
         if (predicate.Type != typeof(bool))
             throw CompilationError(predicateExpr, "Comprehension predicate for 'filter' must return bool.");
 
@@ -302,6 +330,7 @@ public static partial class CelCompiler
         var loopBody = Expression.IfThenElse(
             Expression.LessThan(indexVar, plan.CountExpression),
             Expression.Block(
+                Expression.Call(s_runtimeChargeWork, runtimeContextExpr, Expression.Constant(1L)),
                 Expression.Assign(itemVar, plan.ReadItem(indexVar)),
                 Expression.IfThen(predicate, Expression.Call(listVar, addMethod, itemVar)),
                 Expression.PostIncrementAssign(indexVar)),
@@ -314,8 +343,12 @@ public static partial class CelCompiler
         expressions.AddRange(plan.Initializers);
         expressions.Add(Expression.Assign(indexVar, Expression.Constant(0)));
         expressions.Add(Expression.Assign(listVar, Expression.New(listType)));
-        expressions.Add(Expression.Loop(loopBody, breakLabel));
-        expressions.Add(Expression.Call(listVar, toArrayMethod));
+        expressions.Add(Expression.Call(s_runtimeEnterComprehension, runtimeContextExpr));
+        expressions.Add(Expression.TryFinally(
+            Expression.Block(
+                Expression.Loop(loopBody, breakLabel),
+                Expression.Call(listVar, toArrayMethod)),
+            Expression.Call(s_runtimeExitComprehension, runtimeContextExpr)));
 
         return Expression.Block(plan.ItemType.MakeArrayType(), variables, expressions);
     }
@@ -326,6 +359,7 @@ public static partial class CelCompiler
         string iteratorName,
         CelExpr predicateExpr,
         Expression contextExpr,
+        Expression runtimeContextExpr,
         CelBinderSet binders,
         IReadOnlyDictionary<string, Expression>? scope,
         MacroKind kind)
@@ -334,7 +368,7 @@ public static partial class CelCompiler
             return null;
 
         return BuildConditionalBranchBody(
-            branches.Select(branch => (branch.Condition, BuildQuantifierMacroBody(branch.Plan, iteratorName, predicateExpr, contextExpr, binders, scope, kind))),
+            branches.Select(branch => (branch.Condition, BuildQuantifierMacroBody(branch.Plan, iteratorName, predicateExpr, contextExpr, runtimeContextExpr, binders, scope, kind))),
             Expression.Throw(CreateInvalidComprehensionTargetExpression(sourceExpression, sourceExpr), typeof(bool)));
     }
 
@@ -344,6 +378,7 @@ public static partial class CelCompiler
         string iteratorName,
         CelExpr predicateExpr,
         Expression contextExpr,
+        Expression runtimeContextExpr,
         CelBinderSet binders,
         IReadOnlyDictionary<string, Expression>? scope)
     {
@@ -351,7 +386,7 @@ public static partial class CelCompiler
             return null;
 
         return BuildConditionalBranchBody(
-            branches.Select(branch => (branch.Condition, BuildExistsOneMacroBody(branch.Plan, iteratorName, predicateExpr, contextExpr, binders, scope))),
+            branches.Select(branch => (branch.Condition, BuildExistsOneMacroBody(branch.Plan, iteratorName, predicateExpr, contextExpr, runtimeContextExpr, binders, scope))),
             Expression.Throw(CreateInvalidComprehensionTargetExpression(sourceExpression, sourceExpr), typeof(bool)));
     }
 
@@ -362,6 +397,7 @@ public static partial class CelCompiler
         CelExpr? predicateExpr,
         CelExpr transformExpr,
         Expression contextExpr,
+        Expression runtimeContextExpr,
         CelBinderSet binders,
         IReadOnlyDictionary<string, Expression>? scope)
     {
@@ -369,7 +405,7 @@ public static partial class CelCompiler
             return null;
 
         var branchBodies = branches
-            .Select(branch => (branch.Condition, Body: BuildMapMacroBody(branch.Plan, iteratorName, predicateExpr, transformExpr, contextExpr, binders, scope)))
+            .Select(branch => (branch.Condition, Body: BuildMapMacroBody(branch.Plan, iteratorName, predicateExpr, transformExpr, contextExpr, runtimeContextExpr, binders, scope)))
             .ToList();
         var resultType = GetConditionalResultType(branchBodies.Select(static b => b.Body));
         return BuildConditionalBranchBody(
@@ -383,6 +419,7 @@ public static partial class CelCompiler
         string iteratorName,
         CelExpr predicateExpr,
         Expression contextExpr,
+        Expression runtimeContextExpr,
         CelBinderSet binders,
         IReadOnlyDictionary<string, Expression>? scope)
     {
@@ -390,7 +427,7 @@ public static partial class CelCompiler
             return null;
 
         var branchBodies = branches
-            .Select(branch => (branch.Condition, Body: BuildFilterMacroBody(branch.Plan, iteratorName, predicateExpr, contextExpr, binders, scope)))
+            .Select(branch => (branch.Condition, Body: BuildFilterMacroBody(branch.Plan, iteratorName, predicateExpr, contextExpr, runtimeContextExpr, binders, scope)))
             .ToList();
         var resultType = GetConditionalResultType(branchBodies.Select(static b => b.Body));
         return BuildConditionalBranchBody(

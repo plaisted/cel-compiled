@@ -30,6 +30,24 @@ internal static class CelRuntimeHelpers
     private static CelRuntimeException NoSuchFieldWithSource(string fieldName, string? expressionText, int start, int end) =>
         WithSource(CelRuntimeException.NoSuchField(fieldName), expressionText, start, end);
 
+    private static TimeSpan GetRegexTimeout(CelRuntimeContext? runtimeContext)
+    {
+        runtimeContext?.ThrowIfCancelledOrTimedOut();
+        return runtimeContext?.RegexTimeout ?? CelRuntimeContext.DefaultRegexTimeout;
+    }
+
+    private static CelRuntimeException WrapRegexException(string functionName, ArgumentException ex) =>
+        new("invalid_argument", $"{functionName}: invalid regex pattern. {ex.Message}");
+
+    private static CelRuntimeException WrapRegexTimeoutException(string functionName, RegexMatchTimeoutException ex) =>
+        new("timeout_exceeded", $"{functionName}: regex execution exceeded the configured timeout.", ex);
+
+    public static void ChargeWork(CelRuntimeContext? runtimeContext, long amount) => runtimeContext?.ChargeWork(amount);
+
+    public static void EnterComprehension(CelRuntimeContext? runtimeContext) => runtimeContext?.EnterComprehension();
+
+    public static void ExitComprehension(CelRuntimeContext? runtimeContext) => runtimeContext?.ExitComprehension();
+
     public static CelOptional OptionalOf(object? value) => CelOptional.Of(value);
 
     public static CelOptional OptionalNone() => CelOptional.None;
@@ -1413,7 +1431,22 @@ internal static class CelRuntimeHelpers
     public static bool StringContains(string target, string substring) => target.Contains(substring, StringComparison.Ordinal);
     public static bool StringStartsWith(string target, string prefix) => target.StartsWith(prefix, StringComparison.Ordinal);
     public static bool StringEndsWith(string target, string suffix) => target.EndsWith(suffix, StringComparison.Ordinal);
-    public static bool StringMatches(string target, string pattern) => Regex.IsMatch(target, pattern, RegexOptions.None, TimeSpan.FromSeconds(1));
+    public static bool StringMatches(string target, string pattern, CelRuntimeContext? runtimeContext)
+    {
+        try
+        {
+            ChargeWork(runtimeContext, 1);
+            return Regex.IsMatch(target, pattern, RegexOptions.None, GetRegexTimeout(runtimeContext));
+        }
+        catch (ArgumentException ex)
+        {
+            throw WrapRegexException("matches", ex);
+        }
+        catch (RegexMatchTimeoutException ex)
+        {
+            throw WrapRegexTimeoutException("matches", ex);
+        }
+    }
 
     public static bool CelContains(object? target, object? substring)
     {
@@ -1457,18 +1490,75 @@ internal static class CelRuntimeHelpers
         throw NoMatchingOverloadForValuesWithSource("endsWith", expressionText, start, end, target, suffix);
     }
 
-    public static bool CelMatches(object? target, object? pattern)
+    public static bool CelMatches(object? target, object? pattern, CelRuntimeContext? runtimeContext)
     {
         if (TryGetString(target, out var s) && TryGetString(pattern, out var p))
-            return Regex.IsMatch(s, p, RegexOptions.None, TimeSpan.FromSeconds(1));
+            return StringMatches(s, p, runtimeContext);
         throw CelRuntimeException.NoMatchingOverloadForValues("matches", target, pattern);
     }
 
-    public static bool CelMatches(object? target, object? pattern, string? expressionText, int start, int end)
+    public static bool CelMatches(object? target, object? pattern, CelRuntimeContext? runtimeContext, string? expressionText, int start, int end)
     {
         if (TryGetString(target, out var s) && TryGetString(pattern, out var p))
-            return Regex.IsMatch(s, p, RegexOptions.None, TimeSpan.FromSeconds(1));
+            return StringMatches(s, p, runtimeContext);
         throw NoMatchingOverloadForValuesWithSource("matches", expressionText, start, end, target, pattern);
+    }
+
+    public static CelOptional RegexExtract(string receiver, string pattern, CelRuntimeContext? runtimeContext)
+    {
+        try
+        {
+            ChargeWork(runtimeContext, 1);
+            var match = Regex.Match(receiver, pattern, RegexOptions.None, GetRegexTimeout(runtimeContext));
+            if (!match.Success)
+                return CelOptional.None;
+
+            return match.Groups.Count > 1
+                ? CelOptional.Of(match.Groups[1].Value)
+                : CelOptional.Of(match.Value);
+        }
+        catch (ArgumentException ex)
+        {
+            throw WrapRegexException("regex.extract", ex);
+        }
+        catch (RegexMatchTimeoutException ex)
+        {
+            throw WrapRegexTimeoutException("regex.extract", ex);
+        }
+    }
+
+    public static string[] RegexExtractAll(string receiver, string pattern, CelRuntimeContext? runtimeContext)
+    {
+        try
+        {
+            ChargeWork(runtimeContext, 1);
+            return Regex.Matches(receiver, pattern, RegexOptions.None, GetRegexTimeout(runtimeContext)).Select(m => m.Value).ToArray();
+        }
+        catch (ArgumentException ex)
+        {
+            throw WrapRegexException("regex.extractAll", ex);
+        }
+        catch (RegexMatchTimeoutException ex)
+        {
+            throw WrapRegexTimeoutException("regex.extractAll", ex);
+        }
+    }
+
+    public static string RegexReplace(string receiver, string pattern, string replacement, CelRuntimeContext? runtimeContext)
+    {
+        try
+        {
+            ChargeWork(runtimeContext, 1);
+            return Regex.Replace(receiver, pattern, replacement, RegexOptions.None, GetRegexTimeout(runtimeContext));
+        }
+        catch (ArgumentException ex)
+        {
+            throw WrapRegexException("regex.replace", ex);
+        }
+        catch (RegexMatchTimeoutException ex)
+        {
+            throw WrapRegexTimeoutException("regex.replace", ex);
+        }
     }
 
     private static bool TryGetString(object? value, out string result)

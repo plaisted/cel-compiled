@@ -81,7 +81,8 @@ var registry = new CelTypeRegistryBuilder()
     .Build();
 
 var options = new CelCompileOptions { TypeRegistry = registry };
-var fn = CelExpression.Compile<Resource, string>("displayName", options);
+var program = CelExpression.Compile<Resource, string>("displayName", options);
+var value = program.Invoke(resource);
 ```
 
 Descriptor-backed members can define presence semantics independently from `null`, and nested registered CLR values continue to resolve through the descriptor registry on subsequent member access.
@@ -117,19 +118,19 @@ var registry = new CelFunctionRegistryBuilder()
 var options = new CelCompileOptions { FunctionRegistry = registry };
 
 // Global function call
-var slugFn = CelExpression.Compile<JsonElement, string>("slug(title)", options);
+var slugProgram = CelExpression.Compile<JsonElement, string>("slug(title)", options);
 var doc = JsonDocument.Parse("""{"title":"Hello World"}""");
-slugFn(doc.RootElement); // "hello-world"
+slugProgram.Invoke(doc.RootElement); // "hello-world"
 
 // Receiver-style call
-var reverseFn = CelExpression.Compile<JsonElement, string>("name.reverse()", options);
+var reverseProgram = CelExpression.Compile<JsonElement, string>("name.reverse()", options);
 var doc2 = JsonDocument.Parse("""{"name":"abcde"}""");
-reverseFn(doc2.RootElement); // "edcba"
+reverseProgram.Invoke(doc2.RootElement); // "edcba"
 
 // Receiver with arguments
-var repeatFn = CelExpression.Compile<JsonElement, string>("word.repeat(3)", options);
+var repeatProgram = CelExpression.Compile<JsonElement, string>("word.repeat(3)", options);
 var doc3 = JsonDocument.Parse("""{"word":"ha"}""");
-repeatFn(doc3.RootElement); // "hahaha"
+repeatProgram.Invoke(doc3.RootElement); // "hahaha"
 ```
 
 ### Using Closed Delegates

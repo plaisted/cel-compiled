@@ -2,13 +2,13 @@
 
 [![NuGet Version](https://img.shields.io/nuget/v/Cel.Compiled.svg)](https://www.nuget.org/packages/Cel.Compiled)
 
-`Cel.Compiled` is a high-performance .NET implementation of the [Common Expression Language (CEL)](https://github.com/google/cel-spec). It compiles CEL source text into optimized, reusable .NET delegates, making it ideal for high-frequency evaluation in rule engines, policy enforcement, and dynamic filtering.
+`Cel.Compiled` is a high-performance .NET implementation of the [Common Expression Language (CEL)](https://github.com/google/cel-spec). It compiles CEL source text into optimized, reusable `CelProgram<TContext, TResult>` objects, making it ideal for high-frequency evaluation in rule engines, policy enforcement, and dynamic filtering.
 
 It is designed for scenarios where expressions are compiled once and evaluated many times.
 
 ## Key Features
 
-- **High Performance**: Compiles to strongly-typed delegates for near-native execution speed.
+- **High Performance**: Compiles to reusable programs with an unrestricted delegate helper for near-native execution speed.
 - **Modern .NET**: Built for .NET 10+ with optimized memory usage.
 - **Broad Input Support**: Bind to POCOs, `JsonElement`, `JsonNode`, or custom type descriptors.
 - **Spec-Compliant**: Comprehensive support for CEL operators, functions, macros, and optional types.
@@ -41,10 +41,10 @@ using Cel.Compiled;
 var context = new { User = new { Age = 25, Status = "active" } };
 
 // 2. Compile once
-var fn = CelExpression.Compile<dynamic, bool>("User.Age >= 18 && User.Status == 'active'");
+var program = CelExpression.Compile<dynamic, bool>("User.Age >= 18 && User.Status == 'active'");
 
 // 3. Evaluate many times
-bool isAllowed = fn(context);
+bool isAllowed = program.Invoke(context);
 ```
 
 ### Using JSON Inputs
@@ -53,8 +53,8 @@ bool isAllowed = fn(context);
 using System.Text.Json;
 
 var json = JsonDocument.Parse("""{"age": 25, "status": "active"}""").RootElement;
-var fn = CelExpression.Compile<JsonElement, bool>("age >= 18 && status == 'active'");
-bool result = fn(json);
+var program = CelExpression.Compile<JsonElement, bool>("age >= 18 && status == 'active'");
+bool result = program.Invoke(json);
 ```
 
 ### Compile Options
@@ -74,16 +74,36 @@ var options = new CelCompileOptions
     FunctionRegistry = registry
 };
 
-var fn = CelExpression.Compile<JsonElement, bool>(
+var program = CelExpression.Compile<JsonElement, bool>(
     "name.trim().lowerAscii() == 'alice'",
     options);
 ```
+
+### Runtime Safety For Untrusted Inputs
+
+Use `Invoke(context, runtimeOptions)` when evaluating untrusted or multi-tenant expressions.
+
+```csharp
+var program = CelExpression.Compile<JsonElement, bool>("items.all(x, x > 0)");
+
+var allowed = program.Invoke(
+    json,
+    new CelRuntimeOptions
+    {
+        MaxWork = 10_000,
+        MaxComprehensionDepth = 4,
+        Timeout = TimeSpan.FromMilliseconds(100),
+        RegexTimeout = TimeSpan.FromMilliseconds(25)
+    });
+```
+
+`MaxWork` is intentionally narrow. It counts compiler-owned repeated-work checkpoints such as comprehensions and regex-backed operations, not every AST node or every CPU instruction.
 
 ## Performance
 
 `Cel.Compiled` is designed for runtime speed. By compiling to delegates and minimizing allocations during evaluation, it substantially outperforms the other .NET CEL libraries in steady-state runtime benchmarks.
 
-Fresh benchmark run on `2026-03-16` from [Cel.Compiled.Benchmarks/Program.cs](Cel.Compiled.Benchmarks/Program.cs), using the `CelNetComparisonBenchmarks` suite on:
+Fresh benchmark run on `2026-03-20` from [Cel.Compiled.Benchmarks/Program.cs](Cel.Compiled.Benchmarks/Program.cs), using the `CelNetComparisonBenchmarks` suite on:
 
 - .NET SDK `10.0.104`
 - .NET runtime `10.0.4`
@@ -99,20 +119,20 @@ Steady-state warm execution after compilation:
 
 | Library | Mean | Relative to `Cel.Compiled` | Allocated |
 | --- | ---: | ---: | ---: |
-| Native C# | `7.46 ns` | `2.0x faster` | `0 B` |
-| `Cel.Compiled` | `15.54 ns` | `1.0x` | `72 B` |
-| `Cel.NET` | `376.81 ns` | `24.2x slower` | `1360 B` |
-| `Telus CEL` | `2.97 us` | `191.4x slower` | `8808 B` |
+| Native C# | `7.30 ns` | `1.3x faster` | `0 B` |
+| `Cel.Compiled` | `9.39 ns` | `1.0x` | `0 B` |
+| `Cel.NET` | `405.71 ns` | `43.2x slower` | `1360 B` |
+| `Telus CEL` | `3.03 us` | `322.7x slower` | `8808 B` |
 
 Build-and-run from scratch for the same three expressions:
 
 | Library | Mean | Relative to `Cel.Compiled` | Allocated |
 | --- | ---: | ---: | ---: |
-| `Cel.Compiled` | `513.07 us` | `1.0x` | `40,948 B` |
-| `Cel.NET` | `1.07 ms` | `2.1x slower` | `3,398,265 B` |
-| `Telus CEL` | `34.91 us` | `14.7x faster` | `124,528 B` |
+| `Cel.Compiled` | `678.73 us` | `1.0x` | `50,089 B` |
+| `Cel.NET` | `1.10 ms` | `1.6x slower` | `3,398,264 B` |
+| `Telus CEL` | `35.57 us` | `19.1x faster` | `124,528 B` |
 
-The important tradeoff is straightforward: `Cel.Compiled` pays more upfront compile cost than the most lightweight interpretive path, but once compiled it runs within about `2x` of the equivalent native C# and far ahead of the other measured .NET CEL libraries on this warm-path benchmark.
+The important tradeoff is straightforward: `Cel.Compiled` stays close to native C# on the hot path, but it still pays an upfront compile cost for that speed. On this benchmark it remains far ahead of `Cel.NET` during warm execution, while `Telus CEL` has the fastest build-and-run path among the compared CEL libraries.
 
 To reproduce the comparison:
 
