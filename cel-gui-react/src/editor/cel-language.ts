@@ -1,6 +1,8 @@
 import { StreamLanguage } from '@codemirror/language';
+import { tags as t } from '@lezer/highlight';
 
 const keywords = ['true', 'false', 'null', 'in'];
+const logicOperators = ['&&', '||', '!'];
 const operators = [
   '==',
   '!=',
@@ -8,9 +10,6 @@ const operators = [
   '<=',
   '>',
   '<',
-  '&&',
-  '||',
-  '!',
   '?.',
   '??',
   '?',
@@ -48,6 +47,11 @@ export const celLanguage = StreamLanguage.define({
     if (stream.match(/^[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?/)) return 'number';
     if (stream.match(/^0x[0-9a-fA-F]+/)) return 'number';
 
+    // Logic Operators
+    for (const op of logicOperators) {
+      if (stream.match(op)) return 'logicOperator';
+    }
+
     // Operators
     for (const op of operators) {
       if (stream.match(op)) return 'operator';
@@ -62,5 +66,14 @@ export const celLanguage = StreamLanguage.define({
 
     stream.next();
     return null;
+  },
+  tokenTable: {
+    comment: t.comment,
+    string: t.string,
+    number: t.number,
+    operator: t.operator,
+    logicOperator: t.keyword,
+    keyword: t.keyword,
+    variableName: t.variableName,
   },
 });

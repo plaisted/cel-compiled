@@ -736,13 +736,27 @@
 
 .cm-editor .cm-scroller,
 .cm-editor .cm-content,
-.cm-editor .cm-gutters {
-  background: #ffffff;
-  color: var(--cel-text);
+.cm-editor .cm-content:focus,
+.cm-editor.cm-focused .cm-content {
+  background: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.cm-editor {
+  overflow: hidden;
+  background: #ffffff !important;
 }
 
 .cm-editor .cm-gutters {
+  background: #f8fafc;
+  color: #94a3b8;
   border-right: 1px solid rgba(169, 180, 185, 0.18);
+}
+
+.cel-builder__source:focus-within {
+  box-shadow: var(--cel-ring) !important;
 }
 
 .cm-editor .cm-cursor,
@@ -755,7 +769,7 @@
 .cm-editor .cm-content::selection,
 .cm-editor .cm-line::selection,
 .cm-editor .cm-line *::selection {
-  background-color: rgba(0, 83, 219, 0.2);
+  background-color: #cbdcfc !important;
 }
 
 .cm-activeLine,
