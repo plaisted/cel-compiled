@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 export type CelGuiNodeType = 'group' | 'rule' | 'macro' | 'advanced';
 
@@ -131,4 +131,16 @@ export interface CelExpressionBuilderProps {
   className?: string;
   style?: CSSProperties;
   theme?: Partial<CelThemeTokens>;
+}
+
+export interface CelVisualBuilderProps {
+  defaultValue?: CelGuiNode;
+  value?: CelGuiNode;
+  onChange?: (node: CelGuiNode) => void;
+  readOnly?: boolean;
+  schema?: CelSchema;
+  className?: string;
+  style?: CSSProperties;
+  theme?: Partial<CelThemeTokens>;
+  emptyState?: ReactNode;
 }

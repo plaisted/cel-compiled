@@ -66,6 +66,7 @@ export const CelCodeEditor: React.FC<CelCodeEditorProps> = ({
     <CodeMirror
       value={value}
       onChange={onChange}
+      theme="light"
       readOnly={readOnly}
       extensions={extensions}
       className={className}

@@ -23,11 +23,16 @@ describe('CelCodeEditor', () => {
       | {
           indentWithTab?: boolean;
           extensions?: unknown[];
+          theme?: string;
         }
       | undefined;
 
-    expect(props.indentWithTab).toBe(false);
-    expect(Array.isArray(props.extensions)).toBe(true);
-    expect(props.extensions).toHaveLength(4);
+    expect(props).toBeDefined();
+    const codeMirrorProps = props!;
+
+    expect(codeMirrorProps.indentWithTab).toBe(false);
+    expect(codeMirrorProps.theme).toBe('light');
+    expect(Array.isArray(codeMirrorProps.extensions)).toBe(true);
+    expect(codeMirrorProps.extensions).toHaveLength(4);
   });
 });

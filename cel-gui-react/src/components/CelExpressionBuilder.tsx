@@ -1,45 +1,13 @@
 import React, { Suspense, useCallback, useMemo } from 'react';
-import { CelExpressionBuilderProps, CelBuilderMode, CelGuiNode, CelThemeTokens } from '../types.ts';
+import { CelExpressionBuilderProps, CelBuilderMode, CelGuiNode } from '../types.ts';
 import { useCelExpression } from '../hooks/useCelExpression.ts';
 import { useCelConversion } from '../hooks/useCelConversion.ts';
 import { CelSchemaProvider } from '../context/CelSchemaContext.tsx';
 import { CelBuilderProvider } from '../context/CelBuilderContext.tsx';
 import { NodeRenderer } from './NodeRenderer.tsx';
+import { buildCelRootStyle } from './builderStyles.ts';
 
 const CelCodeEditor = React.lazy(() => import('../editor/CelCodeEditor.tsx'));
-
-const THEME_TOKEN_TO_CSS_VAR: Record<keyof CelThemeTokens, string> = {
-  surface: '--cel-surface',
-  surfaceLow: '--cel-surface-low',
-  surfaceMid: '--cel-surface-mid',
-  surfaceHigh: '--cel-surface-high',
-  surfaceHighest: '--cel-surface-highest',
-  surfaceCard: '--cel-surface-card',
-  surfaceCardSolid: '--cel-surface-card-solid',
-  text: '--cel-text',
-  textMuted: '--cel-text-muted',
-  textSoft: '--cel-text-soft',
-  outline: '--cel-outline',
-  outlineStrong: '--cel-outline-strong',
-  primary: '--cel-primary',
-  primaryDim: '--cel-primary-dim',
-  primarySoft: '--cel-primary-soft',
-  secondary: '--cel-secondary',
-  secondarySoft: '--cel-secondary-soft',
-  tertiary: '--cel-tertiary',
-  danger: '--cel-danger',
-  dangerSoft: '--cel-danger-soft',
-  success: '--cel-success',
-  inverseSurface: '--cel-inverse-surface',
-  inversePrimary: '--cel-inverse-primary',
-  radiusSm: '--cel-radius-sm',
-  radius: '--cel-radius',
-  radiusMd: '--cel-radius-md',
-  shadowAmbient: '--cel-shadow-ambient',
-  shadowSoft: '--cel-shadow-soft',
-  transition: '--cel-transition',
-  ring: '--cel-ring',
-};
 
 export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
   defaultValue,
@@ -81,16 +49,7 @@ export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
   const currentMode = modeProp ?? internalMode;
   const currentPretty = prettyProp ?? internalPretty;
 
-  const rootStyle = useMemo(() => {
-    const themeStyle: React.CSSProperties & Record<string, string> = {};
-    if (theme) {
-      for (const [token, value] of Object.entries(theme) as [keyof CelThemeTokens, string][]) {
-        if (value === undefined) continue;
-        themeStyle[THEME_TOKEN_TO_CSS_VAR[token]] = value;
-      }
-    }
-    return { ...themeStyle, ...style };
-  }, [style, theme]);
+  const rootStyle = useMemo(() => buildCelRootStyle(theme, style), [style, theme]);
 
   const rootClassName = ['cel-builder', 'cel-builder--natural', className]
     .filter(Boolean)
@@ -187,39 +146,33 @@ export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
     <CelSchemaProvider schema={schema}>
       <CelBuilderProvider readOnly={readOnly}>
         <div className={rootClassName} style={rootStyle}>
-          <div className="cel-builder__header">
-            <div className="cel-builder__header-copy">
-              <h2 className="cel-builder__title">Expression Builder</h2>
-              <p className="cel-builder__subtitle">Construct high-performance CEL filters.</p>
-            </div>
-            <div className="cel-builder__toolbar">
-              <div className="cel-builder__toolbar-group">
-                <label className="cel-builder__pretty-toggle">
-                  <input
-                    type="checkbox"
-                    checked={currentPretty}
-                    onChange={handlePrettyToggle}
-                    disabled={isConverting}
-                  />
-                  <span>Pretty Print</span>
-                </label>
-              </div>
-              {showToggle && (
-                <button
-                  type="button"
-                  className="cel-builder__mode-toggle"
-                  aria-label={
-                    currentMode === 'source'
-                      ? 'Switch to visual editor'
-                      : 'Switch to source code editor'
-                  }
-                  onClick={handleToggleMode}
+          <div className="cel-builder__toolbar">
+            <div className="cel-builder__toolbar-group">
+              <label className="cel-builder__pretty-toggle">
+                <input
+                  type="checkbox"
+                  checked={currentPretty}
+                  onChange={handlePrettyToggle}
                   disabled={isConverting}
-                >
-                  {currentMode === 'source' ? 'Visual' : 'Source'}
-                </button>
-              )}
+                />
+                <span>Pretty Print</span>
+              </label>
             </div>
+            {showToggle && (
+              <button
+                type="button"
+                className="cel-builder__mode-toggle"
+                aria-label={
+                  currentMode === 'source'
+                    ? 'Switch to visual editor'
+                    : 'Switch to source code editor'
+                }
+                onClick={handleToggleMode}
+                disabled={isConverting}
+              >
+                {currentMode === 'source' ? 'Visual' : 'Source'}
+              </button>
+            )}
           </div>
 
           {isConverting && (

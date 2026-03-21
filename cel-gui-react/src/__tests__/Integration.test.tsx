@@ -1,5 +1,4 @@
-import React from 'react';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { CelExpressionBuilder } from '../components/CelExpressionBuilder.tsx';
 import { CelGuiGroup } from '../types.ts';
@@ -64,7 +63,7 @@ describe('Integration Test: Expression Building', () => {
     const ruleOperatorSelect = screen.getAllByRole('combobox')[1];
     fireEvent.change(ruleOperatorSelect, { target: { value: '>=' } });
 
-    const ruleValueInput = screen.getByPlaceholderText('value');
+    const ruleValueInput = screen.getByPlaceholderText('Enter number...');
     fireEvent.change(ruleValueInput, { target: { value: '18' } });
 
     // Promote the condition into a nested group that preserves the condition
@@ -73,25 +72,20 @@ describe('Integration Test: Expression Building', () => {
     // Check final emitted structure
     const finalNode = onChange.mock.calls[onChange.mock.calls.length - 1][0] as CelGuiGroup;
 
-    expect(finalNode).toMatchObject({
-      type: 'group',
-      combinator: 'and',
-      not: false,
-      rules: [
-        {
-          type: 'group',
-          combinator: 'and',
-          not: false,
-          rules: [
-            {
-              type: 'rule',
-              field: 'user.age',
-              operator: '>=',
-              value: 18,
-            },
-          ],
-        }
-      ]
+    expect(finalNode.type).toBe('group');
+    expect(finalNode.combinator).toBe('and');
+    expect(finalNode.not).toBe(false);
+    expect(finalNode.rules).toHaveLength(1);
+
+    const promotedGroup = finalNode.rules[0] as CelGuiGroup;
+    expect(promotedGroup.type).toBe('group');
+    expect(promotedGroup.combinator).toBe('and');
+    expect(promotedGroup.not).toBe(false);
+    expect(promotedGroup.rules[0]).toMatchObject({
+      type: 'rule',
+      field: 'user.age',
+      operator: '>=',
+      value: 18,
     });
 
     // Serialize to JSON to ensure no cyclic deps and clean contract

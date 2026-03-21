@@ -32,13 +32,6 @@ function getGroupAriaLabel(combinator: string, not: boolean): string {
   return 'All rules match';
 }
 
-function getGroupSummaryLabel(combinator: string, not: boolean): string {
-  if (not && combinator === 'and') return 'No rules match';
-  if (not && combinator === 'or') return 'Not all rules match';
-  if (combinator === 'or') return 'Any rule matches';
-  return 'All rules match';
-}
-
 export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({
   node,
   onChange,
@@ -186,7 +179,6 @@ export const NaturalGroupNode: React.FC<NaturalGroupNodeProps> = ({
     [node, onChange]
   );
 
-  const combinatorLabel = getGroupSummaryLabel(node.combinator, !!node.not);
   const ariaLabel = getGroupAriaLabel(node.combinator, !!node.not);
   const logicModeValue = `${node.combinator}:${!!node.not}`;
   const logicModeWord = getLogicModeWord(node.combinator, !!node.not);

@@ -46,36 +46,9 @@
     var(--cel-surface);
 }
 
-.cel-builder__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.cel-builder__header-copy {
-  min-width: 0;
-}
-
-.cel-builder__title {
-  margin: 0;
-  font-size: 1.5rem;
-  line-height: 1.15;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  color: var(--cel-text);
-}
-
-.cel-builder__subtitle {
-  margin: 0.3rem 0 0;
-  font-size: 0.75rem;
-  line-height: 1.4;
-  color: var(--cel-text-muted);
-}
-
 .cel-builder__toolbar {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
@@ -750,17 +723,44 @@
 .cm-editor {
   font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
   font-size: 0.78rem;
+  background: #ffffff;
+  color: var(--cel-text);
+  border-radius: 0.75rem;
 }
 
 .cm-theme,
 .cm-editor {
-  background: var(--cel-inverse-surface);
-  color: #d6e2ff;
+  background: #ffffff;
+  color: var(--cel-text);
+}
+
+.cm-editor .cm-scroller,
+.cm-editor .cm-content,
+.cm-editor .cm-gutters {
+  background: #ffffff;
+  color: var(--cel-text);
+}
+
+.cm-editor .cm-gutters {
+  border-right: 1px solid rgba(169, 180, 185, 0.18);
+}
+
+.cm-editor .cm-cursor,
+.cm-editor .cm-dropCursor {
+  border-left-color: var(--cel-text);
+}
+
+.cm-editor .cm-selectionLayer .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionLayer .cm-selectionBackground,
+.cm-editor .cm-content::selection,
+.cm-editor .cm-line::selection,
+.cm-editor .cm-line *::selection {
+  background-color: rgba(0, 83, 219, 0.2);
 }
 
 .cm-activeLine,
 .cm-activeLineGutter {
-  background: rgba(97, 139, 255, 0.08);
+  background: rgba(0, 83, 219, 0.06);
 }
 
 @keyframes cel-node-enter {

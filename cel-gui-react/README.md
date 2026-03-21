@@ -16,6 +16,14 @@ A React component library that provides a visual expression builder and a robust
 npm install @cel-compiled/react
 ```
 
+See [LIBRARY_USAGE.md](./LIBRARY_USAGE.md) for the recommended import paths and integration patterns for:
+
+- visual-only builder usage
+- combined visual plus source editor usage
+- editor-only usage
+
+The packaged components do not render a built-in page header or title.
+
 ## Basic Usage
 
 The library provides a main `<CelExpressionBuilder>` component. It is designed to be connected to the `Cel.Compiled` backend using custom conversion hooks you provide.

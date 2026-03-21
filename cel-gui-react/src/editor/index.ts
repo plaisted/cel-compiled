@@ -1,5 +1,5 @@
-export { CelCodeEditor } from './CelCodeEditor.ts';
-export type { CelCodeEditorProps } from './CelCodeEditor.ts';
+export { CelCodeEditor } from './CelCodeEditor.tsx';
+export type { CelCodeEditorProps } from './CelCodeEditor.tsx';
 export { createCelCompletionSource } from './completion.ts';
 export { createCelLintSource } from './lint.ts';
 export { celLanguage } from './cel-language.ts';

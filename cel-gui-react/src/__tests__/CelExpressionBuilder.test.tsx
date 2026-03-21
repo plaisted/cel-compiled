@@ -1,12 +1,12 @@
-import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { CelExpressionBuilder } from '../components/CelExpressionBuilder.tsx';
+import { CelVisualBuilder } from '../components/CelVisualBuilder.tsx';
 import { CelGuiNode } from '../types.ts';
 
 // Mock NodeRenderer
 vi.mock('../components/NodeRenderer.tsx', () => ({
-  NodeRenderer: ({ node, onChange }: any) => (
+  NodeRenderer: ({ onChange }: any) => (
     <div data-testid="node-renderer">
       <span>Visual Mode Node</span>
       <button onClick={() => onChange({ type: 'rule', field: 'a', operator: '==', value: 2 })}>
@@ -36,6 +36,7 @@ describe('CelExpressionBuilder', () => {
     render(<CelExpressionBuilder defaultValue={defaultNode} />);
     expect(screen.getByTestId('node-renderer')).toBeInTheDocument();
     expect(screen.getByText('Visual Mode Node')).toBeInTheDocument();
+    expect(screen.queryByText('Expression Builder')).not.toBeInTheDocument();
   });
 
   it('renders correctly without initial node', () => {
@@ -192,6 +193,14 @@ describe('CelExpressionBuilder', () => {
     const root = document.querySelector('.cel-builder') as HTMLElement;
     expect(root.style.getPropertyValue('--cel-primary')).toBe('#123456');
     expect(root.style.getPropertyValue('--cel-radius-md')).toBe('20px');
+  });
+
+  it('renders a visual-only builder without source controls', () => {
+    render(<CelVisualBuilder defaultValue={defaultNode} />);
+
+    expect(screen.getByTestId('node-renderer')).toBeInTheDocument();
+    expect(screen.queryByText('Source')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Pretty Print')).not.toBeInTheDocument();
   });
 
   it('re-formats source immediately when pretty print is toggled in source mode', async () => {

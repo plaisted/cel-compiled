@@ -5,7 +5,7 @@ import { CelGuiNode } from '../types.ts';
 
 describe('useCelConversion', () => {
   it('wraps callbacks and tracks isConverting', async () => {
-    const toCelString = vi.fn().mockImplementation(async (node) => {
+    const toCelString = vi.fn().mockImplementation(async (_node) => {
       return new Promise((resolve) => setTimeout(() => resolve('a == 1'), 10));
     });
 
