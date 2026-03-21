@@ -117,15 +117,23 @@ public class BinderTests
         var cacheField = binderType.GetField("s_accessorPlans", BindingFlags.Static | BindingFlags.NonPublic)!;
         var cache = (IDictionary)cacheField.GetValue(null)!;
 
-        var before = cache.Count;
+        // CacheContext is a private nested type only this test uses, so it should not
+        // be present before the first compile (even if other tests ran in parallel).
+        Assert.False(cache.Contains(typeof(CacheContext)));
 
         CelCompiler.Compile<CacheContext>(new CelIdent("Name"));
-        var afterFirst = cache.Count;
 
+        // After first compile, the type must be cached.
+        Assert.True(cache.Contains(typeof(CacheContext)));
+
+        // Compile again — the dictionary key is unique per type, so the entry count for
+        // CacheContext cannot increase regardless of parallel test activity on other types.
+        var countAfterFirst = cache.Count;
         CelCompiler.Compile<CacheContext>(new CelIdent("Name"));
-        var afterSecond = cache.Count;
 
-        Assert.True(afterFirst >= before);
-        Assert.Equal(afterFirst, afterSecond);
+        Assert.True(cache.Contains(typeof(CacheContext)));
+        // CacheContext must not have been added a second time; total count may grow due
+        // to other types being added by parallel tests, but must not shrink.
+        Assert.True(cache.Count >= countAfterFirst);
     }
 }

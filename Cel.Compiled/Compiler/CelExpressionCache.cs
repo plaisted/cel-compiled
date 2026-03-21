@@ -28,6 +28,8 @@ internal static class CelExpressionCache
             (BuildState)(new(options)));
     }
 
+    public static void Clear() => s_cache.Clear();
+
     private readonly record struct BuildState(CelCompileOptions Options)
     {
         public CelProgram<TContext, object?> BuildObjectProgram<TContext>(CelExpr expr, CelCompileOptions options) => CelCompiler.CompileProgramUncached<TContext>(expr, options);

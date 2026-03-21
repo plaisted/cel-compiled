@@ -3,6 +3,7 @@ name: Build and Pack
 on:
   push:
     branches: [ "main", "releases/*" ]
+    tags: [ "v*.*.*" ]
   pull_request:
     branches: [ "main", "releases/*" ]
 
@@ -26,15 +27,15 @@ jobs:
     - name: Test
       run: dotnet test -c Release --no-build
 
-    - name: Check for Release Branch
+    - name: Check for Release Tag
       id: check_release
       shell: bash
       run: |
         VERSION="0.0.1-preview"
-        REF_NAME="${{ github.ref_name }}"
+        REF="${{ github.ref }}"
 
-        # Check for refs/heads/releases/X.Y.Z or X.Y.Z-suffix
-        if [[ "$REF_NAME" =~ ^releases/([0-9]+\.[0-9]+\.[0-9]+(-.*)?)$ ]]; then
+        # Publish only on version tags (v1.2.3 or v1.2.3-suffix)
+        if [[ "$REF" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+(-.*)?)$ ]]; then
           VERSION=${BASH_REMATCH[1]}
           echo "is_valid_release=true" >> $GITHUB_OUTPUT
         fi

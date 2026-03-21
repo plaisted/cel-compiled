@@ -55,7 +55,7 @@ public class CelPrettyPrinterTests
               + b
               + c
             """;
-        Assert.Equal(expected, Format("a + b + c", 5));
+        Assert.Equal(expected.ReplaceLineEndings("\n"), Format("a + b + c", 5));
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public class CelPrettyPrinterTests
               && b
               && c
             """;
-        Assert.Equal(expected, Format(source, 100));
+        Assert.Equal(expected.ReplaceLineEndings("\n"), Format(source, 100));
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public class CelPrettyPrinterTests
               ? true_branch
               : false_branch
             """;
-        Assert.Equal(expected, Format("condition ? true_branch : false_branch", 20));
+        Assert.Equal(expected.ReplaceLineEndings("\n"), Format("condition ? true_branch : false_branch", 20));
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public class CelPrettyPrinterTests
               arg3
             )
             """;
-        Assert.Equal(expected, Format(source, 10));
+        Assert.Equal(expected.ReplaceLineEndings("\n"), Format(source, 10));
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public class CelPrettyPrinterTests
               .c
               .d
             """;
-        Assert.Equal(expected, Format(source, 100));
+        Assert.Equal(expected.ReplaceLineEndings("\n"), Format(source, 100));
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public class CelPrettyPrinterTests
               && x != 5
             )
             """;
-        Assert.Equal(expected, Format(source, 20));
+        Assert.Equal(expected.ReplaceLineEndings("\n"), Format(source, 20));
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public class CelPrettyPrinterTests
               3
             ]
             """;
-        Assert.Equal(expected, Format(source, 5));
+        Assert.Equal(expected.ReplaceLineEndings("\n"), Format(source, 5));
     }
 
     [Fact]
@@ -153,7 +153,7 @@ public class CelPrettyPrinterTests
               "b": 2
             }
             """;
-        Assert.Equal(expected, Format(source, 10));
+        Assert.Equal(expected.ReplaceLineEndings("\n"), Format(source, 10));
     }
 
     [Fact]
@@ -193,7 +193,7 @@ public class CelPrettyPrinterTests
               c
             )
             """;
-        Assert.Equal(expected, Format(source, 100));
+        Assert.Equal(expected.ReplaceLineEndings("\n"), Format(source, 100));
     }
 
     [Fact]
@@ -209,7 +209,7 @@ public class CelPrettyPrinterTests
               .c
               .d
             """;
-        Assert.Equal(expected, Format(source, 100));
+        Assert.Equal(expected.ReplaceLineEndings("\n"), Format(source, 100));
     }
 
     [Fact]
@@ -225,6 +225,6 @@ public class CelPrettyPrinterTests
               .d
               .startsWith("v")
             """;
-        Assert.Equal(expected, Format(source, 100));
+        Assert.Equal(expected.ReplaceLineEndings("\n"), Format(source, 100));
     }
 }

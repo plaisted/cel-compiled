@@ -791,7 +791,7 @@ internal sealed class CelPrettyPrinter
 
     private void NewLine()
     {
-        _sb.AppendLine();
+        _sb.Append('\n');
         _currentColumn = 0;
         var indent = new string(' ', _currentIndent * _options.IndentSize);
         _sb.Append(indent);

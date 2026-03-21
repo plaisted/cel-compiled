@@ -13,7 +13,8 @@
     <PackageProjectUrl>https://github.com/plaisted/cel-compiled</PackageProjectUrl>
     <RepositoryUrl>https://github.com/plaisted/cel-compiled</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageTags>cel;expression;compiler</PackageTags>
+    <Version>0.0.0-local</Version>
+    <PackageTags>cel;common-expression-language;expression;compiler;rule-engine;policy;dotnet</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 

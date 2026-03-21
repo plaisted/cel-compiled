@@ -43,6 +43,15 @@ public sealed class CelCompileOptions
     public CelTypeRegistry? TypeRegistry { get; init; }
 }
 
+/// <summary>
+/// Feature flags that control which CEL language and extension features are enabled at compile time.
+/// </summary>
+/// <remarks>
+/// <see cref="All"/> includes all standard language and extension features but intentionally excludes
+/// <see cref="JsonDecimalBinding"/>. To enable decimal precision for JSON non-integer numbers, combine
+/// <see cref="All"/> with <see cref="JsonDecimalBinding"/> explicitly:
+/// <c>EnabledFeatures = CelFeatureFlags.All | CelFeatureFlags.JsonDecimalBinding</c>
+/// </remarks>
 [Flags]
 public enum CelFeatureFlags
 {
@@ -55,7 +64,14 @@ public enum CelFeatureFlags
     SetExtensions = 1 << 5,
     Base64Extensions = 1 << 6,
     RegexExtensions = 1 << 7,
+    /// <summary>
+    /// Binds JSON non-integer numbers as <c>decimal</c> instead of <c>double</c>.
+    /// Excluded from <see cref="All"/> to preserve default double semantics.
+    /// </summary>
     JsonDecimalBinding = 1 << 8,
+    /// <summary>
+    /// All standard language and extension features. Does not include <see cref="JsonDecimalBinding"/>.
+    /// </summary>
     All = Macros | OptionalSupport | StringExtensions | ListExtensions | MathExtensions | SetExtensions | Base64Extensions | RegexExtensions
 }
 
