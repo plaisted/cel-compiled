@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
-import { CelGuiNode, CelConversionOptions } from '../types.ts';
-import { sanitizeNodeForConversion } from '../utils/sanitizeNode.ts';
+import { CelGuiExpressionNode, CelConversionOptions } from '../types.ts';
+import { sanitizeExpressionForConversion } from '../utils/sanitizeNode.ts';
 
 export function useCelConversion(options?: CelConversionOptions) {
   const [isConverting, setIsConverting] = useState(false);
@@ -16,19 +16,19 @@ export function useCelConversion(options?: CelConversionOptions) {
   // Track concurrent calls so isConverting only clears when all are done.
   const pendingRef = useRef(0);
 
-  const convertToSource = useCallback(async (node: CelGuiNode, pretty?: boolean) => {
+  const convertToSource = useCallback(async (node: CelGuiExpressionNode, pretty?: boolean) => {
     if (!toCelStringRef.current) {
       console.warn('useCelConversion: toCelString is not configured');
       return '';
     }
-    const sanitizedNode = sanitizeNodeForConversion(node);
-    if (!sanitizedNode) {
+    const sanitized = sanitizeExpressionForConversion(node);
+    if (!sanitized) {
       return '';
     }
     if (++pendingRef.current === 1) setIsConverting(true);
     setError(null);
     try {
-      return await toCelStringRef.current(sanitizedNode, pretty);
+      return await toCelStringRef.current(sanitized, pretty);
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
       setError(err);
@@ -38,7 +38,7 @@ export function useCelConversion(options?: CelConversionOptions) {
     }
   }, []);
 
-  const convertToGui = useCallback(async (source: string) => {
+  const convertToGui = useCallback(async (source: string, kind?: 'filter' | 'value', resultType?: string) => {
     if (!toGuiModelRef.current) {
       console.warn('useCelConversion: toGuiModel is not configured');
       return null;
@@ -46,7 +46,7 @@ export function useCelConversion(options?: CelConversionOptions) {
     if (++pendingRef.current === 1) setIsConverting(true);
     setError(null);
     try {
-      return await toGuiModelRef.current(source);
+      return await toGuiModelRef.current(source, kind, resultType as any);
     } catch (e) {
       const err = e instanceof Error ? e : new Error(String(e));
       setError(err);
@@ -56,10 +56,13 @@ export function useCelConversion(options?: CelConversionOptions) {
     }
   }, []);
 
+  const resetError = useCallback(() => setError(null), []);
+
   return {
     convertToSource,
     convertToGui,
     isConverting,
     error,
+    resetError,
   };
 }

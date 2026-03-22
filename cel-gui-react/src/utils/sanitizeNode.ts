@@ -1,4 +1,4 @@
-import { CelGuiNode } from '../types.ts';
+import { CelGuiNode, CelGuiExpressionNode } from '../types.ts';
 
 function hasText(value: unknown): boolean {
   return typeof value === 'string' ? value.trim().length > 0 : !!value;
@@ -25,4 +25,14 @@ export function sanitizeNodeForConversion(node?: CelGuiNode | null): CelGuiNode 
     default:
       return node;
   }
+}
+
+export function sanitizeExpressionForConversion(node?: CelGuiExpressionNode | null): CelGuiExpressionNode | undefined {
+  if (!node) return undefined;
+  if (node.kind === 'filter') {
+    const sanitized = sanitizeNodeForConversion(node.root);
+    return sanitized ? { kind: 'filter', root: sanitized } : undefined;
+  }
+  // Value expressions are always sent as-is (advanced-value with empty expression is valid)
+  return node;
 }

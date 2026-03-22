@@ -25,13 +25,13 @@ public class ExtensionLibraryTests
         new() { FunctionRegistry = new CelFunctionRegistryBuilder().AddStandardExtensions().Build(), EnableCaching = false };
 
     [Fact]
-    public void StringExtensions_AreOptIn()
+    public void StringExtensions_AreIncludedByDefault()
     {
-        var ex = Assert.Throws<CelCompilationException>(() => CelCompiler.Compile<JsonElement, string>("name.trim()"));
-        Assert.Equal("undeclared_reference", ex.ErrorCode);
+        var doc = JsonDocument.Parse("""{"name":"  Alice  "}""");
+        var defaultFn = CelCompiler.Compile<JsonElement, string>("name.trim()");
+        Assert.Equal("Alice", defaultFn(doc.RootElement));
 
         var fn = CelCompiler.Compile<JsonElement, string>("name.trim()", StringOptions);
-        var doc = JsonDocument.Parse("""{"name":"  Alice  "}""");
         Assert.Equal("Alice", fn(doc.RootElement));
     }
 
@@ -341,10 +341,18 @@ public class ExtensionLibraryTests
     }
 
     [Fact]
-    public void SetExtensions_AreOptIn()
+    public void SetExtensions_AreDisabledWhenFeatureFlagIsOff()
     {
-        Assert.ThrowsAny<CelCompilationException>(() =>
-            CelCompiler.Compile<object, bool>("sets.contains([1], [1])"));
+        var options = new CelCompileOptions
+        {
+            EnabledFeatures = CelFeatureFlags.All & ~CelFeatureFlags.SetExtensions,
+            EnableCaching = false
+        };
+
+        var ex = Assert.Throws<CelCompilationException>(() =>
+            CelCompiler.Compile<object, bool>("sets.contains([1], [1])", options));
+        Assert.Equal("feature_disabled", ex.ErrorCode);
+        Assert.Contains("set extension bundle", ex.Message, StringComparison.Ordinal);
 
         var fn = CelCompiler.Compile<object, bool>("sets.contains([1], [1])", SetOptions);
         Assert.True(fn(new object()));
@@ -388,10 +396,18 @@ public class ExtensionLibraryTests
     }
 
     [Fact]
-    public void Base64_AreOptIn()
+    public void Base64_AreDisabledWhenFeatureFlagIsOff()
     {
-        Assert.ThrowsAny<CelCompilationException>(() =>
-            CelCompiler.Compile<object, string>("base64.encode(bytes('a'))"));
+        var options = new CelCompileOptions
+        {
+            EnabledFeatures = CelFeatureFlags.All & ~CelFeatureFlags.Base64Extensions,
+            EnableCaching = false
+        };
+
+        var ex = Assert.Throws<CelCompilationException>(() =>
+            CelCompiler.Compile<object, string>("base64.encode(bytes('a'))", options));
+        Assert.Equal("feature_disabled", ex.ErrorCode);
+        Assert.Contains("base64 extension bundle", ex.Message, StringComparison.Ordinal);
 
         var fn = CelCompiler.Compile<object, string>("base64.encode(bytes('a'))", Base64Options);
         Assert.Equal("YQ==", fn(new object()));
@@ -449,10 +465,18 @@ public class ExtensionLibraryTests
     }
 
     [Fact]
-    public void Regex_AreOptIn()
+    public void Regex_AreDisabledWhenFeatureFlagIsOff()
     {
-        Assert.ThrowsAny<CelCompilationException>(() =>
-            CelCompiler.Compile<object, CelOptional>("regex.extract('a', 'a')"));
+        var options = new CelCompileOptions
+        {
+            EnabledFeatures = CelFeatureFlags.All & ~CelFeatureFlags.RegexExtensions,
+            EnableCaching = false
+        };
+
+        var ex = Assert.Throws<CelCompilationException>(() =>
+            CelCompiler.Compile<object, CelOptional>("regex.extract('a', 'a')", options));
+        Assert.Equal("feature_disabled", ex.ErrorCode);
+        Assert.Contains("regex extension bundle", ex.Message, StringComparison.Ordinal);
 
         var fn = CelCompiler.Compile<object, CelOptional>("regex.extract('a', 'a')", RegexOptions);
         Assert.True(fn(new object()).HasValue);

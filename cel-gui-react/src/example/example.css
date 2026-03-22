@@ -36,6 +36,32 @@
 }
 
 /* ─────────────────────────────────────────────────
+   Kind/result-type selector bar
+   ───────────────────────────────────────────────── */
+.ex-kind-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.ex-kind-bar__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.ex-kind-bar__select {
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 13px;
+  color: #334155;
+}
+
+/* ─────────────────────────────────────────────────
    Segmented layout toggle
    ───────────────────────────────────────────────── */
 .ex-layout-toggle {

@@ -66,6 +66,48 @@ public static partial class CelCompiler
     private static readonly MethodInfo s_celCompare =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.CelCompare), new[] { typeof(object), typeof(object) })!;
 
+    private static readonly MethodInfo s_dynamicEquals =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DynamicEquals), new[] { typeof(object), typeof(object), typeof(bool) })!;
+
+    private static readonly MethodInfo s_dynamicEqualsJsonElementJsonElement =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DynamicEquals), new[] { typeof(JsonElement), typeof(JsonElement), typeof(bool) })!;
+
+    private static readonly MethodInfo s_dynamicEqualsJsonElementObject =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DynamicEquals), new[] { typeof(JsonElement), typeof(object), typeof(bool) })!;
+
+    private static readonly MethodInfo s_dynamicEqualsObjectJsonElement =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DynamicEquals), new[] { typeof(object), typeof(JsonElement), typeof(bool) })!;
+
+    private static readonly MethodInfo s_dynamicCompare =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DynamicCompare), new[] { typeof(object), typeof(object), typeof(bool) })!;
+
+    private static readonly MethodInfo s_dynamicCompareJsonElementJsonElement =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DynamicCompare), new[] { typeof(JsonElement), typeof(JsonElement), typeof(bool) })!;
+
+    private static readonly MethodInfo s_dynamicCompareJsonElementObject =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DynamicCompare), new[] { typeof(JsonElement), typeof(object), typeof(bool) })!;
+
+    private static readonly MethodInfo s_dynamicCompareObjectJsonElement =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DynamicCompare), new[] { typeof(object), typeof(JsonElement), typeof(bool) })!;
+
+    private static readonly MethodInfo s_dynamicArithmetic =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DynamicArithmetic), new[] { typeof(object), typeof(object), typeof(string), typeof(bool) })!;
+
+    private static readonly MethodInfo s_dynamicArithmeticJsonElementJsonElement =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DynamicArithmetic), new[] { typeof(JsonElement), typeof(JsonElement), typeof(string), typeof(bool) })!;
+
+    private static readonly MethodInfo s_dynamicArithmeticJsonElementObject =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DynamicArithmetic), new[] { typeof(JsonElement), typeof(object), typeof(string), typeof(bool) })!;
+
+    private static readonly MethodInfo s_dynamicArithmeticObjectJsonElement =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DynamicArithmetic), new[] { typeof(object), typeof(JsonElement), typeof(string), typeof(bool) })!;
+
+    private static readonly MethodInfo s_dynamicUnaryMinus =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DynamicUnaryMinus), new[] { typeof(object), typeof(bool) })!;
+
+    private static readonly MethodInfo s_dynamicUnaryMinusJsonElement =
+        typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.DynamicUnaryMinus), new[] { typeof(JsonElement), typeof(bool) })!;
+
     private static readonly MethodInfo s_stringCompare =
         typeof(string).GetMethod(nameof(string.Compare), new[] { typeof(string), typeof(string), typeof(StringComparison) })!;
 
@@ -571,17 +613,24 @@ public static partial class CelCompiler
 
         if (bodyExpr.Type != typeof(TResult))
         {
-            try
+            if (binders.TryCoerceValue(bodyExpr, typeof(TResult), out var coercedResult))
             {
-                bodyExpr = Expression.Convert(bodyExpr, typeof(TResult));
+                bodyExpr = coercedResult;
             }
-            catch (InvalidOperationException ex)
+            else
             {
-                throw CompilationError(
-                    expr,
-                    $"Cannot convert CEL expression result type '{bodyExpr.Type.Name}' to requested type '{typeof(TResult).Name}'",
-                    "result_type_conversion_failed",
-                    innerException: ex);
+                try
+                {
+                    bodyExpr = Expression.Convert(bodyExpr, typeof(TResult));
+                }
+                catch (InvalidOperationException ex)
+                {
+                    throw CompilationError(
+                        expr,
+                        $"Cannot convert CEL expression result type '{bodyExpr.Type.Name}' to requested type '{typeof(TResult).Name}'",
+                        "result_type_conversion_failed",
+                        innerException: ex);
+                }
             }
         }
 

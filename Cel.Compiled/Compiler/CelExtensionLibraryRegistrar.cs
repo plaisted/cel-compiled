@@ -19,11 +19,17 @@ internal static class CelExtensionLibraryRegistrar
             .AddReceiverFunction("indexOf", GetMethod(nameof(CelExtensionFunctions.IndexOf), typeof(string), typeof(string)), CelFunctionOrigin.StringExtension)
             .AddReceiverFunction("lastIndexOf", GetMethod(nameof(CelExtensionFunctions.LastIndexOf), typeof(string), typeof(string)), CelFunctionOrigin.StringExtension)
             .AddReceiverFunction("trim", GetMethod(nameof(CelExtensionFunctions.Trim), typeof(string)), CelFunctionOrigin.StringExtension)
+            .AddReceiverFunction("trimLeft", GetMethod(nameof(CelExtensionFunctions.TrimLeft), typeof(string)), CelFunctionOrigin.StringExtension)
+            .AddReceiverFunction("trimRight", GetMethod(nameof(CelExtensionFunctions.TrimRight), typeof(string)), CelFunctionOrigin.StringExtension)
             .AddReceiverFunction("lowerAscii", GetMethod(nameof(CelExtensionFunctions.LowerAscii), typeof(string)), CelFunctionOrigin.StringExtension)
             .AddReceiverFunction("upperAscii", GetMethod(nameof(CelExtensionFunctions.UpperAscii), typeof(string)), CelFunctionOrigin.StringExtension)
             .AddReceiverFunction("reverse", GetMethod(nameof(CelExtensionFunctions.ReverseString), typeof(string)), CelFunctionOrigin.StringExtension)
             .AddReceiverFunction("quote", GetMethod(nameof(CelExtensionFunctions.Quote), typeof(string)), CelFunctionOrigin.StringExtension)
-            .AddReceiverFunction("format", GetMethod(nameof(CelExtensionFunctions.Format), typeof(string), typeof(object)), CelFunctionOrigin.StringExtension);
+            .AddReceiverFunction("format", GetMethod(nameof(CelExtensionFunctions.Format), typeof(string), typeof(object)), CelFunctionOrigin.StringExtension)
+            .AddReceiverFunction("string", GetMethod(nameof(CelExtensionFunctions.ToString), typeof(object)), CelFunctionOrigin.StringExtension)
+            .AddReceiverFunction("int", GetMethod(nameof(CelExtensionFunctions.ToInt), typeof(object)), CelFunctionOrigin.StringExtension)
+            .AddReceiverFunction("uint", GetMethod(nameof(CelExtensionFunctions.ToUint), typeof(object)), CelFunctionOrigin.StringExtension)
+            .AddReceiverFunction("double", GetMethod(nameof(CelExtensionFunctions.ToDouble), typeof(object)), CelFunctionOrigin.StringExtension);
     }
 
     public static void AddListExtensions(CelFunctionRegistryBuilder builder)

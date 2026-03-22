@@ -1,0 +1,30 @@
+# Keep a single checkout stable across Windows and WSL2 by making
+# line endings explicit at the repository level instead of relying
+# on per-machine core.autocrlf settings.
+* text=auto eol=lf
+
+# Shell scripts must stay LF for WSL/Linux execution.
+*.sh text eol=lf
+
+# Windows command scripts should remain CRLF if they are added later.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Common binary formats should never be line-normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.7z binary
+*.dll binary
+*.exe binary
+*.so binary
+*.dylib binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary

@@ -66,9 +66,111 @@ export interface CelSchema {
   extensions?: CelExtensionBundle[];
 }
 
+// ─── Value node types ─────────────────────────────────────────────────────────
+
+export type CelValueType =
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'timestamp'
+  | 'duration'
+  | 'bytes'
+  | 'list'
+  | 'map'
+  | 'any';
+
+export type CelGuiValueNodeType =
+  | 'field-ref'
+  | 'literal'
+  | 'concat'
+  | 'arithmetic'
+  | 'conditional'
+  | 'transform'
+  | 'advanced-value';
+
+export interface CelGuiValueBaseNode {
+  type: CelGuiValueNodeType;
+  /** Client-side only — not part of the backend JSON contract. */
+  id?: string;
+  /** Client-side only — not part of the backend JSON contract. */
+  metadata?: Record<string, unknown>;
+}
+
+export interface CelGuiFieldRefNode extends CelGuiValueBaseNode {
+  type: 'field-ref';
+  field: string;
+}
+
+export interface CelGuiLiteralNode extends CelGuiValueBaseNode {
+  type: 'literal';
+  value: any;
+  valueType: CelValueType;
+}
+
+export interface CelGuiConcatNode extends CelGuiValueBaseNode {
+  type: 'concat';
+  operands: CelGuiValueNode[];
+  isCollapsed?: boolean;
+}
+
+export interface CelGuiArithmeticNode extends CelGuiValueBaseNode {
+  type: 'arithmetic';
+  operator: '+' | '-' | '*' | '/';
+  left: CelGuiValueNode;
+  right: CelGuiValueNode;
+  isCollapsed?: boolean;
+}
+
+export interface CelGuiConditionalNode extends CelGuiValueBaseNode {
+  type: 'conditional';
+  condition: CelGuiNode; // filter node model
+  then: CelGuiValueNode;
+  otherwise: CelGuiValueNode;
+  isCollapsed?: boolean;
+}
+
+export interface CelGuiTransformNode extends CelGuiValueBaseNode {
+  type: 'transform';
+  operand: CelGuiValueNode;
+  transform: string;
+  args: CelGuiValueNode[];
+  isCollapsed?: boolean;
+}
+
+export interface CelGuiAdvancedValueNode extends CelGuiValueBaseNode {
+  type: 'advanced-value';
+  expression: string;
+}
+
+export type CelGuiValueNode =
+  | CelGuiFieldRefNode
+  | CelGuiLiteralNode
+  | CelGuiConcatNode
+  | CelGuiArithmeticNode
+  | CelGuiConditionalNode
+  | CelGuiTransformNode
+  | CelGuiAdvancedValueNode;
+
+// ─── Expression-family-aware root ─────────────────────────────────────────────
+
+export interface CelGuiFilterRoot {
+  kind: 'filter';
+  root: CelGuiNode;
+}
+
+export interface CelGuiValueRoot {
+  kind: 'value';
+  resultType: CelValueType;
+  root: CelGuiValueNode;
+}
+
+export type CelGuiExpressionNode = CelGuiFilterRoot | CelGuiValueRoot;
+
+// ─── Conversion options ───────────────────────────────────────────────────────
+
 export interface CelConversionOptions {
-  toCelString: (node: CelGuiNode, pretty?: boolean) => Promise<string>;
-  toGuiModel: (source: string) => Promise<CelGuiNode>;
+  toCelString: (node: CelGuiExpressionNode, pretty?: boolean) => Promise<string>;
+  toGuiModel: (source: string, kind?: 'filter' | 'value', resultType?: CelValueType) => Promise<CelGuiExpressionNode>;
 }
 
 export type CelBuilderMode = 'visual' | 'source' | 'auto';
@@ -116,13 +218,16 @@ export interface CelThemeTokens {
 }
 
 export interface CelExpressionBuilderProps {
-  defaultValue?: CelGuiNode;
-  value?: CelGuiNode;
-  onChange?: (node: CelGuiNode) => void;
+  kind?: 'filter' | 'value';
+  /** Declared result type for value expressions. Used when `kind="value"` and no `defaultValue` is provided. */
+  resultType?: CelValueType;
+  defaultValue?: CelGuiExpressionNode;
+  value?: CelGuiExpressionNode;
+  onChange?: (node: CelGuiExpressionNode) => void;
   onSourceChange?: (source: string) => void;
   onModeChange?: (mode: CelBuilderMode) => void;
   onPrettyChange?: (pretty: boolean) => void;
-  mode?: CelBuilderMode;
+  editorMode?: CelBuilderMode;
   pretty?: boolean;
   readOnly?: boolean;
   conversion?: CelConversionOptions;
@@ -134,9 +239,9 @@ export interface CelExpressionBuilderProps {
 }
 
 export interface CelVisualBuilderProps {
-  defaultValue?: CelGuiNode;
-  value?: CelGuiNode;
-  onChange?: (node: CelGuiNode) => void;
+  defaultValue?: CelGuiExpressionNode;
+  value?: CelGuiExpressionNode;
+  onChange?: (node: CelGuiExpressionNode) => void;
   readOnly?: boolean;
   schema?: CelSchema;
   className?: string;

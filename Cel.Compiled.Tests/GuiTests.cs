@@ -415,4 +415,325 @@ public class GuiTests
         var backToSource = CelGuiConverter.ToCelString(gui);
         Assert.Equal(source, backToSource);
     }
+
+    // ── Value expression tests ──────────────────────────────────────────────
+
+    [Fact]
+    public void CelGuiConverter_ToExpressionModel_FilterKind_WrapsFilterRoot()
+    {
+        var expr = CelGuiConverter.ToExpressionModel("user.age >= 18", "filter");
+
+        var filterRoot = Assert.IsType<CelGuiFilterRoot>(expr);
+        Assert.Equal("filter", ((CelGuiExpressionNode)filterRoot).GetType().IsAssignableFrom(typeof(CelGuiFilterRoot)) ? "filter" : "unknown");
+
+        var group = Assert.IsType<CelGuiGroup>(filterRoot.Root);
+        Assert.Equal(1, group.Rules.Count);
+        var rule = Assert.IsType<CelGuiRule>(group.Rules[0]);
+        Assert.Equal("user.age", rule.Field);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToValueModel_FieldRef()
+    {
+        var result = CelGuiConverter.ToValueModel("user.name", "string");
+
+        Assert.Equal("string", result.ResultType);
+        var fieldRef = Assert.IsType<CelGuiFieldRefNode>(result.Root);
+        Assert.Equal("user.name", fieldRef.Field);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToValueModel_StringLiteral()
+    {
+        var result = CelGuiConverter.ToValueModel("\"hello\"", "string");
+
+        var literal = Assert.IsType<CelGuiLiteralNode>(result.Root);
+        Assert.Equal("hello", literal.Value);
+        Assert.Equal("string", literal.ValueType);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToValueModel_NumericLiteral()
+    {
+        var result = CelGuiConverter.ToValueModel("42", "number");
+
+        var literal = Assert.IsType<CelGuiLiteralNode>(result.Root);
+        Assert.Equal(42L, literal.Value);
+        Assert.Equal("number", literal.ValueType);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToValueModel_Arithmetic()
+    {
+        var result = CelGuiConverter.ToValueModel("order.qty * order.price", "number");
+
+        var arith = Assert.IsType<CelGuiArithmeticNode>(result.Root);
+        Assert.Equal("*", arith.Operator);
+        var left = Assert.IsType<CelGuiFieldRefNode>(arith.Left);
+        Assert.Equal("order.qty", left.Field);
+        var right = Assert.IsType<CelGuiFieldRefNode>(arith.Right);
+        Assert.Equal("order.price", right.Field);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToValueModel_StringConcat()
+    {
+        var result = CelGuiConverter.ToValueModel("user.first + \" \" + user.last", "string");
+
+        var concat = Assert.IsType<CelGuiConcatNode>(result.Root);
+        Assert.Equal(3, concat.Operands.Count);
+        var first = Assert.IsType<CelGuiFieldRefNode>(concat.Operands[0]);
+        Assert.Equal("user.first", first.Field);
+        var space = Assert.IsType<CelGuiLiteralNode>(concat.Operands[1]);
+        Assert.Equal(" ", space.Value);
+        var last = Assert.IsType<CelGuiFieldRefNode>(concat.Operands[2]);
+        Assert.Equal("user.last", last.Field);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToValueModel_Conditional()
+    {
+        var result = CelGuiConverter.ToValueModel("user.age >= 18 ? \"Adult\" : \"Minor\"", "string");
+
+        var cond = Assert.IsType<CelGuiConditionalNode>(result.Root);
+        var condition = Assert.IsType<CelGuiGroup>(cond.Condition);
+        Assert.Single(condition.Rules);
+        var thenNode = Assert.IsType<CelGuiLiteralNode>(cond.Then);
+        Assert.Equal("Adult", thenNode.Value);
+        var elseNode = Assert.IsType<CelGuiLiteralNode>(cond.Otherwise);
+        Assert.Equal("Minor", elseNode.Value);
+    }
+
+    [Fact]
+    public void CelGuiConverter_FromValueNode_FieldRef_RoundTrip()
+    {
+        var valueRoot = new CelGuiValueRoot
+        {
+            ResultType = "string",
+            Root = new CelGuiFieldRefNode { Field = "user.name" }
+        };
+
+        var cel = CelGuiConverter.FromExpressionModel(valueRoot);
+        Assert.Equal("user.name", cel);
+    }
+
+    [Fact]
+    public void CelGuiConverter_FromValueNode_ConcatRoundTrip()
+    {
+        var valueRoot = new CelGuiValueRoot
+        {
+            ResultType = "string",
+            Root = new CelGuiConcatNode
+            {
+                Operands = new List<CelGuiValueNode>
+                {
+                    new CelGuiFieldRefNode { Field = "user.first" },
+                    new CelGuiLiteralNode { Value = " ", ValueType = "string" },
+                    new CelGuiFieldRefNode { Field = "user.last" }
+                }
+            }
+        };
+
+        var cel = CelGuiConverter.FromExpressionModel(valueRoot);
+        Assert.Equal("user.first + \" \" + user.last", cel);
+    }
+
+    [Fact]
+    public void CelGuiConverter_FromValueNode_ConditionalRoundTrip()
+    {
+        var source = "user.age >= 18 ? \"Adult\" : \"Minor\"";
+        var valueRoot = CelGuiConverter.ToValueModel(source, "string");
+        var back = CelGuiConverter.FromExpressionModel(valueRoot);
+        Assert.Equal(source, back);
+    }
+
+    [Fact]
+    public void CelGuiConverter_FromValueNode_ArithmeticRoundTrip()
+    {
+        var source = "order.qty * order.price";
+        var valueRoot = CelGuiConverter.ToValueModel(source, "number");
+        var back = CelGuiConverter.FromExpressionModel(valueRoot);
+        Assert.Equal(source, back);
+    }
+
+    [Fact]
+    public void CelGuiConverter_FromExpressionModel_EmptyAdvancedValueRoot_ReturnsEmptyString()
+    {
+        var valueRoot = new CelGuiValueRoot
+        {
+            ResultType = "string",
+            Root = new CelGuiAdvancedValueNode { Expression = "" }
+        };
+
+        var cel = CelGuiConverter.FromExpressionModel(valueRoot);
+        Assert.Equal(string.Empty, cel);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToValueModel_AdvancedFallback_ForUnsupportedSubtree()
+    {
+        // A conditional whose `then` is a comprehension: the comprehension falls back to advanced-value
+        var source = "user.active ? items.all(x, x > 0) : false";
+        var result = CelGuiConverter.ToValueModel(source, "boolean");
+
+        var cond = Assert.IsType<CelGuiConditionalNode>(result.Root);
+        // The `then` branch (items.all(x, x > 0)) should be an advanced-value node
+        var advancedThen = Assert.IsType<CelGuiAdvancedValueNode>(cond.Then);
+        Assert.Equal("items.all(x, x > 0)", advancedThen.Expression);
+        // The `otherwise` branch is a literal false
+        var elseLiteral = Assert.IsType<CelGuiLiteralNode>(cond.Otherwise);
+        Assert.Equal(false, elseLiteral.Value);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ValidateValueNode_StringLiteralForStringType_Valid()
+    {
+        var node = new CelGuiLiteralNode { Value = "hello", ValueType = "string" };
+        var errors = CelGuiConverter.ValidateValueNode(node, "string");
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ValidateValueNode_NumericLiteralForStringType_Invalid()
+    {
+        var node = new CelGuiLiteralNode { Value = 42L, ValueType = "number" };
+        var errors = CelGuiConverter.ValidateValueNode(node, "string");
+        Assert.NotEmpty(errors);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ValidateValueNode_ConcatForNumberType_Invalid()
+    {
+        var node = new CelGuiConcatNode
+        {
+            Operands = new List<CelGuiValueNode>
+            {
+                new CelGuiFieldRefNode { Field = "a" },
+                new CelGuiFieldRefNode { Field = "b" }
+            }
+        };
+        var errors = CelGuiConverter.ValidateValueNode(node, "number");
+        Assert.NotEmpty(errors);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ValidateValueNode_ArithmeticWithStringOperand_Invalid()
+    {
+        var node = new CelGuiArithmeticNode
+        {
+            Operator = "+",
+            Left = new CelGuiLiteralNode { Value = "hello", ValueType = "string" },
+            Right = new CelGuiFieldRefNode { Field = "x" }
+        };
+        var errors = CelGuiConverter.ValidateValueNode(node, "number");
+        Assert.NotEmpty(errors);
+    }
+
+    // ── Numeric + / concat disambiguation ──────────────────────────────────────
+
+    [Fact]
+    public void CelGuiConverter_ToValueModel_PlusWithFieldRefs_NumberContext_IsArithmetic()
+    {
+        // a + b with no literals in a numeric context must be arithmetic, not concat
+        var result = CelGuiConverter.ToValueModel("a + b", "number");
+        var arith = Assert.IsType<CelGuiArithmeticNode>(result.Root);
+        Assert.Equal("+", arith.Operator);
+        var left = Assert.IsType<CelGuiFieldRefNode>(arith.Left);
+        Assert.Equal("a", left.Field);
+        var right = Assert.IsType<CelGuiFieldRefNode>(arith.Right);
+        Assert.Equal("b", right.Field);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToValueModel_PlusWithFieldRefs_StringContext_IsConcat()
+    {
+        // a + b with no literals in a string context must be concat
+        var result = CelGuiConverter.ToValueModel("a + b", "string");
+        Assert.IsType<CelGuiConcatNode>(result.Root);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToValueModel_PlusWithNumericLiteral_IsArithmetic_Regardless()
+    {
+        // a + 1 has a numeric literal → must always be arithmetic
+        var result = CelGuiConverter.ToValueModel("a + 1", "any");
+        Assert.IsType<CelGuiArithmeticNode>(result.Root);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToValueModel_PlusWithStringLiteral_IsConcat_Regardless()
+    {
+        // a + "x" has a string literal → must always be concat
+        var result = CelGuiConverter.ToValueModel("a + \"x\"", "any");
+        Assert.IsType<CelGuiConcatNode>(result.Root);
+    }
+
+    // ── Conditional branch-type validation ─────────────────────────────────────
+
+    [Fact]
+    public void CelGuiConverter_ValidateValueNode_ConditionalBranchTypeMismatch_Invalid()
+    {
+        // then = string literal, otherwise = number literal, expected = string → otherwise fails
+        var node = new CelGuiConditionalNode
+        {
+            Condition = new CelGuiGroup { Combinator = "and", Rules = new List<CelGuiNode>() },
+            Then = new CelGuiLiteralNode { Value = "Adult", ValueType = "string" },
+            Otherwise = new CelGuiLiteralNode { Value = 18L, ValueType = "number" },
+        };
+        var errors = CelGuiConverter.ValidateValueNode(node, "string");
+        Assert.NotEmpty(errors);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ValidateValueNode_ConditionalMatchingBranches_Valid()
+    {
+        var node = new CelGuiConditionalNode
+        {
+            Condition = new CelGuiGroup { Combinator = "and", Rules = new List<CelGuiNode>() },
+            Then = new CelGuiLiteralNode { Value = "Adult", ValueType = "string" },
+            Otherwise = new CelGuiLiteralNode { Value = "Minor", ValueType = "string" },
+        };
+        var errors = CelGuiConverter.ValidateValueNode(node, "string");
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToValueModel_MismatchedLiteralType_Throws()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            CelGuiConverter.ToValueModel("\"hello\"", "number"));
+        Assert.Contains("not compatible", ex.Message);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ToValueModel_ConditionalBranchTypeMismatch_Throws()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            CelGuiConverter.ToValueModel("user.age >= 18 ? \"Adult\" : 0", "string"));
+        Assert.Contains("not compatible", ex.Message);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ExpressionModel_JsonSerialization_FilterRoot()
+    {
+        var expr = CelGuiConverter.ToExpressionModel("user.age >= 18", "filter");
+        var json = JsonSerializer.Serialize(expr, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        Assert.Contains("\"kind\":\"filter\"", json);
+        Assert.Contains("\"type\":\"group\"", json);
+
+        var deserialized = JsonSerializer.Deserialize<CelGuiExpressionNode>(json, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        Assert.IsType<CelGuiFilterRoot>(deserialized);
+    }
+
+    [Fact]
+    public void CelGuiConverter_ExpressionModel_JsonSerialization_ValueRoot()
+    {
+        var expr = CelGuiConverter.ToExpressionModel("user.name", "value", "string");
+        var json = JsonSerializer.Serialize(expr, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        Assert.Contains("\"kind\":\"value\"", json);
+        Assert.Contains("\"resultType\":\"string\"", json);
+
+        var deserialized = JsonSerializer.Deserialize<CelGuiExpressionNode>(json, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+        Assert.IsType<CelGuiValueRoot>(deserialized);
+    }
 }

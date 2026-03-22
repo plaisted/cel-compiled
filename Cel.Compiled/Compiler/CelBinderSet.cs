@@ -10,6 +10,7 @@ namespace Cel.Compiled.Compiler;
 internal sealed class CelBinderSet
 {
     private static readonly ICelBinder s_pocoBinder = new PocoCelBinder();
+    private static readonly Lazy<CelFunctionRegistry> s_standardRegistry = new(() => new CelFunctionRegistryBuilder().AddStandardExtensions().Build());
 
     private readonly ICelBinder _rootBinder;
     private readonly ICelBinder[] _binders;
@@ -35,7 +36,7 @@ internal sealed class CelBinderSet
 
         return new CelBinderSet(SelectRootBinder(contextType, binderMode, typeRegistry, binders), binders)
         {
-            FunctionRegistry = functionRegistry,
+            FunctionRegistry = functionRegistry ?? s_standardRegistry.Value,
             TypeRegistry = typeRegistry,
             EnabledFeatures = enabledFeatures
         };

@@ -1,31 +1,33 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { useCelConversion } from '../hooks/useCelConversion.ts';
-import { CelGuiNode } from '../types.ts';
+import { CelGuiFilterRoot, CelGuiExpressionNode } from '../types.ts';
 
 describe('useCelConversion', () => {
+  const filterNode: CelGuiFilterRoot = {
+    kind: 'filter',
+    root: { type: 'rule', field: 'a', operator: '==', value: 1 },
+  };
+
   it('wraps callbacks and tracks isConverting', async () => {
-    const toCelString = vi.fn().mockImplementation(async (_node) => {
+    const toCelString = vi.fn().mockImplementation(async (_node: CelGuiExpressionNode) => {
       return new Promise((resolve) => setTimeout(() => resolve('a == 1'), 10));
     });
 
     const { result } = renderHook(() => useCelConversion({ toCelString, toGuiModel: vi.fn() }));
 
-    const node: CelGuiNode = { type: 'rule', field: 'a', operator: '==', value: 1 };
-
     let promise!: Promise<string>;
     act(() => {
-      promise = result.current.convertToSource(node);
+      promise = result.current.convertToSource(filterNode);
     });
 
-    // Should be converting while promise is pending
     expect(result.current.isConverting).toBe(true);
 
     const source = await act(async () => await promise);
 
     expect(source).toBe('a == 1');
     expect(result.current.isConverting).toBe(false);
-    expect(toCelString).toHaveBeenCalledWith(node, undefined);
+    expect(toCelString).toHaveBeenCalledWith(filterNode, undefined);
   });
 
   it('surfaces errors during conversion', async () => {
@@ -50,7 +52,7 @@ describe('useCelConversion', () => {
     const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { result } = renderHook(() => useCelConversion());
 
-    const source = await act(async () => await result.current.convertToSource({ type: 'rule', field: 'a', operator: '==', value: 1 }));
+    const source = await act(async () => await result.current.convertToSource(filterNode));
     expect(source).toBe('');
     expect(consoleWarnSpy).toHaveBeenCalledWith('useCelConversion: toCelString is not configured');
 
@@ -61,18 +63,21 @@ describe('useCelConversion', () => {
     consoleWarnSpy.mockRestore();
   });
 
-  it('prunes incomplete blank rules before converting to source', async () => {
+  it('prunes incomplete blank filter rules before converting to source', async () => {
     const toCelString = vi.fn().mockResolvedValue('a == 1');
     const { result } = renderHook(() => useCelConversion({ toCelString, toGuiModel: vi.fn() }));
 
-    const node: CelGuiNode = {
-      type: 'group',
-      combinator: 'and',
-      not: false,
-      rules: [
-        { type: 'rule', field: 'a', operator: '==', value: 1 },
-        { type: 'rule', field: '', operator: '==', value: '' },
-      ],
+    const node: CelGuiFilterRoot = {
+      kind: 'filter',
+      root: {
+        type: 'group',
+        combinator: 'and',
+        not: false,
+        rules: [
+          { type: 'rule', field: 'a', operator: '==', value: 1 },
+          { type: 'rule', field: '', operator: '==', value: '' },
+        ],
+      },
     };
 
     const source = await act(async () => await result.current.convertToSource(node));
@@ -80,22 +85,28 @@ describe('useCelConversion', () => {
     expect(source).toBe('a == 1');
     expect(toCelString).toHaveBeenCalledWith(
       {
-        type: 'group',
-        combinator: 'and',
-        not: false,
-        rules: [{ type: 'rule', field: 'a', operator: '==', value: 1 }],
+        kind: 'filter',
+        root: {
+          type: 'group',
+          combinator: 'and',
+          not: false,
+          rules: [{ type: 'rule', field: 'a', operator: '==', value: 1 }],
+        },
       },
       undefined
     );
   });
 
-  it('returns an empty string when conversion input collapses after sanitizing', async () => {
+  it('returns an empty string when filter root collapses after sanitizing', async () => {
     const toCelString = vi.fn();
     const { result } = renderHook(() => useCelConversion({ toCelString, toGuiModel: vi.fn() }));
 
-    const source = await act(async () =>
-      await result.current.convertToSource({ type: 'rule', field: '', operator: '==', value: '' })
-    );
+    const node: CelGuiFilterRoot = {
+      kind: 'filter',
+      root: { type: 'rule', field: '', operator: '==', value: '' },
+    };
+
+    const source = await act(async () => await result.current.convertToSource(node));
 
     expect(source).toBe('');
     expect(toCelString).not.toHaveBeenCalled();

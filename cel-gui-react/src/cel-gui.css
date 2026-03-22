@@ -31,6 +31,11 @@
   --cel-shadow-soft: 0 18px 48px rgba(42, 52, 57, 0.08);
   --cel-transition: 160ms ease;
   --cel-ring: 0 0 0 2px rgba(0, 83, 219, 0.24), 0 0 0 6px rgba(0, 83, 219, 0.08);
+  --cel-nesting-0: var(--cel-surface);
+  --cel-nesting-1: var(--cel-surface-low);
+  --cel-nesting-2: var(--cel-surface-mid);
+  --cel-nesting-3: var(--cel-surface-high);
+  --cel-nesting-4: var(--cel-surface-highest);
 
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 14px;
@@ -912,4 +917,586 @@
   .cel-group__rules--natural > div::after {
     display: none;
   }
+}
+
+/* ── Value node styles ──────────────────────────────────────────────────── */
+
+.cel-value-node {
+  background: var(--cel-surface-card);
+  border-radius: var(--cel-radius-md);
+  box-shadow: inset 0 0 0 1px var(--cel-outline-strong);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cel-value-node--nested {
+  background: var(--cel-surface-low);
+  box-shadow: inset 0 0 0 1px var(--cel-outline);
+}
+
+.cel-value-node__header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cel-value-node__type-select {
+  padding: 0.3rem 0.55rem;
+  border-radius: var(--cel-radius-sm);
+  border: 1px solid var(--cel-outline-strong);
+  background: var(--cel-surface-card-solid);
+  color: var(--cel-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cel-value-node__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cel-value-node__input {
+  padding: 0.4rem 0.65rem;
+  border-radius: var(--cel-radius-sm);
+  border: 1px solid var(--cel-outline-strong);
+  background: var(--cel-surface-card-solid);
+  color: var(--cel-text);
+  font-size: 0.8rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.cel-value-node__input:focus {
+  outline: none;
+  box-shadow: var(--cel-ring);
+}
+
+.cel-value-node__op-select {
+  padding: 0.3rem 0.55rem;
+  border-radius: var(--cel-radius-sm);
+  border: 1px solid var(--cel-outline-strong);
+  background: var(--cel-surface-card-solid);
+  color: var(--cel-text);
+  font-size: 0.8rem;
+}
+
+.cel-value-node__remove {
+  background: none;
+  border: none;
+  padding: 0.2rem;
+  cursor: pointer;
+  color: var(--cel-text-soft);
+  display: flex;
+  align-items: center;
+  border-radius: var(--cel-radius-sm);
+}
+
+.cel-value-node__remove:hover {
+  color: var(--cel-danger);
+  background: var(--cel-danger-soft);
+}
+
+.cel-value-node__add {
+  background: none;
+  border: 1px dashed var(--cel-outline-strong);
+  border-radius: var(--cel-radius-sm);
+  padding: 0.3rem 0.65rem;
+  font-size: 0.75rem;
+  color: var(--cel-text-soft);
+  cursor: pointer;
+  width: fit-content;
+}
+
+.cel-value-node__add:hover {
+  color: var(--cel-primary);
+  border-color: var(--cel-primary);
+}
+
+.cel-value-node__label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cel-text-soft);
+  min-width: 2.5rem;
+}
+
+/* Concat */
+.cel-value-node__concat-operands {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.cel-value-node__concat-operand {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.cel-value-node__concat-plus {
+  padding: 0.4rem;
+  color: var(--cel-text-soft);
+  font-weight: 700;
+  font-size: 0.9rem;
+  align-self: center;
+}
+
+/* Arithmetic */
+.cel-value-node__arithmetic {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+/* Conditional */
+.cel-value-node__conditional {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.cel-value-node__conditional-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.cel-value-node__conditional-condition {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Transform */
+.cel-value-node__transform {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.cel-value-node__dot {
+  color: var(--cel-text-soft);
+  font-weight: 700;
+}
+
+/* Advanced value */
+.cel-value-node__advanced {
+  min-height: 4rem;
+}
+
+/* ─── Chip value composer ─────────────────────────────────────────────────── */
+
+.cel-chip-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cel-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* Chips */
+.cel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: var(--cel-radius);
+  background: var(--cel-surface-card-solid);
+  box-shadow: inset 0 0 0 1px var(--cel-outline-strong);
+  transition: box-shadow var(--cel-transition), transform var(--cel-transition);
+  max-width: 100%;
+}
+
+.cel-chip--field {
+  background: var(--cel-primary-soft);
+  box-shadow: inset 0 0 0 1px rgba(0, 83, 219, 0.18);
+}
+
+.cel-chip--literal {
+  background: rgba(87, 95, 117, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(87, 95, 117, 0.18);
+}
+
+.cel-chip--operator {
+  background: transparent;
+  box-shadow: none;
+}
+
+.cel-chip--advanced {
+  background: rgba(74, 75, 215, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(74, 75, 215, 0.18);
+}
+
+.cel-chip--transform {
+  background: rgba(31, 122, 87, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(31, 122, 87, 0.18);
+}
+
+.cel-chip--composite {
+  padding: 0.15rem 0.25rem;
+  background: var(--cel-surface-low);
+}
+
+.cel-chip--collapsed {
+  opacity: 0.8;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cel-chip--collapsed:hover {
+  opacity: 1;
+}
+
+.cel-chip--invalid {
+  box-shadow: inset 0 0 0 1px var(--cel-danger) !important;
+  background: var(--cel-danger-soft) !important;
+}
+
+.cel-chip__validation-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cel-danger);
+  margin-left: -0.1rem;
+  margin-right: 0.15rem;
+}
+
+.cel-chip__collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cel-text-soft);
+  cursor: pointer;
+  margin-left: -0.1rem;
+  transition: background var(--cel-transition), color var(--cel-transition);
+}
+
+.cel-chip__collapse-toggle:hover {
+  background: var(--cel-surface-mid);
+  color: var(--cel-primary);
+}
+
+.cel-chip__helper-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+  color: var(--cel-text-soft);
+  cursor: help;
+  margin-left: -0.1rem;
+  opacity: 0.6;
+  transition: opacity var(--cel-transition), color var(--cel-transition);
+}
+
+.cel-chip__helper-icon:hover {
+  opacity: 1;
+  color: var(--cel-primary);
+}
+
+.cel-chip-draggable {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.cel-chip-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1.5rem;
+  color: var(--cel-text-muted);
+  font-size: 0.9rem;
+  cursor: grab;
+  user-select: none;
+  opacity: 0.3;
+  transition: opacity var(--cel-transition), color var(--cel-transition);
+}
+
+.cel-chip-drag-handle:hover {
+  opacity: 1;
+  color: var(--cel-primary);
+}
+
+.cel-chip-drag-handle:active {
+  cursor: grabbing;
+}
+.cel-chip--editing {
+  background: var(--cel-surface-card-solid);
+  box-shadow: inset 0 0 0 1px var(--cel-primary), var(--cel-ring);
+}
+
+.cel-chip__label {
+  padding: 0.3rem 0.55rem;
+  border: none;
+  border-radius: var(--cel-radius);
+  background: transparent;
+  color: var(--cel-text);
+  font-size: 0.8rem;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  line-height: 1.3;
+  text-align: left;
+  transition: color var(--cel-transition);
+}
+
+.cel-chip__label:hover {
+  color: var(--cel-primary);
+}
+
+.cel-chip--operator .cel-chip__label {
+  padding: 0.3rem 0.2rem;
+  color: var(--cel-text-soft);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.cel-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cel-text-soft);
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+  margin-right: 0.2rem;
+  flex-shrink: 0;
+  transition: background var(--cel-transition), color var(--cel-transition);
+}
+
+.cel-chip__remove:hover {
+  background: var(--cel-danger-soft);
+  color: var(--cel-danger);
+}
+
+.cel-chip__inline-input {
+  padding: 0.25rem 0.45rem;
+  border: none;
+  border-radius: var(--cel-radius-sm);
+  background: transparent;
+  color: var(--cel-text);
+  font-size: 0.8rem;
+  font-family: inherit;
+  outline: none;
+  min-width: 4rem;
+  max-width: 16rem;
+}
+
+.cel-chip__inline-input--wide {
+  min-width: 10rem;
+  max-width: 24rem;
+}
+
+select.cel-chip__inline-input {
+  cursor: pointer;
+}
+
+/* Separator between concat operands */
+.cel-chip-separator {
+  color: var(--cel-text-soft);
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0 0.1rem;
+  user-select: none;
+}
+
+/* Insert button */
+.cel-chip-insert {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1.5rem;
+  margin: 0;
+}
+
+.cel-chip-insert__btn {
+  position: absolute;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--cel-primary);
+  color: white;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  line-height: 1;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.cel-chip-insert:hover .cel-chip-insert__btn,
+.cel-chip-insert:focus-within .cel-chip-insert__btn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.cel-chip-insert__btn:hover {
+  background: var(--cel-primary-hover, #0042b3);
+  transform: scale(1.1);
+}
+
+/* Chip picker dropdown */
+.cel-chip-picker {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 14rem;
+  padding: 0.4rem;
+  border-radius: var(--cel-radius-md);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(16px);
+  box-shadow: var(--cel-shadow-soft), inset 0 0 0 1px var(--cel-outline);
+}
+
+.cel-chip-picker__option {
+  padding: 0.45rem 0.65rem;
+  border: none;
+  border-radius: var(--cel-radius-sm);
+  background: transparent;
+  color: var(--cel-text);
+  font-size: 0.8rem;
+  font-family: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--cel-transition), color var(--cel-transition);
+}
+
+.cel-chip-picker__option:hover {
+  background: var(--cel-primary-soft);
+  color: var(--cel-primary);
+}
+
+.cel-chip-picker__cancel {
+  margin-top: 0.2rem;
+  padding: 0.35rem 0.65rem;
+  border: none;
+  border-radius: var(--cel-radius-sm);
+  background: transparent;
+  color: var(--cel-text-muted);
+  font-size: 0.75rem;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--cel-transition);
+  border-top: 1px solid var(--cel-outline);
+}
+
+.cel-chip-picker__cancel:hover {
+  color: var(--cel-danger);
+}
+
+/* Conditional grouped block */
+.cel-chip-conditional {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--cel-radius-md);
+  background: var(--cel-surface-low);
+  box-shadow: inset 0 0 0 1px var(--cel-outline);
+}
+
+.cel-chip-conditional__clause {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.cel-chip-conditional__keyword {
+  min-width: 2.5rem;
+  padding-top: 0.35rem;
+  color: var(--cel-secondary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  flex-shrink: 0;
+}
+
+.cel-chip-conditional__predicate {
+  flex: 1;
+  min-width: 0;
+}
+
+.cel-chip-conditional__branch {
+  flex: 1;
+  min-width: 0;
+}
+
+.cel-chip-conditional__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.1rem;
+}
+
+.cel-chip-conditional__add-else-if {
+  padding: 0.3rem 0.6rem;
+  border: none;
+  border-radius: 999px;
+  background: rgba(74, 75, 215, 0.08);
+  color: var(--cel-secondary);
+  font-size: 0.73rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--cel-transition);
+}
+
+.cel-chip-conditional__add-else-if:hover {
+  background: rgba(74, 75, 215, 0.15);
+}
+
+.cel-chip-conditional__remove {
+  margin-left: auto;
+}
+
+.cel-chip-composer__empty {
+  color: var(--cel-text-muted);
+  font-size: 0.8rem;
+}
+
+.cel-chip-composer__unknown {
+  color: var(--cel-danger);
+  font-size: 0.8rem;
 }
