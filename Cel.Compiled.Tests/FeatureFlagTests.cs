@@ -9,13 +9,8 @@ public class FeatureFlagTests
     [Fact]
     public void DefaultFeatureFlags_PreserveExistingBehavior()
     {
-        var registry = new CelFunctionRegistryBuilder()
-            .AddStandardExtensions()
-            .Build();
-
         var options = new CelCompileOptions
         {
-            FunctionRegistry = registry,
             EnableCaching = false
         };
 
