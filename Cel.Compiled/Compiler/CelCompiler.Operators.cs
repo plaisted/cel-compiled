@@ -215,6 +215,9 @@ public static partial class CelCompiler
     private static Expression CompileArithmetic(string function, Expression left, Expression right, CelBinderSet binders, CelExpr? sourceExpr)
     {
         (left, right) = CoerceJsonDecimalOperands(left, right, binders, function);
+        var bindNonIntegerNumbersAsDecimal = Expression.Constant((binders.EnabledFeatures & CelFeatureFlags.JsonDecimalBinding) != 0);
+
+        (left, right) = TryCoerceJsonElementOperandsToKnownTypes(left, right, binders);
 
         if (function == "_+_" && left.Type == typeof(string) && right.Type == typeof(string))
         {
@@ -247,6 +250,19 @@ public static partial class CelCompiler
                     return Expression.Call(s_subtractDurationDuration, left, right);
             }
             throw NoMatchingOverload(sourceExpr, function, left.Type, right.Type);
+        }
+
+        if (TryCompileSpecializedJsonElementArithmetic(left, right, function, bindNonIntegerNumbersAsDecimal, out var specializedArithmetic))
+            return specializedArithmetic;
+
+        if (RequiresDynamicOperatorDispatch(left.Type, right.Type))
+        {
+            return Expression.Call(
+                s_dynamicArithmetic,
+                BoxIfNeeded(left),
+                BoxIfNeeded(right),
+                Expression.Constant(function),
+                bindNonIntegerNumbersAsDecimal);
         }
 
         if (left.Type != right.Type)
@@ -327,8 +343,24 @@ public static partial class CelCompiler
         throw NoMatchingOverload(sourceExpr, function, left.Type, right.Type);
     }
 
-    private static Expression CompileUnaryMinus(Expression operand, CelExpr? sourceExpr)
+    private static Expression CompileUnaryMinus(Expression operand, CelBinderSet binders, CelExpr? sourceExpr)
     {
+        if (operand.Type == typeof(JsonElement))
+        {
+            return Expression.Call(
+                s_dynamicUnaryMinusJsonElement,
+                operand,
+                Expression.Constant((binders.EnabledFeatures & CelFeatureFlags.JsonDecimalBinding) != 0));
+        }
+
+        if (RequiresDynamicOperatorDispatch(operand.Type))
+        {
+            return Expression.Call(
+                s_dynamicUnaryMinus,
+                BoxIfNeeded(operand),
+                Expression.Constant((binders.EnabledFeatures & CelFeatureFlags.JsonDecimalBinding) != 0));
+        }
+
         Type type = operand.Type;
         if (type == typeof(long) || type == typeof(double) || type == typeof(decimal))
         {
@@ -359,6 +391,8 @@ public static partial class CelCompiler
     private static Expression EqualsExpr(Expression left, Expression right, CelBinderSet binders, CelExpr? sourceExpr = null)
     {
         (left, right) = CoerceJsonDecimalOperands(left, right, binders, "_==_");
+        (left, right) = TryCoerceJsonElementOperandsToKnownTypes(left, right, binders);
+        var bindNonIntegerNumbersAsDecimal = Expression.Constant((binders.EnabledFeatures & CelFeatureFlags.JsonDecimalBinding) != 0);
 
         // 1. Null checks
         if (IsNullConstant(left) && IsNullConstant(right)) return Expression.Constant(true);
@@ -377,6 +411,20 @@ public static partial class CelCompiler
                 return Expression.Equal(Expression.Property(left, s_jsonElementValueKind), Expression.Constant(JsonValueKind.Null));
             if (left.Type.IsValueType && Nullable.GetUnderlyingType(left.Type) == null) return Expression.Constant(false);
             return Expression.Equal(left, Expression.Constant(null, left.Type));
+        }
+
+        if (TryCompileSpecializedJsonElementEquality(left, right, bindNonIntegerNumbersAsDecimal, out var specializedEquality))
+        {
+            return specializedEquality;
+        }
+
+        if (RequiresDynamicOperatorDispatch(left.Type, right.Type))
+        {
+            return Expression.Call(
+                s_dynamicEquals,
+                Expression.Convert(left, typeof(object)),
+                Expression.Convert(right, typeof(object)),
+                bindNonIntegerNumbersAsDecimal);
         }
 
         // 2. Same-type primitives
@@ -429,8 +477,40 @@ public static partial class CelCompiler
     private static Expression CompareExpr(string function, Expression left, Expression right, CelBinderSet binders, CelExpr? sourceExpr)
     {
         (left, right) = CoerceJsonDecimalOperands(left, right, binders, function);
+        (left, right) = TryCoerceJsonElementOperandsToKnownTypes(left, right, binders);
+        var bindNonIntegerNumbersAsDecimal = Expression.Constant((binders.EnabledFeatures & CelFeatureFlags.JsonDecimalBinding) != 0);
 
         Expression cmpExpr;
+
+        if (TryCompileSpecializedJsonElementCompare(left, right, bindNonIntegerNumbersAsDecimal, out cmpExpr))
+        {
+            return function switch
+            {
+                "_<_" => Expression.LessThan(cmpExpr, Expression.Constant(0)),
+                "_<=_" => Expression.LessThanOrEqual(cmpExpr, Expression.Constant(0)),
+                "_>_" => Expression.GreaterThan(cmpExpr, Expression.Constant(0)),
+                "_>=_" => Expression.GreaterThanOrEqual(cmpExpr, Expression.Constant(0)),
+                _ => throw new NotSupportedException($"Ordering operator {function} is not supported.")
+            };
+        }
+
+        if (RequiresDynamicOperatorDispatch(left.Type, right.Type))
+        {
+            cmpExpr = Expression.Call(
+                s_dynamicCompare,
+                Expression.Convert(left, typeof(object)),
+                Expression.Convert(right, typeof(object)),
+                bindNonIntegerNumbersAsDecimal);
+
+            return function switch
+            {
+                "_<_" => Expression.LessThan(cmpExpr, Expression.Constant(0)),
+                "_<=_" => Expression.LessThanOrEqual(cmpExpr, Expression.Constant(0)),
+                "_>_" => Expression.GreaterThan(cmpExpr, Expression.Constant(0)),
+                "_>=_" => Expression.GreaterThanOrEqual(cmpExpr, Expression.Constant(0)),
+                _ => throw new NotSupportedException($"Ordering operator {function} is not supported.")
+            };
+        }
 
         // 1. Same-type primitives (long, ulong, double)
         if (left.Type == right.Type && (left.Type == typeof(long) || left.Type == typeof(ulong) || left.Type == typeof(double) || left.Type == typeof(decimal)))
@@ -557,6 +637,105 @@ public static partial class CelCompiler
     }
 
     private static bool IsNumericType(Type t) => t == typeof(long) || t == typeof(ulong) || t == typeof(double) || t == typeof(decimal);
+
+    private static bool RequiresDynamicOperatorDispatch(params Type[] types)
+        => types.Any(type => type == typeof(object) || IsJsonNumberCarrier(type));
+
+    private static (Expression Left, Expression Right) TryCoerceJsonElementOperandsToKnownTypes(Expression left, Expression right, CelBinderSet binders)
+    {
+        if (CanStaticallyCoerceJsonElement(left.Type, right.Type) && binders.TryCoerceValue(left, right.Type, out var coercedLeft))
+            left = coercedLeft;
+
+        if (CanStaticallyCoerceJsonElement(right.Type, left.Type) && binders.TryCoerceValue(right, left.Type, out var coercedRight))
+            right = coercedRight;
+
+        return (left, right);
+    }
+
+    private static bool CanStaticallyCoerceJsonElement(Type sourceType, Type targetType)
+    {
+        if (sourceType != typeof(JsonElement))
+            return false;
+
+        return targetType == typeof(long)
+            || targetType == typeof(ulong)
+            || targetType == typeof(double)
+            || targetType == typeof(decimal)
+            || targetType == typeof(string)
+            || targetType == typeof(bool);
+    }
+
+    private static bool TryCompileSpecializedJsonElementArithmetic(Expression left, Expression right, string function, ConstantExpression bindNonIntegerNumbersAsDecimal, out Expression expression)
+    {
+        if (left.Type == typeof(JsonElement) && right.Type == typeof(JsonElement))
+        {
+            expression = Expression.Call(s_dynamicArithmeticJsonElementJsonElement, left, right, Expression.Constant(function), bindNonIntegerNumbersAsDecimal);
+            return true;
+        }
+
+        if (left.Type == typeof(JsonElement))
+        {
+            expression = Expression.Call(s_dynamicArithmeticJsonElementObject, left, BoxIfNeeded(right), Expression.Constant(function), bindNonIntegerNumbersAsDecimal);
+            return true;
+        }
+
+        if (right.Type == typeof(JsonElement))
+        {
+            expression = Expression.Call(s_dynamicArithmeticObjectJsonElement, BoxIfNeeded(left), right, Expression.Constant(function), bindNonIntegerNumbersAsDecimal);
+            return true;
+        }
+
+        expression = null!;
+        return false;
+    }
+
+    private static bool TryCompileSpecializedJsonElementEquality(Expression left, Expression right, ConstantExpression bindNonIntegerNumbersAsDecimal, out Expression expression)
+    {
+        if (left.Type == typeof(JsonElement) && right.Type == typeof(JsonElement))
+        {
+            expression = Expression.Call(s_dynamicEqualsJsonElementJsonElement, left, right, bindNonIntegerNumbersAsDecimal);
+            return true;
+        }
+
+        if (left.Type == typeof(JsonElement))
+        {
+            expression = Expression.Call(s_dynamicEqualsJsonElementObject, left, BoxIfNeeded(right), bindNonIntegerNumbersAsDecimal);
+            return true;
+        }
+
+        if (right.Type == typeof(JsonElement))
+        {
+            expression = Expression.Call(s_dynamicEqualsObjectJsonElement, BoxIfNeeded(left), right, bindNonIntegerNumbersAsDecimal);
+            return true;
+        }
+
+        expression = null!;
+        return false;
+    }
+
+    private static bool TryCompileSpecializedJsonElementCompare(Expression left, Expression right, ConstantExpression bindNonIntegerNumbersAsDecimal, out Expression expression)
+    {
+        if (left.Type == typeof(JsonElement) && right.Type == typeof(JsonElement))
+        {
+            expression = Expression.Call(s_dynamicCompareJsonElementJsonElement, left, right, bindNonIntegerNumbersAsDecimal);
+            return true;
+        }
+
+        if (left.Type == typeof(JsonElement))
+        {
+            expression = Expression.Call(s_dynamicCompareJsonElementObject, left, BoxIfNeeded(right), bindNonIntegerNumbersAsDecimal);
+            return true;
+        }
+
+        if (right.Type == typeof(JsonElement))
+        {
+            expression = Expression.Call(s_dynamicCompareObjectJsonElement, BoxIfNeeded(left), right, bindNonIntegerNumbersAsDecimal);
+            return true;
+        }
+
+        expression = null!;
+        return false;
+    }
 
     private static (Expression Left, Expression Right) CoerceJsonDecimalOperands(Expression left, Expression right, CelBinderSet binders, string function)
     {

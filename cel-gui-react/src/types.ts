@@ -90,6 +90,10 @@ export type CelGuiValueNodeType =
 
 export interface CelGuiValueBaseNode {
   type: CelGuiValueNodeType;
+  /** Client-side only — not part of the backend JSON contract. */
+  id?: string;
+  /** Client-side only — not part of the backend JSON contract. */
+  metadata?: Record<string, unknown>;
 }
 
 export interface CelGuiFieldRefNode extends CelGuiValueBaseNode {
@@ -106,6 +110,7 @@ export interface CelGuiLiteralNode extends CelGuiValueBaseNode {
 export interface CelGuiConcatNode extends CelGuiValueBaseNode {
   type: 'concat';
   operands: CelGuiValueNode[];
+  isCollapsed?: boolean;
 }
 
 export interface CelGuiArithmeticNode extends CelGuiValueBaseNode {
@@ -113,6 +118,7 @@ export interface CelGuiArithmeticNode extends CelGuiValueBaseNode {
   operator: '+' | '-' | '*' | '/';
   left: CelGuiValueNode;
   right: CelGuiValueNode;
+  isCollapsed?: boolean;
 }
 
 export interface CelGuiConditionalNode extends CelGuiValueBaseNode {
@@ -120,6 +126,7 @@ export interface CelGuiConditionalNode extends CelGuiValueBaseNode {
   condition: CelGuiNode; // filter node model
   then: CelGuiValueNode;
   otherwise: CelGuiValueNode;
+  isCollapsed?: boolean;
 }
 
 export interface CelGuiTransformNode extends CelGuiValueBaseNode {
@@ -127,6 +134,7 @@ export interface CelGuiTransformNode extends CelGuiValueBaseNode {
   operand: CelGuiValueNode;
   transform: string;
   args: CelGuiValueNode[];
+  isCollapsed?: boolean;
 }
 
 export interface CelGuiAdvancedValueNode extends CelGuiValueBaseNode {

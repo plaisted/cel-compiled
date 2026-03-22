@@ -11,7 +11,7 @@ import { buildCelRootStyle } from './builderStyles.ts';
 const CelCodeEditor = React.lazy(() => import('../editor/CelCodeEditor.tsx'));
 
 export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
-  kind = 'filter',
+  kind = 'value',
   resultType: resultTypeProp,
   defaultValue,
   value,
@@ -55,7 +55,7 @@ export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
     defaultPretty: prettyProp ?? false,
   });
 
-  const { convertToSource, convertToGui, isConverting, error: conversionError } =
+  const { convertToSource, convertToGui, isConverting, error: conversionError, resetError } =
     useCelConversion(conversion);
 
   const isControlled = value !== undefined;
@@ -95,10 +95,11 @@ export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
 
   const handleNodeChange = useCallback(
     (newNode: CelGuiExpressionNode) => {
+      if (conversionError) resetError();
       if (!isControlled) setInternalNode(newNode);
       onChange?.(newNode);
     },
-    [isControlled, onChange, setInternalNode]
+    [isControlled, onChange, setInternalNode, conversionError, resetError]
   );
 
   const handleToggleMode = useCallback(async () => {
@@ -184,6 +185,7 @@ export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
           onChange={(newRoot) =>
             handleNodeChange({ kind: 'value', resultType: currentNode.resultType, root: newRoot })
           }
+          errors={errors}
         />
       );
     }
@@ -249,7 +251,10 @@ export const CelExpressionBuilder: React.FC<CelExpressionBuilderProps> = ({
               <Suspense fallback={<div className="cel-builder__loading">Loading editor...</div>}>
                 <CelCodeEditor
                   value={source}
-                  onChange={setSource}
+                  onChange={(text) => {
+                    if (conversionError) resetError();
+                    setSource(text);
+                  }}
                   readOnly={readOnly}
                   schema={schema}
                   errors={errors}

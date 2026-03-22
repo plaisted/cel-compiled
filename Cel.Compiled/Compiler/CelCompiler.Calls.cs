@@ -88,6 +88,10 @@ public static partial class CelCompiler
             var cond = ctx.Compile(call.Args[0]);
             var left = ctx.Compile(call.Args[1]);
             var right = ctx.Compile(call.Args[2]);
+
+            if (cond.Type != typeof(bool) && ctx.Binders.TryCoerceValue(cond, typeof(bool), out var coercedCond))
+                cond = coercedCond;
+
             (left, right) = CelTypeCoercion.NormalizeTernaryBranches(left, right, ctx.Binders);
             return Expression.Condition(cond, left, right);
         }
@@ -424,7 +428,7 @@ public static partial class CelCompiler
             return call.Function switch
             {
                 "!_" => Expression.Not(operand),
-                "-_" => CompileUnaryMinus(operand, call),
+                "-_" => CompileUnaryMinus(operand, ctx.Binders, call),
                 _ => throw new InvalidOperationException($"Unrecognized unary operator '{call.Function}'.")
             };
         }

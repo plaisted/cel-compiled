@@ -103,11 +103,31 @@ var allowed = program.Invoke(
 
 `Cel.Compiled` is designed for runtime speed. By compiling to delegates and minimizing allocations during evaluation, it substantially outperforms the other .NET CEL libraries in steady-state runtime benchmarks.
 
-Fresh benchmark run on `2026-03-20` from [Cel.Compiled.Benchmarks/Program.cs](Cel.Compiled.Benchmarks/Program.cs), using the `CelNetComparisonBenchmarks` suite on:
+Fresh benchmark run on `2026-03-22` from [Cel.Compiled.Benchmarks/NativeVsCelBenchmarks.cs](Cel.Compiled.Benchmarks/NativeVsCelBenchmarks.cs), comparing compiled CEL against equivalent native C# across POCO and `JsonElement` inputs on:
 
 - .NET SDK `10.0.104`
 - .NET runtime `10.0.4`
 - AMD Ryzen 9 7900X
+
+Representative warm-execution results:
+
+| Expression Shape | Native C# POCO | CEL POCO | Native C# JSON | CEL JSON |
+| --- | ---: | ---: | ---: | ---: |
+| nested string access | `0.38 ns` | `1.38 ns` | `66.51 ns` | `73.24 ns` |
+| string contains | `5.17 ns` | `6.20 ns` | `106.07 ns` | `126.15 ns` |
+| array arithmetic | `0.86 ns` | `4.69 ns` | `30.70 ns` | `70.66 ns` |
+| dictionary arithmetic | `7.57 ns` | `11.19 ns` | `56.02 ns` | `90.17 ns` |
+| int conversion | `5.13 ns` | `8.88 ns` | `73.18 ns` | `95.27 ns` |
+| numeric predicate | `0.92 ns` | `2.42 ns` | `103.80 ns` | `124.67 ns` |
+| temporal arithmetic | `136.9 ns` | `345.8 ns` | `196.1 ns` | `451.0 ns` |
+
+Takeaways from the current CEL-vs-native benchmark set:
+
+- On POCO inputs, `Cel.Compiled` stays close to native C# on simple predicates and string operations, typically within a small constant-factor overhead.
+- On `JsonElement` inputs, compiled CEL is close to native JSON access for string-heavy expressions.
+- Numeric JSON expressions still have the most headroom, while temporal expressions are dominated by timestamp/duration parsing rather than dispatch overhead.
+
+In comparison to other .NET CEL libraries `Cel.Compiled` is substantially faster during runtime but has higher upfront compile cost.
 
 Comparison workload:
 
@@ -132,7 +152,7 @@ Build-and-run from scratch for the same three expressions:
 | `Cel.NET` | `1.10 ms` | `1.6x slower` | `3,398,264 B` |
 | `Telus CEL` | `35.57 us` | `19.1x faster` | `124,528 B` |
 
-The important tradeoff is straightforward: `Cel.Compiled` stays close to native C# on the hot path, but it still pays an upfront compile cost for that speed. On this benchmark it remains far ahead of `Cel.NET` during warm execution, while `Telus CEL` has the fastest build-and-run path among the compared CEL libraries.
+The tradeoff of the initial compile cost vs runtime cost is visible in the results. `Cel.Compiled` stays close to native C# during expression execution and is significantly faster than other CEL libraries. However for single execution use cases `Cel.Compiled` falls behind due to the initial compile cost.
 
 To reproduce the comparison:
 

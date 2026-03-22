@@ -56,10 +56,13 @@ export function useCelConversion(options?: CelConversionOptions) {
     }
   }, []);
 
+  const resetError = useCallback(() => setError(null), []);
+
   return {
     convertToSource,
     convertToGui,
     isConverting,
     error,
+    resetError,
   };
 }

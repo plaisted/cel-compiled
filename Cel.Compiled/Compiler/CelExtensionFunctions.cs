@@ -45,6 +45,10 @@ internal static class CelExtensionFunctions
 
     public static string Trim(string receiver) => receiver.Trim();
 
+    public static string TrimLeft(string receiver) => receiver.TrimStart();
+
+    public static string TrimRight(string receiver) => receiver.TrimEnd();
+
     public static string LowerAscii(string receiver)
     {
         Span<char> chars = stackalloc char[receiver.Length];
@@ -599,6 +603,11 @@ internal static class CelExtensionFunctions
 
         return node;
     }
+
+    public static long ToInt(object value) => (long)CelRuntimeHelpers.ToCelInt(value);
+    public static ulong ToUint(object value) => (ulong)CelRuntimeHelpers.ToCelUint(value);
+    public static double ToDouble(object value) => (double)CelRuntimeHelpers.ToCelDouble(value);
+    public static string ToString(object value) => CelRuntimeHelpers.ToCelString(value);
 
     private static CelRuntimeException UnsupportedMath(string functionName, object? value) =>
         new("no_matching_overload", $"{functionName}() is not supported for type {value?.GetType().Name ?? "null"}.");

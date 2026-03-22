@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import ReactDOM from 'react-dom/client';
 import {
   CelExpressionBuilder,
@@ -64,7 +64,7 @@ const DEFAULT_VALUE_EXPRESSIONS: Record<string, CelGuiExpressionNode> = {
 const App = () => {
   const [expressionKind, setExpressionKind] = useState<'filter' | 'value'>('filter');
   const [resultType, setResultType] = useState<CelValueType>('string');
-  const [currentExpression, setCurrentExpression] = useState<CelGuiExpressionNode>(DEFAULT_FILTER_EXPRESSION);
+  const [currentExpression, setCurrentExpression] = useState<CelGuiExpressionNode>(DEFAULT_VALUE_EXPRESSIONS['string']);
   const [pretty, setPretty] = useState(false);
   const [validationErrors, setValidationErrors] = useState<CelError[]>([]);
   const [evalErrors, setEvalErrors] = useState<CelError[]>([]);
@@ -87,7 +87,7 @@ const App = () => {
   const [evalError, setEvalError] = useState<string | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
 
-  const conversion = {
+  const conversion = useMemo(() => ({
     toCelString: async (expression: CelGuiExpressionNode, isPretty?: boolean) => {
       const url = new URL(`${API_BASE}/api/cel/expression-to-cel`);
       if (isPretty) url.searchParams.set('pretty', 'true');
@@ -113,7 +113,7 @@ const App = () => {
       if (!res.ok) throw new Error('Failed to convert to GUI model');
       return res.json() as Promise<CelGuiExpressionNode>;
     },
-  };
+  }), [expressionKind, resultType]);
 
   const validate = useCallback(async (expression: CelGuiExpressionNode) => {
     try {
@@ -230,8 +230,8 @@ const App = () => {
           value={expressionKind}
           onChange={(e) => handleKindChange(e.target.value as 'filter' | 'value')}
         >
-          <option value="filter">Filter (boolean)</option>
           <option value="value">Value (computed)</option>
+          <option value="filter">Filter (boolean)</option>
         </select>
         {expressionKind === 'value' && (
           <>
@@ -247,44 +247,6 @@ const App = () => {
         )}
       </div>
 
-      {/* Schema + Context editors */}
-      <div className="ex-editors">
-        <div className="ex-editor-panel">
-          <label className="ex-editor-panel__label">
-            Schema <span className="ex-editor-panel__label-hint">(JSON)</span>
-          </label>
-          <textarea
-            value={schemaJson}
-            onChange={(e) => handleSchemaChange(e.target.value)}
-            rows={14}
-            className={`ex-editor-panel__textarea${schemaError ? ' ex-editor-panel__textarea--error' : ''}`}
-            spellCheck={false}
-          />
-          <div aria-live="polite" role="status">
-            {schemaError && (
-              <div className="ex-editor-panel__error">{schemaError}</div>
-            )}
-          </div>
-        </div>
-
-        <div className="ex-editor-panel">
-          <label className="ex-editor-panel__label">
-            Context / State <span className="ex-editor-panel__label-hint">(JSON)</span>
-          </label>
-          <textarea
-            value={contextJson}
-            onChange={(e) => { setContextJson(e.target.value); setContextError(null); }}
-            rows={14}
-            className={`ex-editor-panel__textarea${contextError ? ' ex-editor-panel__textarea--error' : ''}`}
-            spellCheck={false}
-          />
-          <div aria-live="polite" role="status">
-            {contextError && (
-              <div className="ex-editor-panel__error">{contextError}</div>
-            )}
-          </div>
-        </div>
-      </div>
 
       {/* Expression builder */}
       <CelExpressionBuilder
@@ -331,6 +293,46 @@ const App = () => {
           {JSON.stringify(currentExpression, null, 2)}
         </pre>
       </details>
+
+
+      {/* Schema + Context editors */}
+      <div className="ex-editors">
+        <div className="ex-editor-panel">
+          <label className="ex-editor-panel__label">
+            Schema <span className="ex-editor-panel__label-hint">(JSON)</span>
+          </label>
+          <textarea
+            value={schemaJson}
+            onChange={(e) => handleSchemaChange(e.target.value)}
+            rows={14}
+            className={`ex-editor-panel__textarea${schemaError ? ' ex-editor-panel__textarea--error' : ''}`}
+            spellCheck={false}
+          />
+          <div aria-live="polite" role="status">
+            {schemaError && (
+              <div className="ex-editor-panel__error">{schemaError}</div>
+            )}
+          </div>
+        </div>
+
+        <div className="ex-editor-panel">
+          <label className="ex-editor-panel__label">
+            Context / State <span className="ex-editor-panel__label-hint">(JSON)</span>
+          </label>
+          <textarea
+            value={contextJson}
+            onChange={(e) => { setContextJson(e.target.value); setContextError(null); }}
+            rows={14}
+            className={`ex-editor-panel__textarea${contextError ? ' ex-editor-panel__textarea--error' : ''}`}
+            spellCheck={false}
+          />
+          <div aria-live="polite" role="status">
+            {contextError && (
+              <div className="ex-editor-panel__error">{contextError}</div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

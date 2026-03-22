@@ -34,6 +34,15 @@ public class PublicApiSurfaceTests
     }
 
     [Fact]
+    public void CelExpressionCompileCanCoerceJsonElementResultToRequestedStringType()
+    {
+        var program = CelExpression.Compile<JsonElement, string>("user.profile.name");
+        var doc = JsonDocument.Parse("""{"user":{"profile":{"name":"Alice"}}}""");
+
+        Assert.Equal("Alice", program.Invoke(doc.RootElement));
+    }
+
+    [Fact]
     public void CelExpressionCompileWrapsParseErrorsInCompilationException()
     {
         var ex = Assert.Throws<CelCompilationException>(() => CelExpression.Compile("1 + )"));

@@ -9,8 +9,25 @@
  * editing (add/remove/replace) covers the first-pass UX.
  */
 
-import React, { useCallback, useRef, useState } from 'react';
-import type {
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  horizontalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
   CelGuiArithmeticNode,
   CelGuiConcatNode,
   CelGuiConditionalNode,
@@ -20,11 +37,14 @@ import type {
   CelGuiAdvancedValueNode,
   CelGuiValueNode,
   CelValueType,
+  CelError,
+  CelFieldDefinition,
 } from '../types.ts';
 import { useCelBuilder } from '../context/CelBuilderContext.tsx';
 import { useCelSchema } from '../context/CelSchemaContext.tsx';
 import { flattenFields } from '../utils/fieldUtils.ts';
 import { NodeRenderer } from './NodeRenderer.tsx';
+import { ChevronDownIcon, ChevronRightIcon, InfoIcon, WarningIcon } from './Icons.tsx';
 
 // ── Picker options ─────────────────────────────────────────────────────────────
 
@@ -43,6 +63,9 @@ function getPickerOptions(resultType: CelValueType): PickerOption[] {
   ];
   if (resultType === 'string' || resultType === 'any') {
     opts.splice(2, 0, { type: 'concat', label: 'Concat (add text)' });
+  } else {
+    // Hide transform if not applicable to non-string/unknown? 
+    // Actually most transforms are string-based.
   }
   if (resultType === 'number' || resultType === 'any') {
     opts.splice(2, 0, { type: 'arithmetic', label: 'Arithmetic' });
@@ -50,45 +73,65 @@ function getPickerOptions(resultType: CelValueType): PickerOption[] {
   return opts;
 }
 
+function isTypeCompatible(fieldType?: CelFieldDefinition['type'], expectedType?: CelValueType): boolean {
+  if (!expectedType || expectedType === 'any') return true;
+  if (!fieldType) return true; // fallback
+  return fieldType === expectedType;
+}
+
 // ── Default node factory ───────────────────────────────────────────────────────
 
 function makeDefaultNode(type: string, resultType: CelValueType): CelGuiValueNode {
   switch (type) {
     case 'field-ref':
-      return { type: 'field-ref', field: '' };
+      return { id: crypto.randomUUID(), type: 'field-ref', field: '', metadata: { source: 'visual' } };
     case 'literal':
-      return { type: 'literal', value: resultType === 'number' ? 0 : '', valueType: resultType };
+      return {
+        id: crypto.randomUUID(),
+        type: 'literal',
+        value: resultType === 'number' ? 0 : '',
+        valueType: resultType,
+        metadata: { source: 'visual' },
+      };
     case 'concat':
       return {
+        id: crypto.randomUUID(),
         type: 'concat',
         operands: [
-          { type: 'advanced-value', expression: '' },
-          { type: 'advanced-value', expression: '' },
+          { id: crypto.randomUUID(), type: 'field-ref', field: '' },
+          { id: crypto.randomUUID(), type: 'field-ref', field: '' },
         ],
+        metadata: { source: 'visual' },
       };
     case 'arithmetic':
       return {
+        id: crypto.randomUUID(),
         type: 'arithmetic',
         operator: '+',
-        left: { type: 'advanced-value', expression: '' },
-        right: { type: 'advanced-value', expression: '' },
+        left: { id: crypto.randomUUID(), type: 'field-ref', field: '' },
+        right: { id: crypto.randomUUID(), type: 'field-ref', field: '' },
+        metadata: { source: 'visual' },
       };
     case 'conditional':
       return {
+        id: crypto.randomUUID(),
         type: 'conditional',
-        condition: { type: 'group', combinator: 'and', not: false, rules: [] },
-        then: { type: 'advanced-value', expression: '' },
-        otherwise: { type: 'advanced-value', expression: '' },
+        condition: { id: crypto.randomUUID(), type: 'group', combinator: 'and', not: false, rules: [] },
+        then: { id: crypto.randomUUID(), type: 'field-ref', field: '' },
+        otherwise: { id: crypto.randomUUID(), type: 'field-ref', field: '' },
+        metadata: { source: 'visual' },
       };
     case 'transform':
       return {
+        id: crypto.randomUUID(),
         type: 'transform',
-        operand: { type: 'advanced-value', expression: '' },
+        operand: { id: crypto.randomUUID(), type: 'field-ref', field: '' },
         transform: 'upperAscii',
         args: [],
+        metadata: { source: 'visual' },
       };
     default:
-      return { type: 'advanced-value', expression: '' };
+      return { id: crypto.randomUUID(), type: 'advanced-value', expression: '', metadata: { source: 'visual' } };
   }
 }
 
@@ -104,10 +147,12 @@ function combineSiblingNodes(
 ): CelGuiValueNode {
   if (resultType === 'number') {
     return {
+      id: crypto.randomUUID(),
       type: 'arithmetic',
       operator: '+',
       left: insertBefore ? insertedNode : existingNode,
       right: insertBefore ? existingNode : insertedNode,
+      metadata: { source: 'visual' },
     };
   }
 
@@ -115,10 +160,12 @@ function combineSiblingNodes(
   const insertedOperands = insertedNode.type === 'concat' ? insertedNode.operands : [insertedNode];
 
   return {
+    id: crypto.randomUUID(),
     type: 'concat',
     operands: insertBefore
       ? [...insertedOperands, ...existingOperands]
       : [...existingOperands, ...insertedOperands],
+    metadata: { source: 'visual' },
   };
 }
 
@@ -210,15 +257,19 @@ const InsertButton: React.FC<InsertButtonProps> = ({
 
 interface FieldRefChipProps {
   node: CelGuiFieldRefNode;
+  resultType: CelValueType;
   onChange: (n: CelGuiValueNode) => void;
   onRemove?: () => void;
 }
 
-const FieldRefChip: React.FC<FieldRefChipProps> = ({ node, onChange, onRemove }) => {
+const FieldRefChip: React.FC<FieldRefChipProps> = ({ node, resultType, onChange, onRemove }) => {
   const { readOnly } = useCelBuilder();
   const schema = useCelSchema();
   const [editing, setEditing] = useState(!node.field);
-  const fields = flattenFields(schema?.fields ?? []).filter((f) => !f.children?.length);
+  const fields = flattenFields(schema?.fields ?? []).filter((f) => {
+    if (f.children?.length) return false;
+    return isTypeCompatible(f.type, resultType);
+  });
   const label = node.field || 'field…';
 
   if (editing && !readOnly) {
@@ -480,35 +531,160 @@ const OperatorChip: React.FC<OperatorChipProps> = ({ operator, operators, onChan
 // Non-leaf nodes (concat, arithmetic, conditional, transform) are handled by
 // the root composer which decomposes them into their constituent chips.
 
+
+
 interface LeafChipProps {
   node: CelGuiValueNode;
   resultType: CelValueType;
   onChange: (n: CelGuiValueNode) => void;
   onRemove?: () => void;
+  depth?: number;
+  errors?: CelError[];
+  id?: string;
+  isDraggable?: boolean;
 }
 
-const LeafChip: React.FC<LeafChipProps> = ({ node, resultType, onChange, onRemove }) => {
-  switch (node.type) {
-    case 'field-ref':
-      return <FieldRefChip node={node} onChange={onChange} onRemove={onRemove} />;
-    case 'literal':
-      return <LiteralChip node={node} onChange={onChange} onRemove={onRemove} />;
-    case 'advanced-value':
-      return <AdvancedChip node={node} onChange={onChange} onRemove={onRemove} />;
-    default:
-      // Nested composite — render recursively inside a contained chip block
-      return (
-        <div className="cel-chip cel-chip--composite">
-          <ChipValueComposer
-            node={node}
-            resultType={resultType}
-            onChange={onChange}
-            onRemove={onRemove}
-            nested
-          />
+const LeafChip: React.FC<LeafChipProps> = ({
+  node,
+  resultType,
+  onChange,
+  onRemove,
+  depth = 0,
+  errors = [],
+  id,
+  isDraggable = false
+}) => {
+  const { readOnly } = useCelBuilder();
+
+  // Find errors that specifically apply to this node if it had an ID
+  // For now, we'll check if any error message mentions the path if we had paths,
+  // but since we are working with live values, we'll assume the parent passes down relevant errors.
+  const nodeErrors = errors;
+  const hasError = nodeErrors.length > 0;
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: id || '' });
+
+  const style: React.CSSProperties = isDraggable ? {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 1000 : 'auto',
+    position: 'relative',
+    display: 'inline-flex',
+    alignItems: 'center',
+  } : {
+    display: 'inline-flex',
+    alignItems: 'center',
+  };
+
+  const renderInner = () => {
+    switch (node.type) {
+      case 'field-ref':
+        return (
+          <div className={`cel-rule__chip-wrapper ${hasError ? 'cel-chip--invalid' : ''}`} title={hasError ? nodeErrors[0].message : undefined}>
+            {hasError && <span className="cel-chip__validation-icon"><WarningIcon /></span>}
+            <FieldRefChip node={node} resultType={resultType} onChange={onChange} onRemove={onRemove} />
+          </div>
+        );
+      case 'literal':
+        return (
+          <div className={`cel-rule__chip-wrapper ${hasError ? 'cel-chip--invalid' : ''}`} title={hasError ? nodeErrors[0].message : undefined}>
+            {hasError && <span className="cel-chip__validation-icon"><WarningIcon /></span>}
+            <LiteralChip node={node as CelGuiLiteralNode} onChange={onChange} onRemove={onRemove} />
+          </div>
+        );
+      case 'advanced-value':
+        return (
+          <div className={`cel-rule__chip-wrapper ${hasError ? 'cel-chip--invalid' : ''}`} title={hasError ? nodeErrors[0].message : undefined}>
+            {hasError && <span className="cel-chip__validation-icon"><WarningIcon /></span>}
+            <AdvancedChip node={node as CelGuiAdvancedValueNode} onChange={onChange} onRemove={onRemove} />
+          </div>
+        );
+      default: {
+        // Nested composite — render recursively inside a contained chip block
+        const isCollapsed = (node as any).isCollapsed;
+        const toggleCollapse = () => {
+          onChange({ ...node, isCollapsed: !isCollapsed } as CelGuiValueNode);
+        };
+
+        if (isCollapsed) {
+          return (
+            <div className={`cel-rule__chip-wrapper ${hasError ? 'cel-chip--invalid' : ''}`} title={hasError ? nodeErrors[0].message : undefined}>
+              {hasError && <span className="cel-chip__validation-icon"><WarningIcon /></span>}
+              <div className="cel-chip cel-chip--composite cel-chip--collapsed">
+                <button
+                  type="button"
+                  className="cel-chip__collapse-toggle"
+                  onClick={toggleCollapse}
+                  aria-label="Expand"
+                >
+                  <ChevronRightIcon />
+                </button>
+                <span className="cel-chip__label" onClick={toggleCollapse}>
+                  {node.type} (...)
+                </span>
+                {!readOnly && onRemove && (
+                  <button type="button" className="cel-chip__remove" onClick={onRemove}>×</button>
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div className={`cel-rule__chip-wrapper ${hasError ? 'cel-chip--invalid' : ''}`} title={hasError ? nodeErrors[0].message : undefined}>
+            {hasError && <span className="cel-chip__validation-icon"><WarningIcon /></span>}
+            <div className="cel-chip cel-chip--composite">
+              <button
+                type="button"
+                className="cel-chip__collapse-toggle"
+                onClick={toggleCollapse}
+                aria-label="Collapse"
+              >
+                <ChevronDownIcon />
+              </button>
+              <ChipValueComposer
+                node={node}
+                resultType={resultType}
+                onChange={onChange}
+                onRemove={onRemove}
+                nested
+                depth={depth + 1}
+                errors={errors}
+              />
+            </div>
+          </div>
+        );
+      }
+    }
+  };
+
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style}
+      className={isDraggable ? 'cel-chip-draggable' : undefined}
+    >
+      {isDraggable && (
+        <div 
+          className="cel-chip-drag-handle" 
+          {...attributes} 
+          {...listeners}
+          title="Drag to reorder"
+        >
+          ⠿
         </div>
-      );
-  }
+      )}
+      {renderInner()}
+    </div>
+  );
 };
 
 // ── Concat composer ────────────────────────────────────────────────────────────
@@ -521,6 +697,36 @@ interface ConcatComposerProps {
 const ConcatComposer: React.FC<ConcatComposerProps> = ({ node, onChange }) => {
   const { readOnly } = useCelBuilder();
 
+  // Ensure all operands have stable IDs for dnd-kit
+  const operandsWithIds = useMemo(() => {
+    return node.operands.map((op, i) => ({
+      ...op,
+      id: op.id || `concat-op-${i}-${op.type}`,
+    }));
+  }, [node.operands]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    if (readOnly) return;
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = operandsWithIds.findIndex((op) => op.id === active.id);
+      const newIndex = operandsWithIds.findIndex((op) => op.id === over.id);
+      const newOperands = arrayMove(node.operands, oldIndex, newIndex);
+      onChange({ ...node, operands: newOperands });
+    }
+  };
+
   const updateOperand = (i: number, updated: CelGuiValueNode) => {
     const operands = node.operands.map((op, idx) => (idx === i ? updated : op));
     onChange({ ...node, operands });
@@ -528,16 +734,18 @@ const ConcatComposer: React.FC<ConcatComposerProps> = ({ node, onChange }) => {
 
   const insertAt = (i: number, type: string) => {
     const newNode = makeDefaultNode(type, 'string');
+    newNode.id = crypto.randomUUID();
     const operands = [...node.operands.slice(0, i), newNode, ...node.operands.slice(i)];
     onChange({ ...node, operands });
   };
 
   const removeAt = (i: number) => {
-    const operands = node.operands.filter((_, idx) => idx !== i);
-    if (operands.length < 1) {
-      onChange({ type: 'advanced-value', expression: '' });
-    } else if (operands.length === 1) {
+    let operands = node.operands.filter((_, idx) => idx !== i);
+    // Cleanup dangling: if we have 1 operand left, promote it to root
+    if (operands.length === 1) {
       onChange(operands[0]);
+    } else if (operands.length === 0) {
+      onChange({ type: 'advanced-value', expression: '' });
     } else {
       onChange({ ...node, operands });
     }
@@ -552,28 +760,41 @@ const ConcatComposer: React.FC<ConcatComposerProps> = ({ node, onChange }) => {
           ariaLabel="Insert before first part"
         />
       )}
-      {node.operands.map((op, i) => (
-        <React.Fragment key={i}>
-          <LeafChip
-            node={op}
-            resultType="string"
-            onChange={(n) => updateOperand(i, n)}
-            onRemove={!readOnly && node.operands.length > 1 ? () => removeAt(i) : undefined}
-          />
-          {i < node.operands.length - 1 && (
-            <>
-              <span className="cel-chip-separator" aria-hidden="true">+</span>
-              {!readOnly && (
-                <InsertButton
-                  resultType="string"
-                  onInsert={(type) => insertAt(i + 1, type)}
-                  ariaLabel={`Insert after part ${i + 1}`}
-                />
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={operandsWithIds.map((op) => op.id!)}
+          strategy={horizontalListSortingStrategy}
+        >
+          {operandsWithIds.map((op, i) => (
+            <React.Fragment key={op.id}>
+              <LeafChip
+                id={op.id}
+                isDraggable={!readOnly}
+                node={op}
+                resultType="string"
+                onChange={(n) => updateOperand(i, n)}
+                onRemove={!readOnly && node.operands.length > 1 ? () => removeAt(i) : undefined}
+              />
+              {i < node.operands.length - 1 && (
+                <>
+                  <span className="cel-chip-separator" aria-hidden="true">+</span>
+                  {!readOnly && (
+                    <InsertButton
+                      resultType="string"
+                      onInsert={(type) => insertAt(i + 1, type)}
+                      ariaLabel={`Insert after part ${i + 1}`}
+                    />
+                  )}
+                </>
               )}
-            </>
-          )}
-        </React.Fragment>
-      ))}
+            </React.Fragment>
+          ))}
+        </SortableContext>
+      </DndContext>
       {!readOnly && (
         <InsertButton
           resultType="string"
@@ -720,17 +941,30 @@ const ConditionalComposer: React.FC<ConditionalComposerProps> = ({
 
 // ── Transform composer ─────────────────────────────────────────────────────────
 
-const KNOWN_TRANSFORMS = [
-  'upperAscii',
-  'lowerAscii',
-  'trim',
-  'trimLeft',
-  'trimRight',
-  'string',
-  'int',
-  'double',
-  'size',
-];
+const TRANSFORM_HELP: Record<string, string> = {
+  upperAscii: 'Converts a string to upper case (ASCII only).',
+  lowerAscii: 'Converts a string to lower case (ASCII only).',
+  trim: 'Removes leading and trailing whitespace.',
+  trimLeft: 'Removes leading whitespace.',
+  trimRight: 'Removes trailing whitespace.',
+  string: 'Converts the value to a string.',
+  int: 'Converts the value to an integer.',
+  uint: 'Converts the value to an unsigned integer.',
+  double: 'Converts the value to a floating-point number.',
+  size: 'Returns the number of elements or characters.',
+  reverse: 'Reverses the order of elements or characters.',
+  quote: 'Wraps the string in double quotes and escapes special characters.',
+};
+
+const KNOWN_TRANSFORMS = Object.keys(TRANSFORM_HELP);
+
+const HelperTooltip: React.FC<{ text: string }> = ({ text }) => {
+  return (
+    <div className="cel-chip__helper-icon" title={text}>
+      <InfoIcon />
+    </div>
+  );
+};
 
 interface TransformComposerProps {
   node: CelGuiTransformNode;
@@ -786,6 +1020,7 @@ const TransformComposer: React.FC<TransformComposerProps> = ({
           >
             {node.transform}()
           </button>
+          {TRANSFORM_HELP[node.transform] && <HelperTooltip text={TRANSFORM_HELP[node.transform]} />}
           {!readOnly && onRemove && (
             <button
               type="button"
@@ -809,8 +1044,11 @@ export interface ChipValueComposerProps {
   resultType: CelValueType;
   onChange: (node: CelGuiValueNode) => void;
   onRemove?: () => void;
+  errors?: CelError[];
   /** When true, renders without the outer wrapper (used in recursive/nested positions). */
   nested?: boolean;
+  /** The nesting depth, used for styling. */
+  depth?: number;
 }
 
 export const ChipValueComposer: React.FC<ChipValueComposerProps> = ({
@@ -819,12 +1057,16 @@ export const ChipValueComposer: React.FC<ChipValueComposerProps> = ({
   onChange,
   onRemove,
   nested = false,
+  depth = 0,
+  errors = [],
 }) => {
   const { readOnly } = useCelBuilder();
 
   const isEmpty =
     !node ||
     (node.type === 'advanced-value' && (node as CelGuiAdvancedValueNode).expression === '');
+
+  const nestingClass = `cel-nesting-${Math.min(depth, 4)}`;
 
   // Insert a new node, promoting simple roots to concat/arithmetic when needed
   const handleInsert = useCallback(
@@ -873,10 +1115,13 @@ export const ChipValueComposer: React.FC<ChipValueComposerProps> = ({
                 ariaLabel="Insert before"
               />
             )}
-            <FieldRefChip
+            <LeafChip
               node={node as CelGuiFieldRefNode}
+              resultType={resultType}
               onChange={onChange}
               onRemove={onRemove}
+              errors={errors}
+              depth={depth}
             />
             {!readOnly && supportsSiblingComposition(resultType) && (
               <InsertButton
@@ -903,10 +1148,13 @@ export const ChipValueComposer: React.FC<ChipValueComposerProps> = ({
                 ariaLabel="Insert before"
               />
             )}
-            <LiteralChip
+            <LeafChip
               node={node as CelGuiLiteralNode}
+              resultType={resultType}
               onChange={onChange}
               onRemove={onRemove}
+              errors={errors}
+              depth={depth}
             />
             {!readOnly && supportsSiblingComposition(resultType) && (
               <InsertButton
@@ -923,10 +1171,13 @@ export const ChipValueComposer: React.FC<ChipValueComposerProps> = ({
       case 'advanced-value':
         return (
           <div className="cel-chip-row">
-            <AdvancedChip
+            <LeafChip
               node={node as CelGuiAdvancedValueNode}
+              resultType={resultType}
               onChange={onChange}
               onRemove={onRemove}
+              errors={errors}
+              depth={depth}
             />
           </div>
         );
@@ -962,7 +1213,11 @@ export const ChipValueComposer: React.FC<ChipValueComposerProps> = ({
   }
 
   return (
-    <div className="cel-chip-composer" aria-label="Value expression composer">
+    <div
+      className={`cel-chip-composer ${nestingClass}`}
+      aria-label="Value expression composer"
+      style={{ '--cel-current-nesting': `var(--cel-nesting-${Math.min(depth, 4)})` } as React.CSSProperties}
+    >
       {renderContent()}
     </div>
   );

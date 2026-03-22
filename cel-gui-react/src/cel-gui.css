@@ -31,6 +31,11 @@
   --cel-shadow-soft: 0 18px 48px rgba(42, 52, 57, 0.08);
   --cel-transition: 160ms ease;
   --cel-ring: 0 0 0 2px rgba(0, 83, 219, 0.24), 0 0 0 6px rgba(0, 83, 219, 0.08);
+  --cel-nesting-0: var(--cel-surface);
+  --cel-nesting-1: var(--cel-surface-low);
+  --cel-nesting-2: var(--cel-surface-mid);
+  --cel-nesting-3: var(--cel-surface-high);
+  --cel-nesting-4: var(--cel-surface-highest);
 
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 14px;
@@ -1138,10 +1143,104 @@
 }
 
 .cel-chip--composite {
-  padding: 0.25rem 0.5rem;
+  padding: 0.15rem 0.25rem;
   background: var(--cel-surface-low);
 }
 
+.cel-chip--collapsed {
+  opacity: 0.8;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cel-chip--collapsed:hover {
+  opacity: 1;
+}
+
+.cel-chip--invalid {
+  box-shadow: inset 0 0 0 1px var(--cel-danger) !important;
+  background: var(--cel-danger-soft) !important;
+}
+
+.cel-chip__validation-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cel-danger);
+  margin-left: -0.1rem;
+  margin-right: 0.15rem;
+}
+
+.cel-chip__collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cel-text-soft);
+  cursor: pointer;
+  margin-left: -0.1rem;
+  transition: background var(--cel-transition), color var(--cel-transition);
+}
+
+.cel-chip__collapse-toggle:hover {
+  background: var(--cel-surface-mid);
+  color: var(--cel-primary);
+}
+
+.cel-chip__helper-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+  color: var(--cel-text-soft);
+  cursor: help;
+  margin-left: -0.1rem;
+  opacity: 0.6;
+  transition: opacity var(--cel-transition), color var(--cel-transition);
+}
+
+.cel-chip__helper-icon:hover {
+  opacity: 1;
+  color: var(--cel-primary);
+}
+
+.cel-chip-draggable {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.cel-chip-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1.5rem;
+  color: var(--cel-text-muted);
+  font-size: 0.9rem;
+  cursor: grab;
+  user-select: none;
+  opacity: 0.3;
+  transition: opacity var(--cel-transition), color var(--cel-transition);
+}
+
+.cel-chip-drag-handle:hover {
+  opacity: 1;
+  color: var(--cel-primary);
+}
+
+.cel-chip-drag-handle:active {
+  cursor: grabbing;
+}
 .cel-chip--editing {
   background: var(--cel-surface-card-solid);
   box-shadow: inset 0 0 0 1px var(--cel-primary), var(--cel-ring);
@@ -1233,9 +1332,15 @@ select.cel-chip__inline-input {
   position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1.5rem;
+  margin: 0;
 }
 
 .cel-chip-insert__btn {
+  position: absolute;
+  z-index: 10;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1244,17 +1349,25 @@ select.cel-chip__inline-input {
   padding: 0;
   border: none;
   border-radius: 999px;
-  background: rgba(0, 83, 219, 0.08);
-  color: var(--cel-primary);
-  font-size: 0.85rem;
-  font-weight: 700;
+  background: var(--cel-primary);
+  color: white;
+  font-size: 1rem;
+  font-weight: 500;
   cursor: pointer;
   line-height: 1;
-  transition: background var(--cel-transition), transform var(--cel-transition);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.cel-chip-insert:hover .cel-chip-insert__btn,
+.cel-chip-insert:focus-within .cel-chip-insert__btn {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .cel-chip-insert__btn:hover {
-  background: rgba(0, 83, 219, 0.16);
+  background: var(--cel-primary-hover, #0042b3);
   transform: scale(1.1);
 }
 
