@@ -1,9 +1,10 @@
 import React, { useCallback, useMemo } from 'react';
-import { CelVisualBuilderProps, CelGuiNode } from '../types.ts';
+import { CelVisualBuilderProps, CelGuiExpressionNode } from '../types.ts';
 import { useCelExpression } from '../hooks/useCelExpression.ts';
 import { CelSchemaProvider } from '../context/CelSchemaContext.tsx';
 import { CelBuilderProvider } from '../context/CelBuilderContext.tsx';
 import { NodeRenderer } from './NodeRenderer.tsx';
+import { ChipValueComposer } from './ChipValueComposer.tsx';
 import { buildCelRootStyle } from './builderStyles.ts';
 
 export const CelVisualBuilder: React.FC<CelVisualBuilderProps> = ({
@@ -32,23 +33,44 @@ export const CelVisualBuilder: React.FC<CelVisualBuilderProps> = ({
     .join(' ');
 
   const handleNodeChange = useCallback(
-    (newNode: CelGuiNode) => {
+    (newNode: CelGuiExpressionNode) => {
       if (!isControlled) setInternalNode(newNode);
       onChange?.(newNode);
     },
     [isControlled, onChange, setInternalNode]
   );
 
+  const renderTree = () => {
+    if (currentNode?.kind === 'value') {
+      return (
+        <ChipValueComposer
+          node={currentNode.root}
+          resultType={currentNode.resultType}
+          onChange={(newRoot) =>
+            handleNodeChange({ kind: 'value', resultType: currentNode.resultType, root: newRoot })
+          }
+        />
+      );
+    }
+
+    if (currentNode?.kind === 'filter') {
+      return (
+        <NodeRenderer
+          node={currentNode.root}
+          onChange={(newRoot) => handleNodeChange({ kind: 'filter', root: newRoot })}
+        />
+      );
+    }
+
+    return <div className="cel-builder__empty">{emptyState ?? 'No expression'}</div>;
+  };
+
   return (
     <CelSchemaProvider schema={schema}>
       <CelBuilderProvider readOnly={readOnly}>
         <div className={rootClassName} style={rootStyle}>
           <div className="cel-builder__content">
-            {currentNode ? (
-              <NodeRenderer node={currentNode} onChange={handleNodeChange} />
-            ) : (
-              <div className="cel-builder__empty">{emptyState ?? 'No expression'}</div>
-            )}
+            {renderTree()}
           </div>
         </div>
       </CelBuilderProvider>

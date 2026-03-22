@@ -23,3 +23,9 @@ export { NaturalRuleNode } from '../components/NaturalRuleNode.tsx';
 export type { NaturalRuleNodeProps } from '../components/NaturalRuleNode.tsx';
 
 export { flattenFields, groupFields } from '../utils/fieldUtils.ts';
+
+export { ValueNodeRenderer } from '../components/ValueNodeRenderer.tsx';
+export type { ValueNodeRendererProps } from '../components/ValueNodeRenderer.tsx';
+
+export { ChipValueComposer } from '../components/ChipValueComposer.tsx';
+export type { ChipValueComposerProps } from '../components/ChipValueComposer.tsx';

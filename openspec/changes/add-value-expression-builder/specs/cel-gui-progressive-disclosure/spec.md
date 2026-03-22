@@ -1,15 +1,15 @@
 ## MODIFIED Requirements
 
 ### Requirement: Three-tier editing with visual, source, and auto modes
-The `<CelExpressionBuilder>` SHALL support an `editorMode` prop with values `"visual"`, `"source"`, and `"auto"`. In `"visual"` mode, only the active expression-family tree is shown. In `"source"` mode, only the code editor is shown. In `"auto"` mode (default), the active expression-family tree is shown with a toggle to switch to source view. The component SHALL use a separate `kind` prop to select whether the visual editor is the filter builder or the value builder.
+The `<CelExpressionBuilder>` SHALL support an `editorMode` prop with values `"visual"`, `"source"`, and `"auto"`. In `"visual"` mode, only the active expression-family visual editor is shown. In `"source"` mode, only the code editor is shown. In `"auto"` mode (default), the active visual editor is shown with a toggle to switch to source view. The component SHALL use a separate `kind` prop to select whether the visual editor is the filter builder or the value chip composer.
 
 #### Scenario: Auto mode shows the filter tree with toggle
 - **WHEN** `kind="filter"` and `editorMode="auto"` (or `editorMode` is omitted) are passed to `<CelExpressionBuilder>`
 - **THEN** the component renders the filter tree and a toggle control to switch to source view
 
-#### Scenario: Auto mode shows the value tree with toggle
+#### Scenario: Auto mode shows the value composer with toggle
 - **WHEN** `kind="value"` and `editorMode="auto"` are passed to `<CelExpressionBuilder>` with a value-expression root
-- **THEN** the component renders the value tree and a toggle control to switch to source view
+- **THEN** the component renders the inline value composer and a toggle control to switch to source view
 
 #### Scenario: Source mode shows code editor
 - **WHEN** `editorMode="source"` is passed and a conversion hook is provided
@@ -39,11 +39,11 @@ When the user switches from source to visual mode (or submits edits in source mo
 
 #### Scenario: Source-to-filter conversion
 - **WHEN** a user edits CEL text in source mode and switches back to visual mode while `kind="filter"`
-- **THEN** the component calls `convertToGui` with the current text and renders the returned filter expression root as a visual tree
+- **THEN** the component calls `convertToGui` with the current text and renders the returned filter expression root as the filter visual editor
 
 #### Scenario: Source-to-value conversion
 - **WHEN** a user edits CEL text in source mode and switches back to visual mode while `kind="value"`
-- **THEN** the component calls `convertToGui` with the current text and renders the returned value expression root as a visual tree
+- **THEN** the component calls `convertToGui` with the current text and renders the returned value expression root as the inline value composer
 
 #### Scenario: Parse error in source mode
 - **WHEN** `convertToGui` rejects with an error

@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react';
-import { CelGuiNode, CelBuilderMode } from '../types.ts';
+import { CelGuiExpressionNode, CelBuilderMode } from '../types.ts';
 
 export interface UseCelExpressionOptions {
-  defaultValue?: CelGuiNode;
+  defaultValue?: CelGuiExpressionNode;
   defaultSource?: string;
   defaultMode?: CelBuilderMode;
   defaultPretty?: boolean;
@@ -14,13 +14,13 @@ export function useCelExpression({
   defaultMode = 'auto',
   defaultPretty = false,
 }: UseCelExpressionOptions = {}) {
-  const [node, setNodeState] = useState<CelGuiNode | undefined>(defaultValue);
+  const [node, setNodeState] = useState<CelGuiExpressionNode | undefined>(defaultValue);
   const [source, setSourceState] = useState<string>(defaultSource);
   const [mode, setModeState] = useState<CelBuilderMode>(defaultMode);
   const [pretty, setPrettyState] = useState<boolean>(defaultPretty);
   const [isDirty, setIsDirty] = useState(false);
 
-  const setNode = useCallback((newNode: CelGuiNode) => {
+  const setNode = useCallback((newNode: CelGuiExpressionNode) => {
     setNodeState(newNode);
     setIsDirty(true);
   }, []);

@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Bidirectional Simple GUI Conversion
-The system SHALL support bidirectional conversion between `CelExpr` AST nodes and an expression-family-aware GUI JSON structure. Filter expressions SHALL continue to support logical groups, comparisons, receiver-style operators, macros, advanced nodes, and optional navigation. Value expressions SHALL support typed value nodes for field references, literals, concatenation, arithmetic, conditionals, transforms, and advanced fallback.
+The system SHALL support bidirectional conversion between `CelExpr` AST nodes and an expression-family-aware GUI JSON structure. Filter expressions SHALL continue to support logical groups, comparisons, receiver-style operators, macros, advanced nodes, and optional navigation. Value expressions SHALL continue to use a typed structured model for field references, literals, concatenation, arithmetic, conditionals, transforms, and advanced fallback, even though the primary visual UI is an inline chip composer rather than a tree editor.
 
 #### Scenario: Convert a simple filter comparison to a filter expression root
 - **WHEN** the CEL expression `"user.age >= 18"` is converted to GUI format for filter editing
@@ -14,6 +14,10 @@ The system SHALL support bidirectional conversion between `CelExpr` AST nodes an
 #### Scenario: Convert a value concat tree back to CEL
 - **WHEN** a value expression root containing a concat node of `user.first`, `" "`, and `user.last` is converted to CEL
 - **THEN** the result is the CEL expression `user.first + " " + user.last`
+
+#### Scenario: Structured value model remains UI-independent
+- **WHEN** the value builder renders an inline chip composer for a structured value expression
+- **THEN** conversion still operates on the typed value-expression model rather than on UI chip state alone
 
 ### Requirement: Lossless Advanced Expression Fallback
 When a `CelExpr` AST node (or subtree) cannot be mapped to the supported GUI model, the system SHALL preserve it as raw CEL within the appropriate advanced node type and SHALL parse that raw CEL back into the final AST when converting to source.
@@ -42,3 +46,7 @@ The converter SHALL accept an expected result type for value-expression conversi
 #### Scenario: Numeric value expression remains valid
 - **WHEN** a value expression with expected type `number` parses to `order.qty * order.price`
 - **THEN** the converter returns a value expression root whose arithmetic node is accepted as a valid numeric tree
+
+#### Scenario: Plus operator respects numeric context
+- **WHEN** a value expression with expected type `number` parses to `a + b`
+- **THEN** the converter does not silently normalize the expression into a string-concat representation solely because both operands are non-literals

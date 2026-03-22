@@ -430,4 +430,288 @@ public static class CelGuiConverter
         if (expr == null) return new CelIdent(lastSegment);
         return new CelSelect(expr, lastSegment, nextIsOptional);
     }
+
+    // ─── Expression-family-aware entry points ─────────────────────────────────
+
+    /// <summary>
+    /// Converts a CEL source expression into an expression-family-aware root.
+    /// For filter expressions the result is a <see cref="CelGuiFilterRoot"/>.
+    /// For value expressions use <see cref="ToValueModel"/> instead.
+    /// </summary>
+    public static CelGuiExpressionNode ToExpressionModel(string celExpression, string kind = "filter", string resultType = "string")
+    {
+        if (kind == "value")
+            return ToValueModel(celExpression, resultType);
+
+        var filterRoot = ToGuiModel(celExpression);
+        return new CelGuiFilterRoot { Root = filterRoot };
+    }
+
+    /// <summary>
+    /// Converts a CEL source expression into a value expression root using the given expected result type.
+    /// </summary>
+    public static CelGuiValueRoot ToValueModel(string celExpression, string resultType = "string")
+    {
+        var ast = CelParser.Parse(celExpression);
+        var valueNode = ToValueNode(ast, resultType);
+        var errors = ValidateValueNode(valueNode, resultType);
+        if (errors.Count > 0)
+            throw new InvalidOperationException(string.Join(" ", errors));
+        return new CelGuiValueRoot { ResultType = resultType, Root = valueNode };
+    }
+
+    /// <summary>
+    /// Converts an expression-family-aware root back to a CEL source string.
+    /// </summary>
+    public static string FromExpressionModel(CelGuiExpressionNode expression, bool pretty = false)
+    {
+        if (expression is CelGuiValueRoot emptyValueRoot &&
+            emptyValueRoot.Root is CelGuiAdvancedValueNode emptyAdvanced &&
+            string.IsNullOrWhiteSpace(emptyAdvanced.Expression))
+        {
+            return string.Empty;
+        }
+
+        CelExpr ast = expression switch
+        {
+            CelGuiFilterRoot filterRoot => FromGuiModel(filterRoot.Root),
+            CelGuiValueRoot valueRoot => FromValueNode(valueRoot.Root),
+            _ => throw new NotSupportedException($"Unknown expression kind: {expression.GetType().Name}")
+        };
+        return pretty ? CelPrettyPrinter.Print(ast) : CelPrinter.Print(ast);
+    }
+
+    // ─── Value-node parsing (CEL AST → CelGuiValueNode) ──────────────────────
+
+    /// <param name="expectedType">The declared result type hint used to disambiguate ambiguous operators such as <c>+</c>.</param>
+    internal static CelGuiValueNode ToValueNode(CelExpr expr, string expectedType = "any")
+    {
+        // 1. Ternary conditional:  expr ? then : else  →  conditional node
+        if (expr is CelCall ternary && ternary.Function == "_?_:_" && ternary.Target == null && ternary.Args.Count == 3)
+        {
+            // Wrap the condition in a group so the filter builder always has a container
+            var rawCondition = ToGuiNode(ternary.Args[0]);
+            var condition = rawCondition is CelGuiGroup
+                ? rawCondition
+                : new CelGuiGroup { Combinator = "and", Rules = new List<CelGuiNode> { rawCondition } };
+            var thenNode = ToValueNode(ternary.Args[1], expectedType);
+            var elseNode = ToValueNode(ternary.Args[2], expectedType);
+            return new CelGuiConditionalNode { Condition = condition, Then = thenNode, Otherwise = elseNode };
+        }
+
+        // 2. Binary + — can be string concat or numeric addition; resolve using expectedType and literal presence
+        if (expr is CelCall addCall && addCall.Function == "_+_" && addCall.Target == null && addCall.Args.Count == 2)
+        {
+            var operands = new List<CelGuiValueNode>();
+            FlattenConcatOrArithmetic(expr, "+", operands, expectedType);
+
+            bool hasStringLiteral = operands.Any(n => n is CelGuiLiteralNode lit && lit.ValueType == "string");
+            bool hasNumericLiteral = operands.Any(n => n is CelGuiLiteralNode lit && (lit.ValueType == "number" || lit.ValueType == "integer" || lit.ValueType == "double"));
+
+            // Prefer explicit expectedType when no literals constrain the decision.
+            bool numericContext = hasNumericLiteral || (!hasStringLiteral && (expectedType == "number"));
+            bool stringContext  = hasStringLiteral  || (!hasNumericLiteral && (expectedType == "string"));
+
+            if (!numericContext || stringContext)
+            {
+                // Treat as string concat
+                return new CelGuiConcatNode { Operands = operands };
+            }
+
+            // Treat as arithmetic
+            if (operands.Count == 2)
+            {
+                return new CelGuiArithmeticNode { Operator = "+", Left = operands[0], Right = operands[1] };
+            }
+            // For 3+ numeric operands fold left-associative
+            var result = operands[0];
+            for (int i = 1; i < operands.Count; i++)
+                result = new CelGuiArithmeticNode { Operator = "+", Left = result, Right = operands[i] };
+            return result;
+        }
+
+        // 3. Other arithmetic operators
+        if (expr is CelCall arithCall && arithCall.Target == null && arithCall.Args.Count == 2)
+        {
+            string? op = arithCall.Function switch
+            {
+                "_-_" => "-",
+                "_*_" => "*",
+                "_/_" => "/",
+                _ => null
+            };
+            if (op != null)
+            {
+                return new CelGuiArithmeticNode
+                {
+                    Operator = op,
+                    Left = ToValueNode(arithCall.Args[0], "number"),
+                    Right = ToValueNode(arithCall.Args[1], "number")
+                };
+            }
+        }
+
+        // 4. Receiver-style transform calls  (operand.transform(args…))
+        if (expr is CelCall txCall && txCall.Target != null)
+        {
+            string? transform = txCall.Function switch
+            {
+                "upperAscii" or "lowerAscii" or "trim" or "trimLeft" or "trimRight"
+                or "replace" or "split" or "join" or "reverse" or "size" or "string"
+                or "int" or "uint" or "double" or "bytes" or "duration" or "timestamp" => txCall.Function,
+                _ => null
+            };
+            if (transform != null)
+            {
+                var operand = ToValueNode(txCall.Target);
+                var args = txCall.Args.Select(a => ToValueNode(a)).ToList();
+                return new CelGuiTransformNode { Operand = operand, Transform = transform, Args = args };
+            }
+        }
+
+        // 5. Constant literal
+        if (expr is CelConstant constant)
+        {
+            var val = constant.Value.Value;
+            string vt = val switch
+            {
+                null => "null",
+                bool => "boolean",
+                string => "string",
+                long or int => "number",
+                double or float => "number",
+                _ => "string"
+            };
+            return new CelGuiLiteralNode { Value = val, ValueType = vt };
+        }
+
+        // 6. Field reference (ident or select chain)
+        if (TryGetFieldPath(expr, out var fieldPath))
+        {
+            return new CelGuiFieldRefNode { Field = fieldPath };
+        }
+
+        // 7. Fallback: advanced-value node
+        return new CelGuiAdvancedValueNode { Expression = CelPrinter.Print(expr) };
+    }
+
+    private static void FlattenConcatOrArithmetic(CelExpr expr, string op, List<CelGuiValueNode> result, string expectedType = "any")
+    {
+        var celOp = op switch { "+" => "_+_", "-" => "_-_", "*" => "_*_", "/" => "_/_", _ => null };
+        if (celOp != null && expr is CelCall call && call.Function == celOp && call.Target == null && call.Args.Count == 2)
+        {
+            FlattenConcatOrArithmetic(call.Args[0], op, result, expectedType);
+            FlattenConcatOrArithmetic(call.Args[1], op, result, expectedType);
+            return;
+        }
+        result.Add(ToValueNode(expr, expectedType));
+    }
+
+    // ─── Value-node generation (CelGuiValueNode → CEL AST) ───────────────────
+
+    internal static CelExpr FromValueNode(CelGuiValueNode node)
+    {
+        return node switch
+        {
+            CelGuiFieldRefNode fieldRef => ParseFieldPath(fieldRef.Field),
+            CelGuiLiteralNode literal => ToAstLiteral(GetJsonValue(literal.Value)),
+            CelGuiConcatNode concat => BuildConcatExpr(concat.Operands),
+            CelGuiArithmeticNode arith => BuildArithmeticExpr(arith),
+            CelGuiConditionalNode cond => BuildConditionalExpr(cond),
+            CelGuiTransformNode tx => BuildTransformExpr(tx),
+            CelGuiAdvancedValueNode adv => CelParser.Parse(adv.Expression),
+            _ => throw new NotSupportedException($"Value node type {node.GetType().Name} is not supported.")
+        };
+    }
+
+    private static CelExpr BuildConcatExpr(List<CelGuiValueNode> operands)
+    {
+        if (operands.Count == 0) return new CelConstant(CelValue.FromSimpleLiteral(""));
+        var exprs = operands.Select(FromValueNode).ToList();
+        CelExpr result = exprs[0];
+        for (int i = 1; i < exprs.Count; i++)
+            result = new CelCall("_+_", null, new[] { result, exprs[i] });
+        return result;
+    }
+
+    private static CelExpr BuildArithmeticExpr(CelGuiArithmeticNode node)
+    {
+        var func = node.Operator switch
+        {
+            "+" => "_+_",
+            "-" => "_-_",
+            "*" => "_*_",
+            "/" => "_/_",
+            _ => throw new NotSupportedException($"Arithmetic operator '{node.Operator}' is not supported.")
+        };
+        return new CelCall(func, null, new[] { FromValueNode(node.Left), FromValueNode(node.Right) });
+    }
+
+    private static CelExpr BuildConditionalExpr(CelGuiConditionalNode node)
+    {
+        var condExpr = FromGuiModel(node.Condition);
+        var thenExpr = FromValueNode(node.Then);
+        var elseExpr = FromValueNode(node.Otherwise);
+        return new CelCall("_?_:_", null, new[] { condExpr, thenExpr, elseExpr });
+    }
+
+    private static CelExpr BuildTransformExpr(CelGuiTransformNode node)
+    {
+        var operand = FromValueNode(node.Operand);
+        var args = node.Args.Select(FromValueNode).ToArray();
+        return new CelCall(node.Transform, operand, args);
+    }
+
+    // ─── Value-type validation ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Validates that a value node tree is compatible with the declared result type.
+    /// Returns a list of validation error messages (empty if valid).
+    /// </summary>
+    public static List<string> ValidateValueNode(CelGuiValueNode node, string expectedType)
+    {
+        var errors = new List<string>();
+        ValidateValueNodeInternal(node, expectedType, errors);
+        return errors;
+    }
+
+    private static void ValidateValueNodeInternal(CelGuiValueNode node, string expectedType, List<string> errors)
+    {
+        switch (node)
+        {
+            case CelGuiLiteralNode literal:
+                if (!IsLiteralCompatible(literal.ValueType, expectedType))
+                    errors.Add($"Literal of type '{literal.ValueType}' is not compatible with expected type '{expectedType}'.");
+                break;
+
+            case CelGuiConcatNode concat:
+                if (expectedType != "string" && expectedType != "any")
+                    errors.Add($"Concat node produces a string value but expected type is '{expectedType}'.");
+                foreach (var operand in concat.Operands)
+                    ValidateValueNodeInternal(operand, "string", errors);
+                break;
+
+            case CelGuiArithmeticNode arith:
+                if (expectedType != "number" && expectedType != "any")
+                    errors.Add($"Arithmetic node produces a numeric value but expected type is '{expectedType}'.");
+                ValidateValueNodeInternal(arith.Left, "number", errors);
+                ValidateValueNodeInternal(arith.Right, "number", errors);
+                break;
+
+            case CelGuiConditionalNode cond:
+                ValidateValueNodeInternal(cond.Then, expectedType, errors);
+                ValidateValueNodeInternal(cond.Otherwise, expectedType, errors);
+                break;
+
+            // field-ref, transform, advanced-value: no deep type validation available
+        }
+    }
+
+    private static bool IsLiteralCompatible(string literalType, string expectedType)
+    {
+        if (expectedType == "any") return true;
+        return literalType == expectedType ||
+               (expectedType == "number" && (literalType == "number" || literalType == "integer" || literalType == "double")) ||
+               literalType == "null";
+    }
 }

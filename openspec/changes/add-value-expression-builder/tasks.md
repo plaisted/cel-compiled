@@ -1,27 +1,41 @@
-## 1. Expression Contract
+## 1. Re-align the Contract
 
-- [ ] 1.1 Add the new expression-family-aware root types in `Cel.Compiled` and `cel-gui-react`, including filter roots, value roots, value-node types, and result-type metadata.
-- [ ] 1.2 Update JSON polymorphism and shared serialization contracts so the backend, test API, and React package all agree on the new discriminators and payload shapes.
-- [ ] 1.3 Rename the React builder's public `mode` prop to `editorMode` and add the new `kind` prop throughout exported types and examples.
+- [x] 1.1 Confirm the value-expression root contract supports explicit initialization with a declared `resultType` even when no value expression body exists yet.
+- [x] 1.2 Preserve the structured value-expression model as the source of truth for conversion and persistence while decoupling it from the visual chip-composer UI.
+- [x] 1.3 Review the public React API and add any missing props needed for initializing a value builder without forcing consumers to construct a full root object manually.
 
-## 2. Converter and Backend Support
+## 2. Fix Backend Conversion Semantics
 
-- [ ] 2.1 Extend `CelGuiConverter` with expression-family-aware entry points for filter and value models while preserving source generation support.
-- [ ] 2.2 Implement value-node parsing and CEL generation for field references, literals, concat, arithmetic, conditional, transform, and advanced-value nodes.
-- [ ] 2.3 Add value-type-aware validation and partial advanced fallback behavior for unsupported value subtrees.
-- [ ] 2.4 Update the test API endpoints and request/response models to accept and return the new expression root contract.
+- [x] 2.1 Update `CelGuiConverter` so value parsing respects the declared expected result type when distinguishing arithmetic from string concatenation.
+- [x] 2.2 Tighten value-type validation to cover conditional branch compatibility and other result-type mismatches required by the updated specs.
+- [x] 2.3 Keep partial advanced fallback for unsupported value subtrees and ensure advanced nodes can survive round-trips inside larger structured expressions.
+- [x] 2.4 Add or revise C# converter tests for numeric `+`, conditional type validation, and advanced subtree fallback under the new requirements.
 
-## 3. React Builder and State Management
+## 3. Replace the Tree-First Value UI with a Chip Composer
 
-- [ ] 3.1 Refactor the top-level builder and `useCelExpression` hook to manage the new expression root shape across both `kind="filter"` and `kind="value"`.
-- [ ] 3.2 Keep the existing filter renderer path working under `kind="filter"` without changing its editing behavior.
-- [ ] 3.3 Implement value-builder components for typed value nodes, including field references, literals, concat, arithmetic, conditional, transform, and advanced-value editors.
-- [ ] 3.4 Embed the existing filter-builder UI inside value conditional predicates and support else-if authoring through nested conditionals.
-- [ ] 3.5 Update source-mode conversion flows to use `editorMode` and the new expression-family-aware conversion payloads.
+- [x] 3.1 Remove the current value-node card renderer as the primary value-editing surface and introduce a horizontal chip-composer component for `kind="value"`.
+- [x] 3.2 Implement inline insertion points before, after, and between chips, including the empty-state `Add value` affordance.
+- [x] 3.3 Build a context-aware picker that only offers valid next actions for the current insertion point, result type, and local expression context.
+- [x] 3.4 Support inline editing, replacement, and removal of field, constant, operator, function, and advanced-expression chips.
+- [x] 3.5 Represent complex constructs such as conditionals and transforms as grouped semantic chip templates with editable subregions rather than generic nested cards.
+- [x] 3.6 Keep filter expressions on the existing visual path without changing their current editing behavior.
 
-## 4. Validation, Testing, and Documentation
+## 4. Rework Builder State and Mode Switching
 
-- [ ] 4.1 Add C# converter tests for value-expression round-trips, type validation, and partial advanced fallback.
-- [ ] 4.2 Add React tests for value-builder rendering, editing, controlled/uncontrolled usage, and source-mode switching.
-- [ ] 4.3 Update example app usage, package docs, and any builder references to the new `kind` and `editorMode` API.
-- [ ] 4.4 Verify the full change against the new OpenSpec artifacts and confirm the change is ready to implement end-to-end.
+- [x] 4.1 Update `CelExpressionBuilder`, `CelVisualBuilder`, and related hooks so the value composer can initialize correctly from `kind`, `resultType`, `defaultValue`, and `value`.
+- [x] 4.2 Ensure source-mode round-tripping preserves expression kind and explicit value `resultType`, including when switching from an initially empty value builder.
+- [x] 4.3 Keep `editorMode="visual" | "source" | "auto"` behavior intact while rendering the chip composer instead of the old value tree.
+
+## 5. Validation and UX Guardrails
+
+- [x] 5.1 Prevent invalid expression composition by construction wherever possible through picker filtering and insertion rules.
+- [x] 5.2 Surface validation errors for cases that cannot be prevented structurally, especially advanced edits and source-mode conversions that violate the declared result type.
+- [x] 5.3 Make grouped inline constructs visually clear enough that nested structure remains understandable without exposing raw tree mechanics.
+- [x] 5.4 Decide whether drag-and-drop reordering belongs in the first pass or should be deferred behind insertion-based editing only.
+
+## 6. Tests, Example App, and Documentation
+
+- [x] 6.1 Replace the current value-builder React tests with coverage for the chip composer: empty state, insertion points, context-aware picker options, inline editing, removal, and grouped constructs.
+- [x] 6.2 Add integration tests for source/visual switching with `kind="value"` and explicit `resultType` initialization.
+- [x] 6.3 Update the example app to demonstrate the chip-composer workflow for string and numeric computed fields.
+- [x] 6.4 Refresh package docs and OpenSpec references so the public behavior describes guided inline composition rather than value-node cards.

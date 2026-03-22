@@ -3,9 +3,11 @@ import ReactDOM from 'react-dom/client';
 import {
   CelExpressionBuilder,
   CelSchema,
-  CelGuiNode,
+  CelGuiExpressionNode,
+  CelGuiFilterRoot,
   CelError,
   CelBuilderMode,
+  CelValueType,
 } from '../index.ts';
 import '../cel-gui.css';
 import './example.css';
@@ -41,15 +43,28 @@ const DEFAULT_CONTEXT_JSON = JSON.stringify(
   2
 );
 
-const DEFAULT_NODE: CelGuiNode = {
-  type: 'group',
-  combinator: 'and',
-  not: false,
-  rules: [{ type: 'rule', field: 'user.age', operator: '>=', value: 18 }],
+const DEFAULT_FILTER_EXPRESSION: CelGuiFilterRoot = {
+  kind: 'filter',
+  root: {
+    type: 'group',
+    combinator: 'and',
+    not: false,
+    rules: [{ type: 'rule', field: 'user.age', operator: '>=', value: 18 }],
+  },
+};
+
+// Default value expressions demonstrating the chip-composer workflow.
+// String: user.name (a field reference)
+// Number: empty arithmetic (start from scratch)
+const DEFAULT_VALUE_EXPRESSIONS: Record<string, CelGuiExpressionNode> = {
+  string: { kind: 'value', resultType: 'string', root: { type: 'field-ref', field: 'user.name' } },
+  number: { kind: 'value', resultType: 'number', root: { type: 'advanced-value', expression: '' } },
 };
 
 const App = () => {
-  const [currentNode, setCurrentNode] = useState<CelGuiNode>(DEFAULT_NODE);
+  const [expressionKind, setExpressionKind] = useState<'filter' | 'value'>('filter');
+  const [resultType, setResultType] = useState<CelValueType>('string');
+  const [currentExpression, setCurrentExpression] = useState<CelGuiExpressionNode>(DEFAULT_FILTER_EXPRESSION);
   const [pretty, setPretty] = useState(false);
   const [validationErrors, setValidationErrors] = useState<CelError[]>([]);
   const [evalErrors, setEvalErrors] = useState<CelError[]>([]);
@@ -73,31 +88,36 @@ const App = () => {
   const [isEvaluating, setIsEvaluating] = useState(false);
 
   const conversion = {
-    toCelString: async (node: CelGuiNode, isPretty?: boolean) => {
-      const url = new URL(`${API_BASE}/api/cel/to-cel-string`);
+    toCelString: async (expression: CelGuiExpressionNode, isPretty?: boolean) => {
+      const url = new URL(`${API_BASE}/api/cel/expression-to-cel`);
       if (isPretty) url.searchParams.set('pretty', 'true');
-      
+
       const res = await fetch(url.toString(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(node),
+        body: JSON.stringify(expression),
       });
       if (!res.ok) throw new Error('Failed to convert to CEL string');
       return res.text();
     },
-    toGuiModel: async (source: string) => {
-      const res = await fetch(`${API_BASE}/api/cel/to-gui-model`, {
+    toGuiModel: async (source: string, kind?: 'filter' | 'value', rt?: CelValueType) => {
+      const res = await fetch(`${API_BASE}/api/cel/to-expression`, {
         method: 'POST',
-        body: source,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          expression: source,
+          kind: kind ?? expressionKind,
+          resultType: rt ?? resultType,
+        }),
       });
       if (!res.ok) throw new Error('Failed to convert to GUI model');
-      return res.json();
+      return res.json() as Promise<CelGuiExpressionNode>;
     },
   };
 
-  const validate = useCallback(async (node: CelGuiNode) => {
+  const validate = useCallback(async (expression: CelGuiExpressionNode) => {
     try {
-      const source = await conversion.toCelString(node);
+      const source = await conversion.toCelString(expression);
       const res = await fetch(`${API_BASE}/api/cel/validate`, {
         method: 'POST',
         body: source,
@@ -106,12 +126,39 @@ const App = () => {
     } catch {
       // Validation errors are non-fatal
     }
-  }, []);
+  }, [expressionKind, resultType]);
 
-  const handleChange = (node: CelGuiNode) => {
-    setCurrentNode(node);
+  const handleChange = (expression: CelGuiExpressionNode) => {
+    setCurrentExpression(expression);
     setEvalErrors([]);
-    validate(node);
+    validate(expression);
+  };
+
+  const handleKindChange = (newKind: 'filter' | 'value') => {
+    setExpressionKind(newKind);
+    if (newKind === 'filter') {
+      setCurrentExpression(DEFAULT_FILTER_EXPRESSION);
+    } else {
+      // Use a pre-built demo expression if available, otherwise start empty
+      setCurrentExpression(
+        DEFAULT_VALUE_EXPRESSIONS[resultType] ?? {
+          kind: 'value',
+          resultType,
+          root: { type: 'advanced-value', expression: '' },
+        }
+      );
+    }
+  };
+
+  const handleResultTypeChange = (newResultType: CelValueType) => {
+    setResultType(newResultType);
+    if (currentExpression.kind === 'value') {
+      setCurrentExpression({
+        kind: 'value',
+        resultType: newResultType,
+        root: currentExpression.root,
+      });
+    }
   };
 
   const handleSchemaChange = (json: string) => {
@@ -139,11 +186,11 @@ const App = () => {
     setEvalResult(null);
     setEvalErrors([]);
     try {
-      // In source mode use the editor text directly; otherwise convert from the node.
+      // In source mode use the editor text directly; otherwise convert from the expression.
       const source =
         builderModeRef.current === 'source'
           ? builderSourceRef.current
-          : await conversion.toCelString(currentNode, pretty);
+          : await conversion.toCelString(currentExpression, pretty);
       const res = await fetch(`${API_BASE}/api/cel/evaluate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -164,6 +211,8 @@ const App = () => {
     }
   };
 
+  const VALUE_TYPES: CelValueType[] = ['string', 'number', 'boolean', 'timestamp', 'duration', 'bytes', 'any'];
+
   return (
     <div className="ex-page">
       <div className="ex-header">
@@ -172,6 +221,31 @@ const App = () => {
       <p className="ex-header__subtitle">
         Edit the schema and context below, build an expression, then hit Evaluate.
       </p>
+
+      {/* Kind selector */}
+      <div className="ex-kind-bar">
+        <label className="ex-kind-bar__label">Expression kind:</label>
+        <select
+          className="ex-kind-bar__select"
+          value={expressionKind}
+          onChange={(e) => handleKindChange(e.target.value as 'filter' | 'value')}
+        >
+          <option value="filter">Filter (boolean)</option>
+          <option value="value">Value (computed)</option>
+        </select>
+        {expressionKind === 'value' && (
+          <>
+            <label className="ex-kind-bar__label">Result type:</label>
+            <select
+              className="ex-kind-bar__select"
+              value={resultType}
+              onChange={(e) => handleResultTypeChange(e.target.value as CelValueType)}
+            >
+              {VALUE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </>
+        )}
+      </div>
 
       {/* Schema + Context editors */}
       <div className="ex-editors">
@@ -214,7 +288,8 @@ const App = () => {
 
       {/* Expression builder */}
       <CelExpressionBuilder
-        value={currentNode}
+        kind={expressionKind}
+        value={currentExpression}
         onChange={handleChange}
         onSourceChange={(s) => { builderSourceRef.current = s; }}
         onModeChange={(m) => { builderModeRef.current = m; }}
@@ -253,7 +328,7 @@ const App = () => {
       <details className="ex-model-details">
         <summary>Current JSON Model</summary>
         <pre className="ex-model-details__pre">
-          {JSON.stringify(currentNode, null, 2)}
+          {JSON.stringify(currentExpression, null, 2)}
         </pre>
       </details>
     </div>

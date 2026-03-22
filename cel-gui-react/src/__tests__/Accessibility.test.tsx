@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { NaturalGroupNode } from '../components/NaturalGroupNode.tsx';
 import { NaturalRuleNode } from '../components/NaturalRuleNode.tsx';
 import { CelExpressionBuilder } from '../components/CelExpressionBuilder.tsx';
-import { CelGuiGroup, CelGuiRule } from '../types.ts';
+import { CelGuiGroup, CelGuiRule, CelGuiFilterRoot } from '../types.ts';
 import { CelBuilderProvider } from '../context/CelBuilderContext.tsx';
 import { CelSchemaProvider } from '../context/CelSchemaContext.tsx';
 
@@ -273,13 +273,14 @@ describe('7.4 Focus management after add-rule', () => {
       not: false,
       rules: [],
     };
+    const defaultFilterRoot: CelGuiFilterRoot = { kind: 'filter', root: defaultGroup };
     const conversion = {
       toCelString: vi.fn().mockResolvedValue(''),
-      toGuiModel: vi.fn().mockResolvedValue(defaultGroup),
+      toGuiModel: vi.fn().mockResolvedValue(defaultFilterRoot),
     };
     // No schema → NaturalRuleNode renders a plain text input for field
     render(
-      <CelExpressionBuilder defaultValue={defaultGroup} conversion={conversion} />
+      <CelExpressionBuilder kind="filter" defaultValue={defaultFilterRoot} conversion={conversion} />
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Add condition' }));
@@ -295,26 +296,22 @@ describe('7.4 Focus management after add-rule', () => {
 
 describe('7.5 Mode toggle aria-label', () => {
   it('shows "Switch to source code editor" in visual mode', () => {
-    const defaultGroup: CelGuiGroup = {
-      type: 'group',
-      combinator: 'and',
-      not: false,
-      rules: [],
+    const defaultFilterRoot: CelGuiFilterRoot = {
+      kind: 'filter',
+      root: { type: 'group', combinator: 'and', not: false, rules: [] },
     };
-    render(<CelExpressionBuilder defaultValue={defaultGroup} />);
+    render(<CelExpressionBuilder kind="filter" defaultValue={defaultFilterRoot} />);
 
     const toggle = screen.getByRole('button', { name: 'Switch to source code editor' });
     expect(toggle).toBeInTheDocument();
   });
 
   it('shows "Switch to visual editor" after switching to source mode (no conversion)', async () => {
-    const defaultGroup: CelGuiGroup = {
-      type: 'group',
-      combinator: 'and',
-      not: false,
-      rules: [],
+    const defaultFilterRoot: CelGuiFilterRoot = {
+      kind: 'filter',
+      root: { type: 'group', combinator: 'and', not: false, rules: [] },
     };
-    render(<CelExpressionBuilder defaultValue={defaultGroup} />);
+    render(<CelExpressionBuilder kind="filter" defaultValue={defaultFilterRoot} />);
 
     // Click to switch to source (no conversion configured — mode switches directly)
     fireEvent.click(screen.getByRole('button', { name: 'Switch to source code editor' }));

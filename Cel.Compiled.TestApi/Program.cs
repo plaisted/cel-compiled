@@ -64,6 +64,51 @@ app.MapPost("/api/cel/to-cel-string", async (HttpContext context) =>
     }
 });
 
+// Expression-family-aware endpoints (filter + value)
+app.MapPost("/api/cel/to-expression", async (HttpContext context) =>
+{
+    var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    JsonElement body;
+    try { body = await JsonSerializer.DeserializeAsync<JsonElement>(context.Request.Body); }
+    catch { return Results.BadRequest(new { error = "Invalid JSON body" }); }
+
+    if (!body.TryGetProperty("expression", out var exprEl) || exprEl.GetString() is not string celExpression)
+        return Results.BadRequest(new { error = "Missing 'expression'" });
+
+    var kind = body.TryGetProperty("kind", out var kindEl) ? kindEl.GetString() ?? "filter" : "filter";
+    var resultType = body.TryGetProperty("resultType", out var rtEl) ? rtEl.GetString() ?? "string" : "string";
+
+    try
+    {
+        var node = CelGuiConverter.ToExpressionModel(celExpression, kind, resultType);
+        return Results.Json(node, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
+app.MapPost("/api/cel/expression-to-cel", async (HttpContext context) =>
+{
+    try
+    {
+        var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        var node = await JsonSerializer.DeserializeAsync<CelGuiExpressionNode>(context.Request.Body, jsonOptions);
+        if (node == null) return Results.BadRequest("Invalid JSON");
+
+        bool pretty = context.Request.Query.TryGetValue("pretty", out var prettyValues) &&
+                      bool.TryParse(prettyValues.FirstOrDefault(), out var isPretty) && isPretty;
+
+        var celString = CelGuiConverter.FromExpressionModel(node, pretty);
+        return Results.Text(celString);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
 app.MapPost("/api/cel/validate", async (HttpContext context) =>
 {
     using var reader = new StreamReader(context.Request.Body);
