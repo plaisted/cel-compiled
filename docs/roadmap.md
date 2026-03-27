@@ -43,11 +43,9 @@ These are low-effort, high-impact additions that make the library easier to adop
 
 These require more coordinated parser and compiler changes but fit the current architecture.
 
-### First-Class Environment Model — P1 / D3
+### Typed-Root Schema Validation — P1 / D3
 
-Introduce a unified environment abstraction for declaring variables, constants, functions, types, and feature flags ahead of compilation.
-
-Today, `Cel.Compiled` uses `TContext` plus `CelCompileOptions`, which is lightweight and pragmatic, but it does not provide a single declarative model comparable to `cel-go`'s `Env`. That becomes the main structural limitation once users want richer validation, policy authoring workflows, or reusable compilation environments. If static checking remains on the roadmap, this is the natural prerequisite.
+`Cel.Compiled` now exposes typed-root `Check(...)` / `CompileChecked(...)` APIs plus selector-based schema annotations on `CelCompileOptions` for schema-backed JSON members.
 
 ### ~~Comprehensive Runtime Error Attribution — P1 / D2~~ Done
 
@@ -109,9 +107,9 @@ These features matter most for mature embeddings, IDE integration, and advanced 
 
 ### Static Type Checking — P1 long-term / D4
 
-A dedicated `Env.Check()`-style phase that validates type correctness at compile time before evaluation, producing a checked AST with resolved types and overloads. This is the biggest architectural gap relative to `cel-go` and is essential for tooling (IDE integration, policy linting, CI validation of policy files). It is also the clearest path to checked metadata, stronger compile-time guarantees, and richer optimization opportunities.
+A dedicated checked-expression phase that validates type correctness at compile time before evaluation, producing a checked AST with resolved types and overloads. `Cel.Compiled` now has public typed-root `Check(...)` / `CompileChecked(...)` support for POCOs, descriptor-backed types, and schema-backed JSON members, but it does not yet expose a public checked AST or the richer semantic metadata needed for full IDE- and tooling-oriented workflows. That remains the biggest architectural gap relative to `cel-go`.
 
-This should be designed together with a first-class environment model rather than layered awkwardly onto the current `TContext`-plus-options shape.
+The remaining work is broadening checking coverage, exposing stable checked metadata where appropriate, and deciding how much tooling-oriented inspection surface should become public.
 
 ### AST Validators and Optimizers — P2 / D2
 

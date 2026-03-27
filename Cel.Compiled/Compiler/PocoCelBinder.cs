@@ -29,18 +29,32 @@ internal sealed class PocoCelBinder : ICelBinder
 
     public Expression ResolveMember(Expression operandExpression, string memberName, CelExpr? sourceExpr = null)
     {
+        if (sourceExpr != null &&
+            CelSemanticContext.Current?.TryGetMemberBinding(sourceExpr, out var resolvedBinding) == true)
+            return resolvedBinding.BindAccess(operandExpression);
+
         var plan = GetPlan(operandExpression.Type);
         if (!plan.TryGetMember(memberName, out var member))
             throw MemberNotFound(sourceExpr, operandExpression.Type, memberName);
+
+        if (sourceExpr != null)
+            CelSemanticContext.Current?.RegisterMemberBinding(sourceExpr, member);
 
         return member.Bind(operandExpression);
     }
 
     public Expression ResolvePresence(Expression operandExpression, string memberName, CelExpr? sourceExpr = null)
     {
+        if (sourceExpr != null &&
+            CelSemanticContext.Current?.TryGetMemberBinding(sourceExpr, out var resolvedBinding) == true)
+            return resolvedBinding.BindPresence(operandExpression);
+
         var plan = GetPlan(operandExpression.Type);
         if (!plan.TryGetMember(memberName, out var member))
             throw MemberNotFound(sourceExpr, operandExpression.Type, memberName);
+
+        if (sourceExpr != null)
+            CelSemanticContext.Current?.RegisterMemberBinding(sourceExpr, member);
 
         if (member.IsAlwaysPresent)
             return Expression.Constant(true);
@@ -51,8 +65,18 @@ internal sealed class PocoCelBinder : ICelBinder
 
     public Expression ResolveOptionalMember(Expression operandExpression, string memberName, CelExpr? sourceExpr = null)
     {
-        var access = ResolveMember(operandExpression, memberName);
-        return Expression.Call(s_optionalOf, BoxIfNeeded(access));
+        if (sourceExpr != null &&
+            CelSemanticContext.Current?.TryGetMemberBinding(sourceExpr, out var resolvedBinding) == true)
+            return resolvedBinding.BindOptional(operandExpression);
+
+        var plan = GetPlan(operandExpression.Type);
+        if (!plan.TryGetMember(memberName, out var member))
+            throw MemberNotFound(sourceExpr, operandExpression.Type, memberName);
+
+        if (sourceExpr != null)
+            CelSemanticContext.Current?.RegisterMemberBinding(sourceExpr, member);
+
+        return member.BuildOptional(operandExpression);
     }
 
     public bool TryResolveIndex(Expression operandExpression, Expression indexExpression, out Expression boundExpression, CelExpr? sourceExpr = null)
@@ -132,7 +156,7 @@ internal sealed class PocoCelBinder : ICelBinder
         }
     }
 
-    private sealed class MemberAccessorPlan
+    private sealed class MemberAccessorPlan : CelResolvedMemberBinding
     {
         private readonly MemberInfo _member;
 
@@ -144,9 +168,35 @@ internal sealed class PocoCelBinder : ICelBinder
 
         public bool IsAlwaysPresent { get; }
 
+        public override Type ValueType => _member switch
+        {
+            PropertyInfo property => property.PropertyType,
+            FieldInfo fieldInfo => fieldInfo.FieldType,
+            _ => typeof(object)
+        };
+
         public Expression Bind(Expression operandExpression)
         {
             return Expression.MakeMemberAccess(operandExpression, _member);
         }
+
+        public Expression BuildOptional(Expression operandExpression)
+        {
+            var access = Bind(operandExpression);
+            return Expression.Call(s_optionalOf, BoxIfNeeded(access));
+        }
+
+        public override Expression BindAccess(Expression operandExpression) => Bind(operandExpression);
+
+        public override Expression BindPresence(Expression operandExpression)
+        {
+            if (IsAlwaysPresent)
+                return Expression.Constant(true);
+
+            var access = Bind(operandExpression);
+            return Expression.NotEqual(access, Expression.Constant(null, access.Type));
+        }
+
+        public override Expression BindOptional(Expression operandExpression) => BuildOptional(operandExpression);
     }
 }
