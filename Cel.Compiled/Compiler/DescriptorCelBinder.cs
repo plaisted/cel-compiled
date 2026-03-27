@@ -30,22 +30,44 @@ internal sealed class DescriptorCelBinder : ICelBinder
 
     public Expression ResolveMember(Expression operandExpression, string memberName, CelExpr? sourceExpr = null)
     {
+        if (sourceExpr != null &&
+            CelSemanticContext.Current?.TryGetMemberBinding(sourceExpr, out var resolvedBinding) == true)
+            return resolvedBinding.BindAccess(operandExpression);
+
         var member = GetMemberDescriptor(operandExpression.Type, memberName, sourceExpr);
-        return Expression.Convert(
-            Expression.Call(s_getMemberValue, Expression.Constant(member), Expression.Convert(operandExpression, typeof(object))),
-            member.ValueType);
+        var binding = new DescriptorMemberBinding(member);
+        if (sourceExpr != null)
+            CelSemanticContext.Current?.RegisterMemberBinding(sourceExpr, binding);
+
+        return binding.BindAccess(operandExpression);
     }
 
     public Expression ResolvePresence(Expression operandExpression, string memberName, CelExpr? sourceExpr = null)
     {
+        if (sourceExpr != null &&
+            CelSemanticContext.Current?.TryGetMemberBinding(sourceExpr, out var resolvedBinding) == true)
+            return resolvedBinding.BindPresence(operandExpression);
+
         var member = GetMemberDescriptor(operandExpression.Type, memberName, sourceExpr);
-        return Expression.Call(s_hasMemberValue, Expression.Constant(member), Expression.Convert(operandExpression, typeof(object)));
+        var binding = new DescriptorMemberBinding(member);
+        if (sourceExpr != null)
+            CelSemanticContext.Current?.RegisterMemberBinding(sourceExpr, binding);
+
+        return binding.BindPresence(operandExpression);
     }
 
     public Expression ResolveOptionalMember(Expression operandExpression, string memberName, CelExpr? sourceExpr = null)
     {
+        if (sourceExpr != null &&
+            CelSemanticContext.Current?.TryGetMemberBinding(sourceExpr, out var resolvedBinding) == true)
+            return resolvedBinding.BindOptional(operandExpression);
+
         var member = GetMemberDescriptor(operandExpression.Type, memberName, sourceExpr);
-        return Expression.Call(s_getOptionalMemberValue, Expression.Constant(member), Expression.Convert(operandExpression, typeof(object)));
+        var binding = new DescriptorMemberBinding(member);
+        if (sourceExpr != null)
+            CelSemanticContext.Current?.RegisterMemberBinding(sourceExpr, binding);
+
+        return binding.BindOptional(operandExpression);
     }
 
     public bool TryResolveIndex(Expression operandExpression, Expression indexExpression, out Expression boundExpression, CelExpr? sourceExpr = null)
@@ -89,5 +111,34 @@ internal sealed class DescriptorCelBinder : ICelBinder
             return CelCompilationException.WithSource(message, "compilation_error", expressionText, span);
 
         return new CelCompilationException(message);
+    }
+
+    private sealed class DescriptorMemberBinding : CelResolvedMemberBinding
+    {
+        private readonly CelTypeMemberDescriptor _member;
+
+        public DescriptorMemberBinding(CelTypeMemberDescriptor member)
+        {
+            _member = member;
+        }
+
+        public override Type ValueType => _member.ValueType;
+
+        public override Expression BindAccess(Expression operandExpression)
+        {
+            return Expression.Convert(
+                Expression.Call(s_getMemberValue, Expression.Constant(_member), Expression.Convert(operandExpression, typeof(object))),
+                _member.ValueType);
+        }
+
+        public override Expression BindPresence(Expression operandExpression)
+        {
+            return Expression.Call(s_hasMemberValue, Expression.Constant(_member), Expression.Convert(operandExpression, typeof(object)));
+        }
+
+        public override Expression BindOptional(Expression operandExpression)
+        {
+            return Expression.Call(s_getOptionalMemberValue, Expression.Constant(_member), Expression.Convert(operandExpression, typeof(object)));
+        }
     }
 }

@@ -19,7 +19,7 @@ public static partial class CelCompiler
         Expression contextExpr,
         Expression runtimeContextExpr,
         CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope,
+        CelBindingScope scope,
         MacroKind kind)
     {
         var target = CompileNode(targetExpr, contextExpr, runtimeContextExpr, binders, scope);
@@ -41,7 +41,7 @@ public static partial class CelCompiler
         Expression contextExpr,
         Expression runtimeContextExpr,
         CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope)
+        CelBindingScope scope)
     {
         var target = CompileNode(targetExpr, contextExpr, runtimeContextExpr, binders, scope);
         var sourceVar = Expression.Variable(target.Type, "macroSource");
@@ -63,7 +63,7 @@ public static partial class CelCompiler
         Expression contextExpr,
         Expression runtimeContextExpr,
         CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope)
+        CelBindingScope scope)
     {
         var target = CompileNode(targetExpr, contextExpr, runtimeContextExpr, binders, scope);
         var sourceVar = Expression.Variable(target.Type, "macroSource");
@@ -84,7 +84,7 @@ public static partial class CelCompiler
         Expression contextExpr,
         Expression runtimeContextExpr,
         CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope)
+        CelBindingScope scope)
     {
         var target = CompileNode(targetExpr, contextExpr, runtimeContextExpr, binders, scope);
         var sourceVar = Expression.Variable(target.Type, "macroSource");
@@ -105,7 +105,7 @@ public static partial class CelCompiler
         Expression contextExpr,
         Expression runtimeContextExpr,
         CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope,
+        CelBindingScope scope,
         MacroKind kind)
     {
         var itemVar = Expression.Variable(plan.ItemType, iteratorName);
@@ -177,7 +177,7 @@ public static partial class CelCompiler
         Expression contextExpr,
         Expression runtimeContextExpr,
         CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope)
+        CelBindingScope scope)
     {
         var itemVar = Expression.Variable(plan.ItemType, iteratorName);
         var indexVar = Expression.Variable(typeof(int), "i");
@@ -229,7 +229,7 @@ public static partial class CelCompiler
         Expression contextExpr,
         Expression runtimeContextExpr,
         CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope)
+        CelBindingScope scope)
     {
         var itemVar = Expression.Variable(plan.ItemType, iteratorName);
         var indexVar = Expression.Variable(typeof(int), "i");
@@ -313,7 +313,7 @@ public static partial class CelCompiler
         Expression contextExpr,
         Expression runtimeContextExpr,
         CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope)
+        CelBindingScope scope)
     {
         var itemVar = Expression.Variable(plan.ItemType, iteratorName);
         var indexVar = Expression.Variable(typeof(int), "i");
@@ -361,7 +361,7 @@ public static partial class CelCompiler
         Expression contextExpr,
         Expression runtimeContextExpr,
         CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope,
+        CelBindingScope scope,
         MacroKind kind)
     {
         if (!TryCreateDynamicComprehensionBranches(sourceExpression, out var branches))
@@ -380,7 +380,7 @@ public static partial class CelCompiler
         Expression contextExpr,
         Expression runtimeContextExpr,
         CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope)
+        CelBindingScope scope)
     {
         if (!TryCreateDynamicComprehensionBranches(sourceExpression, out var branches))
             return null;
@@ -399,7 +399,7 @@ public static partial class CelCompiler
         Expression contextExpr,
         Expression runtimeContextExpr,
         CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope)
+        CelBindingScope scope)
     {
         if (!TryCreateDynamicComprehensionBranches(sourceExpression, out var branches))
             return null;
@@ -421,7 +421,7 @@ public static partial class CelCompiler
         Expression contextExpr,
         Expression runtimeContextExpr,
         CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope)
+        CelBindingScope scope)
     {
         if (!TryCreateDynamicComprehensionBranches(sourceExpression, out var branches))
             return null;

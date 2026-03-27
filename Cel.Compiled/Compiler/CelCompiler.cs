@@ -16,6 +16,17 @@ namespace Cel.Compiled.Compiler;
 /// </summary>
 public static partial class CelCompiler
 {
+    private sealed class CompilationPlan<TInput>
+    {
+        public required CelExpr Expr { get; init; }
+        public required ParameterExpression InputParameter { get; init; }
+        public required Expression FallbackContextExpression { get; init; }
+        public required ParameterExpression RuntimeContextParameter { get; init; }
+        public required CelBinderSet Binders { get; init; }
+        public required CelBindingScope LoweringScope { get; init; }
+        public required CelSemanticAnalysis Analysis { get; init; }
+    }
+
     private enum MacroKind
     {
         All,
@@ -167,6 +178,18 @@ public static partial class CelCompiler
 
     private static readonly MethodInfo s_runtimeExitComprehension =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.ExitComprehension), new[] { typeof(CelRuntimeContext) })!;
+
+    private static readonly MethodInfo s_getRequiredActivationValue =
+        typeof(CelRuntimeHelpers).GetMethods().Single(method =>
+            method.Name == nameof(CelRuntimeHelpers.GetRequiredActivationValue) &&
+            method.IsGenericMethodDefinition &&
+            method.GetParameters().Length == 2);
+
+    private static readonly MethodInfo s_getRequiredActivationValueWithSource =
+        typeof(CelRuntimeHelpers).GetMethods().Single(method =>
+            method.Name == nameof(CelRuntimeHelpers.GetRequiredActivationValue) &&
+            method.IsGenericMethodDefinition &&
+            method.GetParameters().Length == 5);
 
     private static readonly MethodInfo s_regexExtract =
         typeof(CelRuntimeHelpers).GetMethod(nameof(CelRuntimeHelpers.RegexExtract), new[] { typeof(string), typeof(string), typeof(CelRuntimeContext) })!;
@@ -535,9 +558,10 @@ public static partial class CelCompiler
 
     public static CelProgram<TContext, object?> CompileProgram<TContext>(string celExpression, CelCompileOptions? options)
     {
+        var effectiveOptions = options ?? CelCompileOptions.Default;
         try
         {
-            return CompileProgram<TContext>(Cel.Compiled.Parser.CelParser.Parse(celExpression), options);
+            return CompileProgram<TContext>(ParseExpression(celExpression, effectiveOptions.EnableCaching), effectiveOptions);
         }
         catch (Cel.Compiled.Parser.CelParseException ex)
         {
@@ -552,14 +576,58 @@ public static partial class CelCompiler
 
     public static CelProgram<TContext, TResult> CompileProgram<TContext, TResult>(string celExpression, CelCompileOptions? options)
     {
+        var effectiveOptions = options ?? CelCompileOptions.Default;
         try
         {
-            return CompileProgram<TContext, TResult>(Cel.Compiled.Parser.CelParser.Parse(celExpression), options);
+            return CompileProgram<TContext, TResult>(ParseExpression(celExpression, effectiveOptions.EnableCaching), effectiveOptions);
         }
         catch (Cel.Compiled.Parser.CelParseException ex)
         {
             throw CelCompilationException.Parse(celExpression, ex.Message, ex.Position, ex.EndPosition, ex);
         }
+    }
+
+    public static CelProgram<CelActivation, object?> CompileProgram(CelEnvironment environment, string celExpression)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        return CompileProgram(environment, ParseExpression(celExpression, environment.EnableCaching));
+    }
+
+    public static CelProgram<CelActivation, TResult> CompileProgram<TResult>(CelEnvironment environment, string celExpression)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        return CompileProgram<TResult>(environment, ParseExpression(celExpression, environment.EnableCaching));
+    }
+
+    public static CelCheckResult Check(CelEnvironment environment, string celExpression)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        ArgumentNullException.ThrowIfNull(celExpression);
+
+        try
+        {
+            var analysis = BuildEnvironmentCompilationPlan(ParseOrThrow(celExpression), environment).Analysis;
+            // Parse may still be cached even when diagnostics are requested.
+            return CelCheckResult.SuccessResult(analysis.ResultType);
+        }
+        catch (CelCompilationException ex)
+        {
+            return CelCheckResult.Failure(ex);
+        }
+    }
+
+    public static CelProgram<CelActivation, object?> CompileCheckedProgram(CelEnvironment environment, string celExpression)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        ArgumentNullException.ThrowIfNull(celExpression);
+        return CompileProgram(environment, ParseExpression(celExpression, environment.EnableCaching));
+    }
+
+    public static CelProgram<CelActivation, TResult> CompileCheckedProgram<TResult>(CelEnvironment environment, string celExpression)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        ArgumentNullException.ThrowIfNull(celExpression);
+        return CompileProgram<TResult>(environment, ParseExpression(celExpression, environment.EnableCaching));
     }
 
     internal static CelProgram<TContext, object?> CompileProgram<TContext>(CelExpr expr)
@@ -588,6 +656,52 @@ public static partial class CelCompiler
             : CompileProgramUncached<TContext, TResult>(expr, effectiveOptions);
     }
 
+    internal static CelProgram<CelActivation, object?> CompileProgram(CelEnvironment environment, CelExpr expr)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        return environment.EnableCaching
+            ? CelExpressionCache.GetOrCompile(expr, environment)
+            : CompileProgramUncached(expr, environment);
+    }
+
+    internal static CelProgram<CelActivation, TResult> CompileProgram<TResult>(CelEnvironment environment, CelExpr expr)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        return environment.EnableCaching
+            ? CelExpressionCache.GetOrCompile<TResult>(expr, environment)
+            : CompileProgramUncached<TResult>(expr, environment);
+    }
+
+    internal static CelProgram<CelActivation, object?> CompileCheckedProgram(CelEnvironment environment, CelExpr expr, CelSemanticAnalysis analysis)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        ArgumentNullException.ThrowIfNull(expr);
+        ArgumentNullException.ThrowIfNull(analysis);
+        return CompileProgram(environment, expr);
+    }
+
+    internal static CelProgram<CelActivation, TResult> CompileCheckedProgram<TResult>(CelEnvironment environment, CelExpr expr, CelSemanticAnalysis analysis)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        ArgumentNullException.ThrowIfNull(expr);
+        ArgumentNullException.ThrowIfNull(analysis);
+        return CompileProgram<TResult>(environment, expr);
+    }
+
+    internal static CelSemanticAnalysis CheckOrThrow(CelEnvironment environment, string celExpression)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        ArgumentNullException.ThrowIfNull(celExpression);
+        return Check(environment, ParseExpression(celExpression, environment.EnableCaching));
+    }
+
+    internal static CelSemanticAnalysis Check(CelEnvironment environment, CelExpr expr)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+        ArgumentNullException.ThrowIfNull(expr);
+        return BuildEnvironmentCompilationPlan(expr, environment).Analysis;
+    }
+
     internal static Func<TContext, object?> CompileUncached<TContext>(CelExpr expr, CelCompileOptions options)
     {
         return CompileProgramUncached<TContext>(expr, options).AsDelegate();
@@ -605,42 +719,30 @@ public static partial class CelCompiler
 
     internal static CelProgram<TContext, TResult> CompileProgramUncached<TContext, TResult>(CelExpr expr, CelCompileOptions options)
     {
-        using var _ = CelDiagnosticContext.Push(CelSourceMapRegistry.TryGet(expr, out var sourceMap) ? sourceMap : null);
-        var contextParam = Expression.Parameter(typeof(TContext), "context");
-        var runtimeContextParam = Expression.Parameter(typeof(CelRuntimeContext), "runtimeContext");
-        var binders = CelBinderSet.Create(typeof(TContext), options.BinderMode, options.FunctionRegistry, options.TypeRegistry, options.EnabledFeatures);
-        var bodyExpr = CompileNode(expr, contextParam, runtimeContextParam, binders, null);
-
-        if (bodyExpr.Type != typeof(TResult))
-        {
-            if (binders.TryCoerceValue(bodyExpr, typeof(TResult), out var coercedResult))
-            {
-                bodyExpr = coercedResult;
-            }
-            else
-            {
-                try
-                {
-                    bodyExpr = Expression.Convert(bodyExpr, typeof(TResult));
-                }
-                catch (InvalidOperationException ex)
-                {
-                    throw CompilationError(
-                        expr,
-                        $"Cannot convert CEL expression result type '{bodyExpr.Type.Name}' to requested type '{typeof(TResult).Name}'",
-                        "result_type_conversion_failed",
-                        innerException: ex);
-                }
-            }
-        }
-
-        var lambda = Expression.Lambda<Func<TContext, CelRuntimeContext?, TResult>>(bodyExpr, contextParam, runtimeContextParam);
-        return new CelProgram<TContext, TResult>(lambda.Compile());
+        var plan = BuildContextCompilationPlan<TContext>(expr, options);
+        return CompilePlan<TContext, TResult>(plan);
     }
 
-    private static Expression CompileNode(CelExpr expr, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    internal static CelProgram<CelActivation, object?> CompileProgramUncached(CelExpr expr, CelEnvironment environment)
     {
-        return expr switch
+        return CompileProgramUncached<object?>(expr, environment, null);
+    }
+
+    internal static CelProgram<CelActivation, TResult> CompileProgramUncached<TResult>(CelExpr expr, CelEnvironment environment)
+    {
+        var plan = BuildEnvironmentCompilationPlan(expr, environment);
+        return CompilePlan<CelActivation, TResult>(plan);
+    }
+
+    internal static CelProgram<CelActivation, TResult> CompileProgramUncached<TResult>(CelExpr expr, CelEnvironment environment, CelSemanticAnalysis? analysis)
+    {
+        var plan = BuildEnvironmentCompilationPlan(expr, environment);
+        return CompilePlan<CelActivation, TResult>(plan);
+    }
+
+    private static Expression CompileNode(CelExpr expr, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, CelBindingScope scope)
+    {
+        var compiled = expr switch
         {
             CelConstant constant => CompileConstant(constant),
             CelIdent ident => CompileIdent(ident, contextExpr, binders, scope),
@@ -651,6 +753,9 @@ public static partial class CelCompiler
             CelMap map => CompileMap(map, contextExpr, runtimeContextExpr, binders, scope),
             _ => throw CompilationError(expr, $"Unsupported expression type '{expr.GetType().Name}'.", "compilation_error")
         };
+
+        CelSemanticContext.Current?.Register(expr, compiled.Type);
+        return compiled;
     }
 
     private static CelCompilationException CompilationError(
@@ -718,7 +823,7 @@ public static partial class CelCompiler
     private static CelCompilationException FeatureDisabled(CelExpr? expr, string featureName) =>
         CompilationError(expr, CelCompilationException.FeatureDisabled(featureName).Message, "feature_disabled");
 
-    private static Expression CompileMap(CelMap map, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    private static Expression CompileMap(CelMap map, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, CelBindingScope scope)
     {
         if (map.Entries.Count == 0)
         {
@@ -778,7 +883,7 @@ public static partial class CelCompiler
         );
     }
 
-    private static Expression CompileList(CelList list, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    private static Expression CompileList(CelList list, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, CelBindingScope scope)
     {
         if (list.Elements.Count == 0)
         {
@@ -821,15 +926,214 @@ public static partial class CelCompiler
             : Expression.Constant(value, value.GetType());
     }
 
-    private static Expression CompileIdent(CelIdent ident, Expression contextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    private static Expression CompileIdent(CelIdent ident, Expression contextExpr, CelBinderSet binders, CelBindingScope scope)
     {
-        if (scope != null && scope.TryGetValue(ident.Name, out var local))
-            return local;
+        if (scope.TryResolve(ident.Name, ident, out var local, out var binding))
+        {
+            if (binding?.SchemaReference is CelSchemaReference schemaReference)
+                CelSemanticContext.Current?.RegisterSchemaReference(ident, schemaReference);
+
+            return TryAttachEnvironmentSource(local, ident, out var sourceAwareLocal) ? sourceAwareLocal : local;
+        }
 
         return binders.ResolveMember(contextExpr, ident.Name, ident);
     }
 
-    private static Expression CompileSelect(CelSelect select, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    private static CelExpr ParseOrThrow(string celExpression)
+    {
+        try
+        {
+            return Cel.Compiled.Parser.CelParser.Parse(celExpression);
+        }
+        catch (Cel.Compiled.Parser.CelParseException ex)
+        {
+            throw CelCompilationException.Parse(celExpression, ex.Message, ex.Position, ex.EndPosition, ex);
+        }
+    }
+
+    private static CelExpr ParseExpression(string celExpression, bool enableCaching) =>
+        enableCaching ? CelExpressionCache.GetOrParse(celExpression) : ParseOrThrow(celExpression);
+
+    private static CompilationPlan<TContext> BuildContextCompilationPlan<TContext>(CelExpr expr, CelCompileOptions options)
+    {
+        using var _ = CelDiagnosticContext.Push(CelSourceMapRegistry.TryGet(expr, out var sourceMap) ? sourceMap : null);
+        var contextParam = Expression.Parameter(typeof(TContext), "context");
+        var runtimeContextParam = Expression.Parameter(typeof(CelRuntimeContext), "runtimeContext");
+        var binders = CelBinderSet.Create(typeof(TContext), options.BinderMode, options.FunctionRegistry, options.TypeRegistry, options.EnabledFeatures);
+        var scope = CelBindingScope.CreateRoot((name, sourceExpr) => binders.ResolveMember(contextParam, name, sourceExpr));
+
+        var plan = new CompilationPlan<TContext>
+        {
+            Expr = expr,
+            InputParameter = contextParam,
+            FallbackContextExpression = contextParam,
+            RuntimeContextParameter = runtimeContextParam,
+            Binders = binders,
+            LoweringScope = scope,
+            Analysis = options.EnableCaching
+                ? CelExpressionCache.GetOrAnalyze<TContext>(expr, options, static (cachedExpr, cachedOptions) => AnalyzeContext<TContext>(cachedExpr, cachedOptions))
+                : AnalyzeContext<TContext>(expr, options)
+        };
+
+        return plan;
+    }
+
+    private static CompilationPlan<CelActivation> BuildEnvironmentCompilationPlan(CelExpr expr, CelEnvironment environment)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
+
+        using var _ = CelDiagnosticContext.Push(CelSourceMapRegistry.TryGet(expr, out var sourceMap) ? sourceMap : null);
+        var activationParam = Expression.Parameter(typeof(CelActivation), "activation");
+        var runtimeContextParam = Expression.Parameter(typeof(CelRuntimeContext), "runtimeContext");
+        var binders = CelBinderSet.Create(typeof(object), CelBinderMode.Auto, environment.FunctionRegistry, environment.TypeRegistry, environment.EnabledFeatures);
+        var loweringScope = CreateEnvironmentRuntimeScope(activationParam, environment);
+        var analysisScope = CreateEnvironmentAnalysisScope(environment);
+
+        var plan = new CompilationPlan<CelActivation>
+        {
+            Expr = expr,
+            InputParameter = activationParam,
+            FallbackContextExpression = Expression.Default(typeof(object)),
+            RuntimeContextParameter = runtimeContextParam,
+            Binders = binders,
+            LoweringScope = loweringScope,
+            Analysis = environment.EnableCaching
+                ? CelExpressionCache.GetOrAnalyze(expr, environment, static (cachedExpr, cachedEnvironment) => AnalyzeEnvironment(cachedExpr, cachedEnvironment))
+                : AnalyzeEnvironment(expr, environment)
+        };
+
+        return plan;
+    }
+
+    private static CelSemanticAnalysis AnalyzeContext<TContext>(CelExpr expr, CelCompileOptions options)
+    {
+        using var _ = CelDiagnosticContext.Push(CelSourceMapRegistry.TryGet(expr, out var sourceMap) ? sourceMap : null);
+        var binders = CelBinderSet.Create(typeof(TContext), options.BinderMode, options.FunctionRegistry, options.TypeRegistry, options.EnabledFeatures);
+        var runtimeContextExpr = Expression.Parameter(typeof(CelRuntimeContext), "runtimeContext");
+        var contextParam = Expression.Parameter(typeof(TContext), "context");
+        var scope = CelBindingScope.CreateRoot((name, sourceExpr) => binders.ResolveMember(contextParam, name, sourceExpr));
+        return Analyze(expr, binders, scope, runtimeContextExpr);
+    }
+
+    private static CelSemanticAnalysis AnalyzeEnvironment(CelExpr expr, CelEnvironment environment)
+    {
+        using var _ = CelDiagnosticContext.Push(CelSourceMapRegistry.TryGet(expr, out var sourceMap) ? sourceMap : null);
+        var binders = CelBinderSet.Create(typeof(object), CelBinderMode.Auto, environment.FunctionRegistry, environment.TypeRegistry, environment.EnabledFeatures);
+        var runtimeContextExpr = Expression.Parameter(typeof(CelRuntimeContext), "runtimeContext");
+        var analysisScope = CreateEnvironmentAnalysisScope(environment);
+        return Analyze(expr, binders, analysisScope, runtimeContextExpr);
+    }
+
+    private static CelSemanticAnalysis Analyze(CelExpr expr, CelBinderSet binders, CelBindingScope scope, Expression runtimeContextExpr)
+    {
+        var analysis = new CelSemanticAnalysis();
+        using var _ = CelSemanticContext.Push(analysis);
+        CompileNode(expr, Expression.Default(typeof(object)), runtimeContextExpr, binders, scope);
+        return analysis;
+    }
+
+    private static CelProgram<TInput, TResult> CompilePlan<TInput, TResult>(CompilationPlan<TInput> plan)
+    {
+        using var _ = CelDiagnosticContext.Push(CelSourceMapRegistry.TryGet(plan.Expr, out var sourceMap) ? sourceMap : null);
+        using var __ = CelSemanticContext.Push(plan.Analysis);
+        var bodyExpr = CompileNode(plan.Expr, plan.FallbackContextExpression, plan.RuntimeContextParameter, plan.Binders, plan.LoweringScope);
+        bodyExpr = CoerceResultType<TResult>(plan.Expr, bodyExpr, plan.Binders);
+        var lambda = Expression.Lambda<Func<TInput, CelRuntimeContext?, TResult>>(bodyExpr, plan.InputParameter, plan.RuntimeContextParameter);
+        return new CelProgram<TInput, TResult>(lambda.Compile());
+    }
+
+    private static Expression CoerceResultType<TResult>(CelExpr expr, Expression bodyExpr, CelBinderSet binders)
+    {
+        if (bodyExpr.Type == typeof(TResult))
+            return bodyExpr;
+
+        if (binders.TryCoerceValue(bodyExpr, typeof(TResult), out var coercedResult))
+            return coercedResult;
+
+        try
+        {
+            return Expression.Convert(bodyExpr, typeof(TResult));
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw CompilationError(
+                expr,
+                $"Cannot convert CEL expression result type '{bodyExpr.Type.Name}' to requested type '{typeof(TResult).Name}'",
+                "result_type_conversion_failed",
+                innerException: ex);
+        }
+    }
+
+    private static CelBindingScope CreateEnvironmentRuntimeScope(ParameterExpression activationParam, CelEnvironment environment)
+    {
+        var scope = CelBindingScope.CreateRoot();
+        foreach (var variable in environment.Variables)
+        {
+            scope = scope.Extend(
+                variable.Name,
+                sourceExpr =>
+                {
+                    if (sourceExpr is CelIdent ident)
+                    {
+                        var source = CelDiagnosticUtilities.GetSourceContextConstants(ident);
+                        return Expression.Call(
+                            s_getRequiredActivationValueWithSource.MakeGenericMethod(variable.ClrType),
+                            activationParam,
+                            Expression.Constant(variable.Name),
+                            source.ExpressionText,
+                            source.Start,
+                            source.End);
+                    }
+
+                    return Expression.Call(
+                        s_getRequiredActivationValue.MakeGenericMethod(variable.ClrType),
+                        activationParam,
+                        Expression.Constant(variable.Name));
+                },
+                variable.Schema is null ? null : CelSchemaValidation.CreateReference(variable.Name, variable.Schema, variable.ValidationMode));
+        }
+
+        return scope;
+    }
+
+    private static CelBindingScope CreateEnvironmentAnalysisScope(CelEnvironment environment)
+    {
+        var scope = CelBindingScope.CreateRoot();
+        foreach (var variable in environment.Variables)
+        {
+            var parameter = Expression.Parameter(variable.ClrType, variable.Name);
+            scope = scope.Extend(
+                variable.Name,
+                _ => parameter,
+                variable.Schema is null ? null : CelSchemaValidation.CreateReference(variable.Name, variable.Schema, variable.ValidationMode));
+        }
+
+        return scope;
+    }
+
+    private static bool TryAttachEnvironmentSource(Expression local, CelIdent ident, out Expression sourceAwareExpression)
+    {
+        if (local is MethodCallExpression call &&
+            call.Method.IsGenericMethod &&
+            call.Method.GetGenericMethodDefinition() == s_getRequiredActivationValue &&
+            call.Arguments.Count == 2)
+        {
+            var source = CelDiagnosticUtilities.GetSourceContextConstants(ident);
+            sourceAwareExpression = Expression.Call(
+                s_getRequiredActivationValueWithSource.MakeGenericMethod(call.Method.GetGenericArguments()[0]),
+                call.Arguments[0],
+                call.Arguments[1],
+                source.ExpressionText,
+                source.Start,
+                source.End);
+            return true;
+        }
+
+        sourceAwareExpression = local;
+        return false;
+    }
+
+    private static Expression CompileSelect(CelSelect select, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, CelBindingScope scope)
     {
         if (select.IsOptional)
         {
@@ -838,10 +1142,11 @@ public static partial class CelCompiler
         }
 
         var operandExpr = CompileNode(select.Operand, contextExpr, runtimeContextExpr, binders, scope);
+        RegisterSchemaMemberReference(select.Operand, select, select.Field);
         return binders.ResolveMember(operandExpr, select.Field, select);
     }
 
-    private static CompiledOptional CompileOptionalSelect(CelSelect select, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    private static CompiledOptional CompileOptionalSelect(CelSelect select, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, CelBindingScope scope)
     {
         if (TryCompileOptionalValue(select.Operand, contextExpr, runtimeContextExpr, binders, scope, out var operandOptional))
         {
@@ -858,17 +1163,19 @@ public static partial class CelCompiler
                         binders.ResolveOptionalMember(valueVar, select.Field, select)),
                     Expression.Call(s_optionalNone)));
 
+            RegisterSchemaMemberReference(select.Operand, select, select.Field);
             var memberType = binders.ResolveMember(Expression.Parameter(operandOptional.ValueType, "value"), select.Field, select).Type;
             return new CompiledOptional(optionalExpression, memberType);
         }
 
         var operandExpr = CompileNode(select.Operand, contextExpr, runtimeContextExpr, binders, scope);
+        RegisterSchemaMemberReference(select.Operand, select, select.Field);
         return new CompiledOptional(
             binders.ResolveOptionalMember(operandExpr, select.Field, select),
             binders.ResolveMember(operandExpr, select.Field, select).Type);
     }
 
-    private static bool TryCompileOptionalValue(CelExpr expr, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope, out CompiledOptional compiledOptional)
+    private static bool TryCompileOptionalValue(CelExpr expr, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, CelBindingScope scope, out CompiledOptional compiledOptional)
     {
         switch (expr)
         {
@@ -893,6 +1200,24 @@ public static partial class CelCompiler
                 compiledOptional = default;
                 return false;
         }
+    }
+
+    private static void RegisterSchemaMemberReference(CelExpr operandExpr, CelExpr currentExpr, string memberName)
+    {
+        var analysis = CelSemanticContext.Current;
+        if (analysis is null || !analysis.TryGetSchemaReference(operandExpr, out var schemaReference))
+            return;
+
+        analysis.RegisterSchemaReference(currentExpr, CelSchemaValidation.ResolveMember(schemaReference, memberName, currentExpr));
+    }
+
+    private static void RegisterSchemaIndexReference(CelExpr operandExpr, CelExpr indexExpr, CelExpr currentExpr)
+    {
+        var analysis = CelSemanticContext.Current;
+        if (analysis is null || !analysis.TryGetSchemaReference(operandExpr, out var schemaReference))
+            return;
+
+        analysis.RegisterSchemaReference(currentExpr, CelSchemaValidation.ResolveIndex(schemaReference, indexExpr, currentExpr, analysis));
     }
 
 }

@@ -127,6 +127,33 @@ public class DiagnosticsTests
     }
 
     [Fact]
+    public void CheckedCompilationSchemaFailureIncludesStructuredSourceLocation()
+    {
+        var environment = CelExpression.CreateEnvironment()
+            .AddVariable<JsonElement>(
+                "payload",
+                new CelEnvironmentVariableOptions
+                {
+                    Schema = CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}"""),
+                    ValidationMode = CelValidationMode.Strict
+                })
+            .Build();
+
+        var result = environment.Check("payload.missing");
+
+        Assert.False(result.Success);
+        var ex = Assert.Single(result.Diagnostics);
+        Assert.Equal("payload.missing", ex.ExpressionText);
+        Assert.Equal(new CelSourceSpan(0, 15), ex.SourceSpan);
+        Assert.Equal(1, ex.Line);
+        Assert.Equal(1, ex.Column);
+
+        var formatted = CelDiagnosticFormatter.Format(ex);
+        Assert.Contains("payload.missing", formatted);
+        Assert.Contains("^", formatted);
+    }
+
+    [Fact]
     public void FormatterIncludesLineColumnSnippetAndCaret()
     {
         var ex = Assert.Throws<CelCompilationException>(() => CelExpression.Compile<object>("1 + )"));

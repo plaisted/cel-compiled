@@ -13,17 +13,17 @@ namespace Cel.Compiled.Compiler;
 public static partial class CelCompiler
 {
     // Carries compilation context for CompileCall helpers, avoiding repeated parameter threading.
-    private readonly struct CallCompileContext(Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    private readonly struct CallCompileContext(Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, CelBindingScope scope)
     {
         public readonly Expression ContextExpr = contextExpr;
         public readonly Expression RuntimeContextExpr = runtimeContextExpr;
         public readonly CelBinderSet Binders = binders;
-        public readonly IReadOnlyDictionary<string, Expression>? Scope = scope;
+        public readonly CelBindingScope Scope = scope;
 
         public Expression Compile(CelExpr expr) => CompileNode(expr, ContextExpr, RuntimeContextExpr, Binders, Scope);
     }
 
-    private static Expression CompileCall(CelCall call, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    private static Expression CompileCall(CelCall call, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, CelBindingScope scope)
     {
         var ctx = new CallCompileContext(contextExpr, runtimeContextExpr, binders, scope);
 
@@ -517,7 +517,7 @@ public static partial class CelCompiler
     private static bool IsOptionalNoneCall(CelCall call) =>
         call.Target is CelIdent { Name: "optional" } && call.Function == "none" && call.Args.Count == 0;
 
-    private static Expression EnsureOptionalArgument(CelExpr expr, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    private static Expression EnsureOptionalArgument(CelExpr expr, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, CelBindingScope scope)
     {
         EnsureFeatureEnabled(binders, CelFeatureFlags.OptionalSupport, "optional support", expr);
 
@@ -736,7 +736,7 @@ public static partial class CelCompiler
         Expression contextExpr,
         Expression runtimeContextExpr,
         CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope,
+        CelBindingScope scope,
         CelExpr? sourceExpr)
     {
         if (target.Type != typeof(DateTimeOffset))
@@ -757,7 +757,7 @@ public static partial class CelCompiler
         Expression contextExpr,
         Expression runtimeContextExpr,
         CelBinderSet binders,
-        IReadOnlyDictionary<string, Expression>? scope)
+        CelBindingScope scope)
     {
         var timezone = CompileNode(timezoneExpr, contextExpr, runtimeContextExpr, binders, scope);
         if (timezone.Type != typeof(string))

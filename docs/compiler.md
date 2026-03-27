@@ -7,7 +7,7 @@
   - `CelCompiler.Macros.cs`: macro lowering and comprehension planning
   - `CelCompiler.Operators.cs`: low-level index access, arithmetic/comparison/logical operators, shared helper utilities
 
-  The real compilation happens in `CompileProgramUncached<TContext, TResult>` in `Cel.Compiled/Compiler/CelCompiler.cs`. It:
+  The main runtime-first compilation path still happens in `CompileProgramUncached<TContext, TResult>` in `Cel.Compiled/Compiler/CelCompiler.cs`. It:
 
   1. Pushes diagnostic/source-map context.
   2. Creates the lambda parameters for the evaluation context and optional runtime context.
@@ -16,6 +16,14 @@
   5. Converts the final expression to TResult if needed.
   6. Wraps it in `Expression.Lambda<Func<TContext, CelRuntimeContext?, TResult>>(...).Compile()`.
   7. Returns a `CelProgram<TContext, TResult>` that exposes `Invoke(context)`, `Invoke(context, runtimeOptions)`, and `AsDelegate()`.
+
+  Environment-backed compilation follows the same lowering model but with named-variable scope rather than a single implicit `TContext` root:
+
+  1. Parse source text into a CEL AST.
+  2. Run `Check(...)` for environment-backed validation when the caller uses `Check(...)` or `CompileChecked(...)`.
+  3. Build named-variable scope entries from `CelEnvironment` declarations.
+  4. Lower through the existing compiler pipeline using that scope and the environment's function/type/feature configuration.
+  5. Compile a `CelProgram<CelActivation, TResult>` that executes against runtime activations containing named values.
 
   `CompileNode(...)` in `Cel.Compiled/Compiler/CelCompiler.cs` is the main dispatcher:
 
@@ -48,7 +56,8 @@
 
   Binding is delegated to CelBinderSet in Cel.Compiled/Compiler/CelBinderSet.cs. The compiler itself does not know how to read foo.b
   ar from every runtime type; it asks the binder set to resolve members, presence checks, optional members, indexers, size, and coer
-  cions for POCOs, JsonElement, JsonNode, or descriptor-backed types.
+  cions for POCOs, JsonElement, JsonNode, or descriptor-backed types. Environment-backed checking adds a schema-aware validation pre-
+  pass for declared JSON variables before the normal lowering pipeline runs.
 
   A few major lowering patterns:
 

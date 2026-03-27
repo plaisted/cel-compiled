@@ -9,6 +9,11 @@ namespace Cel.Compiled;
 public static class CelExpression
 {
     /// <summary>
+    /// Creates a reusable CEL environment builder for environment-backed compilation workflows.
+    /// </summary>
+    public static CelEnvironmentBuilder CreateEnvironment() => CelEnvironment.Create();
+
+    /// <summary>
     /// Compiles a CEL expression for an untyped object context.
     /// </summary>
     public static CelProgram<object, object?> Compile(string celExpression, CelCompileOptions? options = null)
