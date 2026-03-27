@@ -392,6 +392,7 @@ public static partial class CelCompiler
         }
 
         var operand = ctx.Compile(select.Operand);
+        RegisterSchemaMemberReference(select.Operand, select, select.Field);
         return ctx.Binders.ResolvePresence(operand, select.Field, select);
     }
 

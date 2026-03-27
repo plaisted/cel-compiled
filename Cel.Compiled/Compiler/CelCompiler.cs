@@ -585,6 +585,10 @@ public static partial class CelCompiler
             var analysis = Check<TContext>(ParseExpression(celExpression, effectiveOptions.EnableCaching), effectiveOptions);
             return CelCheckResult.SuccessResult(analysis.ResultType);
         }
+        catch (Cel.Compiled.Parser.CelParseException ex)
+        {
+            return CelCheckResult.Failure(CelCompilationException.Parse(celExpression, ex.Message, ex.Position, ex.EndPosition, ex));
+        }
         catch (CelCompilationException ex)
         {
             return CelCheckResult.Failure(ex);
@@ -651,14 +655,18 @@ public static partial class CelCompiler
     {
         ArgumentNullException.ThrowIfNull(expr);
         ArgumentNullException.ThrowIfNull(analysis);
-        return CompileProgram<TContext>(expr, options);
+        var effectiveOptions = options ?? CelCompileOptions.Default;
+        var plan = BuildContextCompilationPlan<TContext>(expr, effectiveOptions, analysis);
+        return CompilePlan<TContext, object?>(plan);
     }
 
     internal static CelProgram<TContext, TResult> CompileCheckedProgram<TContext, TResult>(CelExpr expr, CelSemanticAnalysis analysis, CelCompileOptions? options)
     {
         ArgumentNullException.ThrowIfNull(expr);
         ArgumentNullException.ThrowIfNull(analysis);
-        return CompileProgram<TContext, TResult>(expr, options);
+        var effectiveOptions = options ?? CelCompileOptions.Default;
+        var plan = BuildContextCompilationPlan<TContext>(expr, effectiveOptions, analysis);
+        return CompilePlan<TContext, TResult>(plan);
     }
 
     internal static CelSemanticAnalysis CheckOrThrow<TContext>(string celExpression, CelCompileOptions? options)
@@ -910,7 +918,7 @@ public static partial class CelCompiler
     private static CelExpr ParseExpression(string celExpression, bool enableCaching) =>
         enableCaching ? CelExpressionCache.GetOrParse(celExpression) : ParseOrThrow(celExpression);
 
-    private static CompilationPlan<TContext> BuildContextCompilationPlan<TContext>(CelExpr expr, CelCompileOptions options)
+    private static CompilationPlan<TContext> BuildContextCompilationPlan<TContext>(CelExpr expr, CelCompileOptions options, CelSemanticAnalysis? analysis = null)
     {
         using var _ = CelDiagnosticContext.Push(CelSourceMapRegistry.TryGet(expr, out var sourceMap) ? sourceMap : null);
         var contextParam = Expression.Parameter(typeof(TContext), "context");
@@ -926,9 +934,10 @@ public static partial class CelCompiler
             RuntimeContextParameter = runtimeContextParam,
             Binders = binders,
             LoweringScope = scope,
-            Analysis = options.EnableCaching
-                ? CelExpressionCache.GetOrAnalyze<TContext>(expr, options, static (cachedExpr, cachedOptions) => AnalyzeContext<TContext>(cachedExpr, cachedOptions))
-                : AnalyzeContext<TContext>(expr, options)
+            Analysis = analysis
+                ?? (options.EnableCaching
+                    ? CelExpressionCache.GetOrAnalyze<TContext>(expr, options, static (cachedExpr, cachedOptions) => AnalyzeContext<TContext>(cachedExpr, cachedOptions))
+                    : AnalyzeContext<TContext>(expr, options))
         };
 
         return plan;

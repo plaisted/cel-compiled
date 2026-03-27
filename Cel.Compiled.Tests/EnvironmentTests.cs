@@ -97,6 +97,53 @@ public class EnvironmentTests
     }
 
     [Fact]
+    public void CheckFailsForUnknownSchemaMemberInsideHasInStrictMode()
+    {
+        var options = new CelCompileOptions()
+            .AddSchemaMember<MixedContext, JsonElement>(
+                x => x.Payload,
+                CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}"""),
+                CelValidationMode.Strict);
+
+        var result = CelExpression.Check<MixedContext>("has(Payload.missing)", options);
+
+        Assert.False(result.Success);
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Contains("missing", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Equal(new CelSourceSpan(4, 19), diagnostic.SourceSpan);
+    }
+
+    [Fact]
+    public void CheckAllowsDeclaredSchemaMemberInsideHasInStrictMode()
+    {
+        var options = new CelCompileOptions()
+            .AddSchemaMember<MixedContext, JsonElement>(
+                x => x.Payload,
+                CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}"""),
+                CelValidationMode.Strict);
+
+        var result = CelExpression.Check<MixedContext>("has(Payload.userId)", options);
+
+        Assert.True(result.Success);
+        Assert.Equal(typeof(bool), result.ResultType);
+    }
+
+    [Fact]
+    public void CheckAllowsUnknownSchemaMemberInsideHasInLooseMode()
+    {
+        var options = new CelCompileOptions()
+            .AddSchemaMember<MixedContext, JsonElement>(
+                x => x.Payload,
+                CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}"""),
+                CelValidationMode.Loose);
+
+        var result = CelExpression.Check<MixedContext>("has(Payload.missing)", options);
+
+        Assert.True(result.Success);
+        Assert.Equal(typeof(bool), result.ResultType);
+    }
+
+    [Fact]
     public void CheckRejectsObjectStyleMemberAccessOnSchemaArray()
     {
         var options = new CelCompileOptions()
@@ -171,6 +218,17 @@ public class EnvironmentTests
     {
         var uncheckedProgram = CelExpression.Compile<MixedContext, string>("Request.UserId");
         var checkedProgram = CelExpression.CompileChecked<MixedContext, string>("Request.UserId");
+        var context = new MixedContext { Request = new RequestContext { UserId = "alice" } };
+
+        Assert.Equal(uncheckedProgram.Invoke(context), checkedProgram.Invoke(context));
+    }
+
+    [Fact]
+    public void CompileCheckedMatchesUncheckedExecutionWhenCachingDisabled()
+    {
+        var options = new CelCompileOptions { EnableCaching = false };
+        var uncheckedProgram = CelExpression.Compile<MixedContext, string>("Request.UserId", options);
+        var checkedProgram = CelExpression.CompileChecked<MixedContext, string>("Request.UserId", options);
         var context = new MixedContext { Request = new RequestContext { UserId = "alice" } };
 
         Assert.Equal(uncheckedProgram.Invoke(context), checkedProgram.Invoke(context));

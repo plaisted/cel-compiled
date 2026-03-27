@@ -58,6 +58,21 @@ public class DiagnosticsTests
     }
 
     [Fact]
+    public void CheckParseFailureReturnsDiagnosticInsteadOfThrowing()
+    {
+        var result = CelExpression.Check<object>("1 + )");
+
+        Assert.False(result.Success);
+        Assert.Null(result.ResultType);
+        var ex = Assert.Single(result.Diagnostics);
+        Assert.Equal("parse_error", ex.ErrorCode);
+        Assert.Equal(1, ex.Line);
+        Assert.Equal(5, ex.Column);
+        Assert.Equal("1 + )", ex.ExpressionText);
+        Assert.Equal(new CelSourceSpan(4, 5), ex.SourceSpan);
+    }
+
+    [Fact]
     public void EmptyExpressionCompileFailureUsesExplicitMessage()
     {
         var ex = Assert.Throws<CelCompilationException>(() => CelExpression.Compile<object>(string.Empty));
