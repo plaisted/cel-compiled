@@ -202,42 +202,6 @@ internal static class CelRuntimeHelpers
     public static CelOptional GetOptionalDictionaryValue(IDictionary dictionary, object key) =>
         dictionary.Contains(key) ? OptionalOf(dictionary[key]) : OptionalNone();
 
-    public static T GetRequiredActivationValue<T>(CelActivation activation, string name)
-    {
-        ArgumentNullException.ThrowIfNull(activation);
-        ArgumentNullException.ThrowIfNull(name);
-
-        if (!activation.TryGetValue(name, out var raw))
-            throw new CelRuntimeException("no_such_field", $"Activation does not contain a value for '{name}'.");
-
-        if (raw is null)
-        {
-            if (default(T) is null)
-                return default!;
-
-            throw new CelRuntimeException("invalid_argument", $"Activation value '{name}' is null and cannot be used as '{typeof(T).Name}'.");
-        }
-
-        if (raw is T typed)
-            return typed;
-
-        throw new CelRuntimeException(
-            "invalid_argument",
-            $"Activation value '{name}' has CLR type '{raw.GetType().Name}' but the environment expects '{typeof(T).Name}'.");
-    }
-
-    public static T GetRequiredActivationValue<T>(CelActivation activation, string name, string? expressionText, int start, int end)
-    {
-        try
-        {
-            return GetRequiredActivationValue<T>(activation, name);
-        }
-        catch (CelRuntimeException ex)
-        {
-            throw WithSource(ex, expressionText, start, end);
-        }
-    }
-
     public static bool CelEquals(object? left, object? right)
     {
         left = NormalizeCelValue(left);

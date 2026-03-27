@@ -22,6 +22,9 @@ public class PublicApiSurfaceTests
         Assert.DoesNotContain("Cel.Compiled.Compiler.CelRuntimeHelpers", exported);
         Assert.DoesNotContain("Cel.Compiled.Compiler.CelError", exported);
         Assert.DoesNotContain("Cel.Compiled.Compiler.CelResult`1", exported);
+        Assert.DoesNotContain("Cel.Compiled.CelActivation", exported);
+        Assert.DoesNotContain("Cel.Compiled.CelEnvironment", exported);
+        Assert.DoesNotContain("Cel.Compiled.CelEnvironment`1", exported);
     }
 
     [Fact]

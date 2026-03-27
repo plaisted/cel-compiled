@@ -9,11 +9,6 @@ namespace Cel.Compiled;
 public static class CelExpression
 {
     /// <summary>
-    /// Creates a reusable CEL environment builder for environment-backed compilation workflows.
-    /// </summary>
-    public static CelEnvironmentBuilder CreateEnvironment() => CelEnvironment.Create();
-
-    /// <summary>
     /// Compiles a CEL expression for an untyped object context.
     /// </summary>
     public static CelProgram<object, object?> Compile(string celExpression, CelCompileOptions? options = null)
@@ -38,6 +33,33 @@ public static class CelExpression
     {
         ArgumentNullException.ThrowIfNull(celExpression);
         return CelCompiler.CompileProgram<TContext, TResult>(celExpression, options);
+    }
+
+    /// <summary>
+    /// Validates a CEL expression for a specific context type without compiling a reusable program.
+    /// </summary>
+    public static CelCheckResult Check<TContext>(string celExpression, CelCompileOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(celExpression);
+        return CelCompiler.Check<TContext>(celExpression, options);
+    }
+
+    /// <summary>
+    /// Compiles a CEL expression for a specific context type after validation.
+    /// </summary>
+    public static CelProgram<TContext, object?> CompileChecked<TContext>(string celExpression, CelCompileOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(celExpression);
+        return CelCompiler.CompileCheckedProgram<TContext>(celExpression, options);
+    }
+
+    /// <summary>
+    /// Compiles a CEL expression for a specific context type and result type after validation.
+    /// </summary>
+    public static CelProgram<TContext, TResult> CompileChecked<TContext, TResult>(string celExpression, CelCompileOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(celExpression);
+        return CelCompiler.CompileCheckedProgram<TContext, TResult>(celExpression, options);
     }
 
     /// <summary>

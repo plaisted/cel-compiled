@@ -43,11 +43,9 @@ These are low-effort, high-impact additions that make the library easier to adop
 
 These require more coordinated parser and compiler changes but fit the current architecture.
 
-### ~~First-Class Environment Model — P1 / D3~~ Done
+### Typed-Root Schema Validation — P1 / D3
 
-`Cel.Compiled` now exposes a first-class `CelEnvironment` abstraction for declaring variables, functions, types, feature flags, and checker inputs ahead of compilation.
-
-The existing `TContext` plus `CelCompileOptions` APIs remain supported as the lightweight runtime-first path, but environment-backed workflows now provide reusable named variables and checker configuration for richer authoring and validation scenarios.
+`Cel.Compiled` now exposes typed-root `Check(...)` / `CompileChecked(...)` APIs plus selector-based schema annotations on `CelCompileOptions` for schema-backed JSON members.
 
 ### ~~Comprehensive Runtime Error Attribution — P1 / D2~~ Done
 
@@ -109,9 +107,9 @@ These features matter most for mature embeddings, IDE integration, and advanced 
 
 ### Static Type Checking — P1 long-term / D4
 
-A dedicated `Env.Check()`-style phase that validates type correctness at compile time before evaluation, producing a checked AST with resolved types and overloads. `Cel.Compiled` now has an environment-backed `Check(...)` / `CompileChecked(...)` workflow for POCOs, descriptor-backed types, and schema-backed JSON, but it does not yet expose a public checked AST or the richer semantic metadata needed for full IDE- and tooling-oriented workflows. That remains the biggest architectural gap relative to `cel-go`.
+A dedicated checked-expression phase that validates type correctness at compile time before evaluation, producing a checked AST with resolved types and overloads. `Cel.Compiled` now has public typed-root `Check(...)` / `CompileChecked(...)` support for POCOs, descriptor-backed types, and schema-backed JSON members, but it does not yet expose a public checked AST or the richer semantic metadata needed for full IDE- and tooling-oriented workflows. That remains the biggest architectural gap relative to `cel-go`.
 
-The environment prerequisite is now in place, so the remaining work is broadening checking coverage, exposing stable checked metadata where appropriate, and deciding how much tooling-oriented inspection surface should become public.
+The remaining work is broadening checking coverage, exposing stable checked metadata where appropriate, and deciding how much tooling-oriented inspection surface should become public.
 
 ### AST Validators and Optimizers — P2 / D2
 

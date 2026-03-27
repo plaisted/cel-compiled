@@ -15,7 +15,7 @@ internal static class CelExpressionCache
 
     public static CelProgram<TContext, object?> GetOrCompile<TContext>(CelExpr expr, CelCompileOptions options)
     {
-        var key = new CacheKey(typeof(TContext), typeof(object), expr, options.BinderMode, options.EnabledFeatures, options.FunctionRegistry?.IdentityHash, options.TypeRegistry?.IdentityHash, null);
+        var key = new CacheKey(typeof(TContext), typeof(object), expr, options.BinderMode, options.EnabledFeatures, options.FunctionRegistry?.IdentityHash, options.TypeRegistry?.IdentityHash, options.SchemaMemberIdentityHash);
         return (CelProgram<TContext, object?>)s_cache.GetOrAdd(
             key,
             static (cacheKey, state) => state.BuildObjectProgram<TContext>(cacheKey.Expr, state.Options!),
@@ -24,29 +24,11 @@ internal static class CelExpressionCache
 
     public static CelProgram<TContext, TResult> GetOrCompile<TContext, TResult>(CelExpr expr, CelCompileOptions options)
     {
-        var key = new CacheKey(typeof(TContext), typeof(TResult), expr, options.BinderMode, options.EnabledFeatures, options.FunctionRegistry?.IdentityHash, options.TypeRegistry?.IdentityHash, null);
+        var key = new CacheKey(typeof(TContext), typeof(TResult), expr, options.BinderMode, options.EnabledFeatures, options.FunctionRegistry?.IdentityHash, options.TypeRegistry?.IdentityHash, options.SchemaMemberIdentityHash);
         return (CelProgram<TContext, TResult>)s_cache.GetOrAdd(
             key,
             static (cacheKey, state) => state.BuildTypedProgram<TContext, TResult>(cacheKey.Expr, state.Options!),
             new BuildState(Options: options));
-    }
-
-    public static CelProgram<CelActivation, object?> GetOrCompile(CelExpr expr, CelEnvironment environment)
-    {
-        var key = new CacheKey(typeof(CelActivation), typeof(object), expr, CelBinderMode.Auto, environment.EnabledFeatures, environment.FunctionRegistry?.IdentityHash, environment.TypeRegistry?.IdentityHash, environment.IdentityHash);
-        return (CelProgram<CelActivation, object?>)s_cache.GetOrAdd(
-            key,
-            static (cacheKey, state) => state.BuildObjectEnvironmentProgram(cacheKey.Expr, state.Environment!),
-            new BuildState(Environment: environment));
-    }
-
-    public static CelProgram<CelActivation, TResult> GetOrCompile<TResult>(CelExpr expr, CelEnvironment environment)
-    {
-        var key = new CacheKey(typeof(CelActivation), typeof(TResult), expr, CelBinderMode.Auto, environment.EnabledFeatures, environment.FunctionRegistry?.IdentityHash, environment.TypeRegistry?.IdentityHash, environment.IdentityHash);
-        return (CelProgram<CelActivation, TResult>)s_cache.GetOrAdd(
-            key,
-            static (cacheKey, state) => state.BuildTypedEnvironmentProgram<TResult>(cacheKey.Expr, state.Environment!),
-            new BuildState(Environment: environment));
     }
 
     public static CelExpr GetOrParse(string expression)
@@ -56,14 +38,8 @@ internal static class CelExpressionCache
 
     public static CelSemanticAnalysis GetOrAnalyze<TContext>(CelExpr expr, CelCompileOptions options, Func<CelExpr, CelCompileOptions, CelSemanticAnalysis> analyzer)
     {
-        var key = new AnalysisCacheKey(typeof(TContext), expr, options.BinderMode, options.EnabledFeatures, options.FunctionRegistry?.IdentityHash, options.TypeRegistry?.IdentityHash, null);
-        return s_analysisCache.GetOrAdd(key, static (cacheKey, state) => state.RequireAnalyzer()(cacheKey.Expr, state.RequireOptions()), (AnalyzerState)(new(options, null, analyzer, null)));
-    }
-
-    public static CelSemanticAnalysis GetOrAnalyze(CelExpr expr, CelEnvironment environment, Func<CelExpr, CelEnvironment, CelSemanticAnalysis> analyzer)
-    {
-        var key = new AnalysisCacheKey(typeof(CelActivation), expr, CelBinderMode.Auto, environment.EnabledFeatures, environment.FunctionRegistry?.IdentityHash, environment.TypeRegistry?.IdentityHash, environment.IdentityHash);
-        return s_analysisCache.GetOrAdd(key, static (cacheKey, state) => state.EnvironmentAnalyzer!(cacheKey.Expr, state.Environment!), new AnalyzerState(null, environment, null, analyzer));
+        var key = new AnalysisCacheKey(typeof(TContext), expr, options.BinderMode, options.EnabledFeatures, options.FunctionRegistry?.IdentityHash, options.TypeRegistry?.IdentityHash, options.SchemaMemberIdentityHash);
+        return s_analysisCache.GetOrAdd(key, static (cacheKey, state) => state.RequireAnalyzer()(cacheKey.Expr, state.RequireOptions()), (AnalyzerState)(new(options, analyzer, null)));
     }
 
     public static void Clear()
@@ -73,22 +49,17 @@ internal static class CelExpressionCache
         s_parseCache.Clear();
     }
 
-    private readonly record struct BuildState(CelCompileOptions? Options = null, CelEnvironment? Environment = null)
+    private readonly record struct BuildState(CelCompileOptions? Options = null)
     {
         public CelProgram<TContext, object?> BuildObjectProgram<TContext>(CelExpr expr, CelCompileOptions options) => CelCompiler.CompileProgramUncached<TContext>(expr, options);
 
         public CelProgram<TContext, TResult> BuildTypedProgram<TContext, TResult>(CelExpr expr, CelCompileOptions options) => CelCompiler.CompileProgramUncached<TContext, TResult>(expr, options);
-
-        public CelProgram<CelActivation, object?> BuildObjectEnvironmentProgram(CelExpr expr, CelEnvironment environment) => CelCompiler.CompileProgramUncached<object?>(expr, environment);
-
-        public CelProgram<CelActivation, TResult> BuildTypedEnvironmentProgram<TResult>(CelExpr expr, CelEnvironment environment) => CelCompiler.CompileProgramUncached<TResult>(expr, environment);
     }
 
     private readonly record struct AnalyzerState(
         CelCompileOptions? Options,
-        CelEnvironment? Environment,
         Func<CelExpr, CelCompileOptions, CelSemanticAnalysis>? Analyzer,
-        Func<CelExpr, CelEnvironment, CelSemanticAnalysis>? EnvironmentAnalyzer)
+        object? Unused)
     {
         public CelCompileOptions RequireOptions() => Options ?? throw new InvalidOperationException("Analyzer options were not provided.");
 

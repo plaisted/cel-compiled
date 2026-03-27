@@ -79,34 +79,34 @@ var program = CelExpression.Compile<JsonElement, bool>(
     options);
 ```
 
-### Environment-Backed Checking
+### Schema-Backed Checking
 
-Use a reusable environment when you want named variables, mixed POCO and JSON inputs, or an explicit validation step before compilation.
+Use `CelCompileOptions` when you want schema-aware validation for JSON members on a strongly typed CLR context before compilation.
 
 ```csharp
 using System.Text.Json;
 using Cel.Compiled;
 using Cel.Compiled.Compiler;
 
-var environment = CelExpression.CreateEnvironment()
-    .AddVariable<RequestContext>("request")
-    .AddVariable<JsonElement>(
-        "payload",
-        new CelEnvironmentVariableOptions
-        {
-            BinderMode = CelBinderMode.JsonElement,
-            Schema = CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}"""),
-            ValidationMode = CelValidationMode.Strict
-        })
-    .Build();
+public sealed class EvalContext
+{
+    public RequestContext Request { get; init; } = new();
+    public JsonElement Payload { get; init; }
+}
 
-var check = environment.Check("request.UserId == payload.userId");
+var options = new CelCompileOptions()
+    .AddSchemaMember<EvalContext, JsonElement>(
+        x => x.Payload,
+        CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}"""),
+        CelValidationMode.Strict);
+
+var check = CelExpression.Check<EvalContext>("Request.UserId == Payload.userId", options);
 if (!check.Success)
 {
     throw check.Diagnostics[0];
 }
 
-var program = environment.CompileChecked<bool>("request.UserId == payload.userId");
+var program = CelExpression.CompileChecked<EvalContext, bool>("Request.UserId == Payload.userId", options);
 ```
 
 ### Runtime Safety For Untrusted Inputs
@@ -207,8 +207,7 @@ BenchmarkDotNet writes detailed reports to `BenchmarkDotNet.Artifacts/results/`.
 
 `Cel.Compiled` aims to be a practical, high-performance .NET CEL runtime, not a line-for-line clone of `cel-go`. The biggest current differences are:
 
-- **Static checking is present but intentionally scoped**: the library now exposes an environment-backed `Check(...)` / `CompileChecked(...)` workflow for named variables, POCOs, descriptor-backed types, and schema-backed JSON validation. It does not yet expose a public checked AST or the broader tooling surface that `cel-go` builds around checked expressions.
-- **Environment support is newer than the runtime-first APIs**: `CelEnvironment` now provides a first-class environment model for variables, functions, types, feature flags, and checker inputs, but the existing `TContext` plus `CelCompileOptions` APIs remain the primary lightweight path for compile-once/run-many scenarios.
+- **Static checking is present but intentionally scoped**: the library now exposes typed-root `Check(...)` / `CompileChecked(...)` workflows, including schema-backed JSON validation through `CelCompileOptions`. It does not yet expose a public checked AST or the broader tooling surface that `cel-go` builds around checked expressions.
 - **Runtime-first design**: the library is strongest when you compile once and reuse delegates. It is less optimized for one-off evaluation or tooling workflows built around checked AST inspection.
 - **No portable compiled-expression serialization**: compiled delegates are cached in-process, but there is no `cel-go`-style serialized checked-expression or compiled-plan format that can be saved and reloaded across processes.
 - **Partial evaluation and residualization are not implemented**: unknown propagation, residual AST generation, and richer evaluation-state tooling are still gaps.

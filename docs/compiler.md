@@ -17,13 +17,14 @@
   6. Wraps it in `Expression.Lambda<Func<TContext, CelRuntimeContext?, TResult>>(...).Compile()`.
   7. Returns a `CelProgram<TContext, TResult>` that exposes `Invoke(context)`, `Invoke(context, runtimeOptions)`, and `AsDelegate()`.
 
-  Environment-backed compilation follows the same lowering model but with named-variable scope rather than a single implicit `TContext` root:
+  Schema-backed typed-root compilation follows the same lowering model but may pre-seed compile-time schema references for
+  selected root members declared through `CelCompileOptions`:
 
   1. Parse source text into a CEL AST.
-  2. Run `Check(...)` for environment-backed validation when the caller uses `Check(...)` or `CompileChecked(...)`.
-  3. Build named-variable scope entries from `CelEnvironment` declarations.
-  4. Lower through the existing compiler pipeline using that scope and the environment's function/type/feature configuration.
-  5. Compile a `CelProgram<CelActivation, TResult>` that executes against runtime activations containing named values.
+  2. Run `Check(...)` for typed-root validation when the caller uses `Check(...)` or `CompileChecked(...)`.
+  3. Build root-member schema entries from `CelCompileOptions.AddSchemaMember(...)`.
+  4. Lower through the existing compiler pipeline using that scope and the context's function/type/feature configuration.
+  5. Compile a `CelProgram<TContext, TResult>` that executes against the normal typed CLR context.
 
   `CompileNode(...)` in `Cel.Compiled/Compiler/CelCompiler.cs` is the main dispatcher:
 
@@ -56,8 +57,8 @@
 
   Binding is delegated to CelBinderSet in Cel.Compiled/Compiler/CelBinderSet.cs. The compiler itself does not know how to read foo.b
   ar from every runtime type; it asks the binder set to resolve members, presence checks, optional members, indexers, size, and coer
-  cions for POCOs, JsonElement, JsonNode, or descriptor-backed types. Environment-backed checking adds a schema-aware validation pre-
-  pass for declared JSON variables before the normal lowering pipeline runs.
+  cions for POCOs, JsonElement, JsonNode, or descriptor-backed types. Schema-backed checking adds a schema-aware validation pre-pass
+  for selected root JSON members before the normal lowering pipeline runs.
 
   A few major lowering patterns:
 

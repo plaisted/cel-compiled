@@ -22,130 +22,59 @@ public class EnvironmentTests
         public string TenantId { get; set; } = string.Empty;
     }
 
-    [Fact]
-    public void EnvironmentCanCompileAgainstNamedPocoAndJsonVariables()
+    private sealed class MixedContext
     {
-        var environment = CelExpression.CreateEnvironment()
-            .AddVariable<RequestContext>("request")
-            .AddVariable<JsonElement>(
-                "payload",
-                new CelEnvironmentVariableOptions
-                {
-                    Schema = CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}""")
-                })
-            .Build();
+        public RequestContext Request { get; set; } = new();
+        public JsonElement Payload { get; set; }
+        public JsonDocument PayloadDocument { get; set; } = JsonDocument.Parse("{}");
+        public JsonNode PayloadNode { get; set; } = JsonNode.Parse("{}")!;
+        public Resource Resource { get; set; } = new();
+        public AccountContext Account { get; set; } = new();
+    }
 
-        var program = environment.Compile<bool>("request.UserId == payload.userId");
+    [Fact]
+    public void CompileCanUseSchemaBoundJsonElementMemberAlongsidePocoMembers()
+    {
         using var payload = JsonDocument.Parse("""{"userId":"alice"}""");
-        var activation = CelActivation.Create(
-            ("request", new RequestContext { UserId = "alice" }),
-            ("payload", payload.RootElement));
+        var options = new CelCompileOptions()
+            .AddSchemaMember<MixedContext, JsonElement>(
+                x => x.Payload,
+                CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}"""));
 
-        Assert.True(program.Invoke(activation));
-    }
-
-    [Fact]
-    public void EnvironmentCacheIsolatedAcrossDifferentVariableSets()
-    {
-        var sharedSchema = CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}""");
-        var expression = "request.UserId == payload.userId";
-
-        var firstEnvironment = CelExpression.CreateEnvironment()
-            .AddVariable<RequestContext>("request")
-            .AddVariable<JsonElement>("payload", new CelEnvironmentVariableOptions
-            {
-                Schema = sharedSchema
-            })
-            .Build();
-
-        var secondEnvironment = CelExpression.CreateEnvironment()
-            .AddVariable<RequestContext>("request")
-            .AddVariable<JsonElement>("payload", new CelEnvironmentVariableOptions
-            {
-                Schema = sharedSchema
-            })
-            .AddVariable<long>("tenantId")
-            .Build();
-
-        var first = firstEnvironment.Compile<bool>(expression);
-        var second = secondEnvironment.Compile<bool>(expression);
-
-        Assert.NotSame(first, second);
-    }
-
-    [Fact]
-    public void EnvironmentBuilderCanApplyCompileOptions()
-    {
-        var registry = new CelFunctionRegistryBuilder()
-            .AddGlobalFunction("slug", (Func<string, string>)(value => value.ToLowerInvariant()))
-            .Build();
-
-        var options = new CelCompileOptions
+        var program = CelExpression.Compile<MixedContext, bool>("Request.UserId == Payload.userId", options);
+        var context = new MixedContext
         {
-            EnableCaching = false,
-            EnabledFeatures = CelFeatureFlags.StringExtensions,
-            FunctionRegistry = registry
+            Request = new RequestContext { UserId = "alice" },
+            Payload = payload.RootElement
         };
 
-        var environment = CelExpression.CreateEnvironment()
-            .ApplyCompileOptions(options)
-            .AddVariable<string>("name")
-            .Build();
-
-        Assert.False(environment.EnableCaching);
-        Assert.Equal(CelFeatureFlags.StringExtensions, environment.EnabledFeatures);
-        Assert.Same(registry, environment.FunctionRegistry);
-        Assert.Single(environment.Variables);
+        Assert.True(program.Invoke(context));
     }
 
     [Fact]
-    public void EnvironmentCheckReportsMissingMemberForPocoVariable()
+    public void CheckSupportsMixedPocoAndSchemaBoundJsonMembers()
     {
-        var environment = CelExpression.CreateEnvironment()
-            .AddVariable<RequestContext>("request")
-            .Build();
+        var options = new CelCompileOptions()
+            .AddSchemaMember<MixedContext, JsonElement>(
+                x => x.Payload,
+                CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}"""));
 
-        var result = environment.Check("request.MissingField == 'alice'");
-
-        Assert.False(result.Success);
-        var diagnostic = Assert.Single(result.Diagnostics);
-        Assert.Equal("compilation_error", diagnostic.ErrorCode);
-        Assert.Contains("MissingField", diagnostic.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void EnvironmentCheckSupportsMixedVariables()
-    {
-        var environment = CelExpression.CreateEnvironment()
-            .AddVariable<RequestContext>("request")
-            .AddVariable<JsonElement>(
-                "payload",
-                new CelEnvironmentVariableOptions
-                {
-                    Schema = CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}""")
-                })
-            .Build();
-
-        var result = environment.Check("request.UserId == payload.userId");
+        var result = CelExpression.Check<MixedContext>("Request.UserId == Payload.userId", options);
 
         Assert.True(result.Success);
         Assert.Equal(typeof(bool), result.ResultType);
     }
 
     [Fact]
-    public void EnvironmentCheckFailsForUnknownSchemaMemberInStrictMode()
+    public void CheckFailsForUnknownSchemaMemberInStrictMode()
     {
-        var environment = CelExpression.CreateEnvironment()
-            .AddVariable<JsonElement>(
-                "payload",
-                new CelEnvironmentVariableOptions
-                {
-                    Schema = CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}"""),
-                    ValidationMode = CelValidationMode.Strict
-                })
-            .Build();
+        var options = new CelCompileOptions()
+            .AddSchemaMember<MixedContext, JsonElement>(
+                x => x.Payload,
+                CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}"""),
+                CelValidationMode.Strict);
 
-        var result = environment.Check("payload.missing");
+        var result = CelExpression.Check<MixedContext>("Payload.missing", options);
 
         Assert.False(result.Success);
         var diagnostic = Assert.Single(result.Diagnostics);
@@ -154,251 +83,188 @@ public class EnvironmentTests
     }
 
     [Fact]
-    public void EnvironmentCheckAllowsUnknownSchemaMemberInLooseMode()
+    public void CheckAllowsUnknownSchemaMemberInLooseMode()
     {
-        var environment = CelExpression.CreateEnvironment()
-            .AddVariable<JsonElement>(
-                "payload",
-                new CelEnvironmentVariableOptions
-                {
-                    Schema = CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}"""),
-                    ValidationMode = CelValidationMode.Loose
-                })
-            .Build();
+        var options = new CelCompileOptions()
+            .AddSchemaMember<MixedContext, JsonElement>(
+                x => x.Payload,
+                CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}"""),
+                CelValidationMode.Loose);
 
-        var result = environment.Check("payload.missing");
+        var result = CelExpression.Check<MixedContext>("Payload.missing", options);
 
         Assert.True(result.Success);
     }
 
     [Fact]
-    public void EnvironmentCheckRejectsObjectStyleMemberAccessOnSchemaArray()
+    public void CheckRejectsObjectStyleMemberAccessOnSchemaArray()
     {
-        var environment = CelExpression.CreateEnvironment()
-            .AddVariable<JsonElement>(
-                "payload",
-                new CelEnvironmentVariableOptions
-                {
-                    Schema = CelSchema.FromJson("""{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"}}}}""")
-                })
-            .Build();
+        var options = new CelCompileOptions()
+            .AddSchemaMember<MixedContext, JsonElement>(
+                x => x.Payload,
+                CelSchema.FromJson("""{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"}}}}"""));
 
-        var result = environment.Check("payload.name");
+        var result = CelExpression.Check<MixedContext>("Payload.name", options);
 
         Assert.False(result.Success);
         Assert.Contains("array", Assert.Single(result.Diagnostics).Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void EnvironmentCheckSupportsSchemaArrayIndexing()
+    public void CheckSupportsSchemaArrayIndexing()
     {
-        var environment = CelExpression.CreateEnvironment()
-            .AddVariable<JsonElement>(
-                "payload",
-                new CelEnvironmentVariableOptions
-                {
-                    Schema = CelSchema.FromJson("""{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"}}}}""")
-                })
-            .Build();
+        var options = new CelCompileOptions()
+            .AddSchemaMember<MixedContext, JsonElement>(
+                x => x.Payload,
+                CelSchema.FromJson("""{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"}}}}"""));
 
-        var result = environment.Check("payload[0].name == 'alice'");
+        var result = CelExpression.Check<MixedContext>("Payload[0].name == 'alice'", options);
 
         Assert.True(result.Success);
         Assert.Equal(typeof(bool), result.ResultType);
     }
 
     [Fact]
-    public void EnvironmentReuseSupportsCachingAndTypeRegistryConfiguration()
+    public void CheckRejectsStringSchemaArrayIndex()
     {
-        var typeRegistry = new CelTypeRegistryBuilder()
-            .AddDescriptor(new CelTypeDescriptorBuilder<Resource>("example.Resource")
-                .AddMember("displayName", resource => resource.RawName.ToUpperInvariant())
-                .Build())
-            .Build();
+        var options = new CelCompileOptions()
+            .AddSchemaMember<MixedContext, JsonElement>(
+                x => x.Payload,
+                CelSchema.FromJson("""{"type":"array","items":{"type":"string"}}"""));
 
-        var environment = CelExpression.CreateEnvironment()
-            .SetTypeRegistry(typeRegistry)
-            .AddVariable<Resource>("resource")
-            .Build();
-
-        var first = environment.Compile<string>("resource.displayName");
-        var second = environment.Compile<string>("resource.displayName");
-
-        Assert.Same(first, second);
-        Assert.Equal("ALPHA", first.Invoke(CelActivation.Create(("resource", new Resource { RawName = "alpha" }))));
-    }
-
-    [Fact]
-    public void CompileCheckedMatchesUncheckedExecutionForValidEnvironmentExpression()
-    {
-        var environment = CelExpression.CreateEnvironment()
-            .AddVariable<RequestContext>("request")
-            .Build();
-
-        var uncheckedProgram = environment.Compile<string>("request.UserId");
-        var checkedProgram = environment.CompileChecked<string>("request.UserId");
-        var activation = CelActivation.Create(("request", new RequestContext { UserId = "alice" }));
-
-        Assert.Equal(uncheckedProgram.Invoke(activation), checkedProgram.Invoke(activation));
-    }
-
-    [Fact]
-    public void CompileCheckedReusesAnalyzedCacheEntryFromUncheckedEnvironmentCompile()
-    {
-        var environment = CelExpression.CreateEnvironment()
-            .AddVariable<RequestContext>("request")
-            .Build();
-
-        var uncheckedProgram = environment.Compile<string>("request.UserId");
-        var checkedProgram = environment.CompileChecked<string>("request.UserId");
-        var checkedAgain = environment.CompileChecked<string>("request.UserId");
-
-        Assert.Same(uncheckedProgram, checkedProgram);
-        Assert.Same(checkedProgram, checkedAgain);
-    }
-
-    [Fact]
-    public void EnvironmentProgramThrowsCelRuntimeExceptionForMissingActivationValue()
-    {
-        var environment = CelExpression.CreateEnvironment()
-            .AddVariable<RequestContext>("request")
-            .Build();
-
-        var program = environment.Compile<string>("request.UserId");
-
-        var ex = Assert.Throws<CelRuntimeException>(() => program.Invoke(CelActivation.Empty));
-        Assert.Equal("no_such_field", ex.ErrorCode);
-        Assert.Equal("request.UserId", ex.ExpressionText);
-        Assert.Equal(new CelSourceSpan(0, 7), ex.SourceSpan);
-    }
-
-    [Fact]
-    public void EnvironmentProgramThrowsCelRuntimeExceptionForWrongActivationType()
-    {
-        var environment = CelExpression.CreateEnvironment()
-            .AddVariable<RequestContext>("request")
-            .Build();
-
-        var program = environment.Compile<string>("request.UserId");
-        var activation = CelActivation.Create(("request", "alice"));
-
-        var ex = Assert.Throws<CelRuntimeException>(() => program.Invoke(activation));
-        Assert.Equal("invalid_argument", ex.ErrorCode);
-        Assert.Equal("request.UserId", ex.ExpressionText);
-        Assert.Equal(new CelSourceSpan(0, 7), ex.SourceSpan);
-    }
-
-    [Fact]
-    public void EnvironmentProgramAllowsNullActivationValueForReferenceTypeVariable()
-    {
-        var environment = CelExpression.CreateEnvironment()
-            .AddVariable<string>("name")
-            .Build();
-
-        var program = environment.Compile<bool>("name == null");
-
-        Assert.True(program.Invoke(CelActivation.Create(("name", null))));
-    }
-
-    [Fact]
-    public void EnvironmentProgramRejectsNullActivationValueForValueTypeVariable()
-    {
-        var environment = CelExpression.CreateEnvironment()
-            .AddVariable<long>("count")
-            .Build();
-
-        var program = environment.Compile<long>("count");
-
-        var ex = Assert.Throws<CelRuntimeException>(() => program.Invoke(CelActivation.Create(("count", null))));
-        Assert.Equal("invalid_argument", ex.ErrorCode);
-        Assert.Equal("count", ex.ExpressionText);
-        Assert.Equal(new CelSourceSpan(0, 5), ex.SourceSpan);
-    }
-
-    [Fact]
-    public void EnvironmentCheckRejectsStringSchemaArrayIndex()
-    {
-        var environment = CelExpression.CreateEnvironment()
-            .AddVariable<JsonElement>(
-                "payload",
-                new CelEnvironmentVariableOptions
-                {
-                    Schema = CelSchema.FromJson("""{"type":"array","items":{"type":"string"}}""")
-                })
-            .Build();
-
-        var result = environment.Check("payload['0']");
+        var result = CelExpression.Check<MixedContext>("Payload['0']", options);
 
         Assert.False(result.Success);
         Assert.Contains("integer index", Assert.Single(result.Diagnostics).Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void EnvironmentCheckSupportsSchemaBackedJsonNodeVariables()
+    public void CheckSupportsSchemaBackedJsonNodeMember()
     {
-        var environment = CelExpression.CreateEnvironment()
-            .AddVariable<JsonNode>(
-                "payload",
-                new CelEnvironmentVariableOptions
-                {
-                    Schema = CelSchema.FromJson("""{"type":"object","properties":{"user":{"type":"object","properties":{"name":{"type":"string"}}}}}""")
-                })
-            .Build();
+        var options = new CelCompileOptions()
+            .AddSchemaMember<MixedContext, JsonNode>(
+                x => x.PayloadNode,
+                CelSchema.FromJson("""{"type":"object","properties":{"user":{"type":"object","properties":{"name":{"type":"string"}}}}}"""));
 
-        var result = environment.Check("payload.user.name == 'alice'");
+        var result = CelExpression.Check<MixedContext>("PayloadNode.user.name == 'alice'", options);
 
         Assert.True(result.Success);
         Assert.Equal(typeof(bool), result.ResultType);
     }
 
     [Fact]
-    public void EnvironmentCanCompileAcrossPocoDescriptorAndSchemaVariables()
+    public void CheckSupportsSchemaBackedJsonDocumentMember()
     {
-        var typeRegistry = new CelTypeRegistryBuilder()
-            .AddDescriptor(new CelTypeDescriptorBuilder<Resource>("example.Resource")
-                .AddMember("displayName", resource => resource.RawName.ToUpperInvariant())
-                .Build())
-            .Build();
+        var options = new CelCompileOptions()
+            .AddSchemaMember<MixedContext, JsonDocument>(
+                x => x.PayloadDocument,
+                CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}"""));
 
-        var environment = CelExpression.CreateEnvironment()
-            .SetTypeRegistry(typeRegistry)
-            .AddVariable<AccountContext>("account")
-            .AddVariable<Resource>("resource")
-            .AddVariable<JsonElement>(
-                "payload",
-                new CelEnvironmentVariableOptions
-                {
-                    Schema = CelSchema.FromJson("""{"type":"object","properties":{"tenantId":{"type":"string"}}}""")
-                })
-            .Build();
+        var result = CelExpression.Check<MixedContext>("PayloadDocument.userId == 'alice'", options);
 
-        var program = environment.Compile<bool>("account.TenantId == payload.tenantId && resource.displayName == 'ALPHA'");
+        Assert.True(result.Success);
+        Assert.Equal(typeof(bool), result.ResultType);
+    }
+
+    [Fact]
+    public void CompileCheckedMatchesUncheckedExecution()
+    {
+        var uncheckedProgram = CelExpression.Compile<MixedContext, string>("Request.UserId");
+        var checkedProgram = CelExpression.CompileChecked<MixedContext, string>("Request.UserId");
+        var context = new MixedContext { Request = new RequestContext { UserId = "alice" } };
+
+        Assert.Equal(uncheckedProgram.Invoke(context), checkedProgram.Invoke(context));
+    }
+
+    [Fact]
+    public void CacheIsolatedAcrossDifferentSchemaMemberSets()
+    {
+        var expression = "Request.UserId == Payload.userId";
+        var sharedSchema = CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}""");
+
+        var firstOptions = new CelCompileOptions()
+            .AddSchemaMember<MixedContext, JsonElement>(x => x.Payload, sharedSchema);
+
+        var secondOptions = new CelCompileOptions()
+            .AddSchemaMember<MixedContext, JsonElement>(x => x.Payload, sharedSchema)
+            .AddSchemaMember<MixedContext, JsonNode>(
+                x => x.PayloadNode,
+                CelSchema.FromJson("""{"type":"object","properties":{"name":{"type":"string"}}}"""));
+
+        var first = CelExpression.Compile<MixedContext, bool>(expression, firstOptions);
+        var second = CelExpression.Compile<MixedContext, bool>(expression, secondOptions);
+
+        Assert.NotSame(first, second);
+    }
+
+    [Fact]
+    public void RepeatedCompilationReusesCacheForSameSchemaConfiguration()
+    {
+        var options = new CelCompileOptions()
+            .AddSchemaMember<MixedContext, JsonElement>(
+                x => x.Payload,
+                CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}"""));
+
+        var first = CelExpression.Compile<MixedContext, bool>("Request.UserId == Payload.userId", options);
+        var second = CelExpression.Compile<MixedContext, bool>("Request.UserId == Payload.userId", options);
+
+        Assert.Same(first, second);
+    }
+
+    [Fact]
+    public void SelectorValidationRejectsNestedMembers()
+    {
+        var options = new CelCompileOptions();
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            options.AddSchemaMember<MixedContext, string>(
+                x => x.Request.UserId,
+                CelSchema.FromJson("""{"type":"string"}""")));
+
+        Assert.Contains("direct member accesses", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SelectorValidationRejectsComputedExpressions()
+    {
+        var options = new CelCompileOptions();
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            options.AddSchemaMember<MixedContext, string>(
+                x => x.Request.UserId.ToUpperInvariant(),
+                CelSchema.FromJson("""{"type":"string"}""")));
+
+        Assert.Contains("direct member accesses", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CompileCanCombineDescriptorBackedPocoWithSchemaBoundJsonMember()
+    {
         using var payload = JsonDocument.Parse("""{"tenantId":"t1"}""");
-        var activation = CelActivation.Create(
-            ("account", new AccountContext { TenantId = "t1" }),
-            ("resource", new Resource { RawName = "alpha" }),
-            ("payload", payload.RootElement));
-
-        Assert.True(program.Invoke(activation));
-    }
-
-    [Fact]
-    public void EnvironmentCheckSupportsDescriptorBackedVariables()
-    {
         var typeRegistry = new CelTypeRegistryBuilder()
             .AddDescriptor(new CelTypeDescriptorBuilder<Resource>("example.Resource")
                 .AddMember("displayName", resource => resource.RawName.ToUpperInvariant())
                 .Build())
             .Build();
 
-        var environment = CelExpression.CreateEnvironment()
-            .SetTypeRegistry(typeRegistry)
-            .AddVariable<Resource>("resource")
-            .Build();
+        var options = new CelCompileOptions
+        {
+            TypeRegistry = typeRegistry
+        }.AddSchemaMember<MixedContext, JsonElement>(
+            x => x.Payload,
+            CelSchema.FromJson("""{"type":"object","properties":{"tenantId":{"type":"string"}}}"""));
 
-        var result = environment.Check("resource.displayName == 'ALPHA'");
+        var program = CelExpression.Compile<MixedContext, bool>(
+            "Account.TenantId == Payload.tenantId && Resource.displayName == 'ALPHA'",
+            options);
 
-        Assert.True(result.Success);
-        Assert.Equal(typeof(bool), result.ResultType);
+        var context = new MixedContext
+        {
+            Account = new AccountContext { TenantId = "t1" },
+            Payload = payload.RootElement,
+            Resource = new Resource { RawName = "alpha" }
+        };
+
+        Assert.True(program.Invoke(context));
     }
 }
