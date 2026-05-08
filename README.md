@@ -9,7 +9,7 @@ It is designed for scenarios where expressions are compiled once and evaluated m
 ## Key Features
 
 - **High Performance**: Compiles to reusable programs with an unrestricted delegate helper for near-native execution speed.
-- **Modern .NET**: Built for .NET 10+ with optimized memory usage.
+- **Modern .NET**: Built for .NET 8+ with optimized memory usage.
 - **Broad Input Support**: Bind to POCOs, `JsonElement`, `JsonNode`, or custom type descriptors.
 - **Spec-Compliant**: Comprehensive support for CEL operators, functions, macros, and optional types.
 - **Extensible**: Easily register custom functions and receiver-style extensions.
