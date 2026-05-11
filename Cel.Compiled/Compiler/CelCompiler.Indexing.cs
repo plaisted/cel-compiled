@@ -12,7 +12,7 @@ namespace Cel.Compiled.Compiler;
 
 public static partial class CelCompiler
 {
-    private static Expression CompileIndex(CelIndex index, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    private static Expression CompileIndex(CelIndex index, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, CelBindingScope scope)
     {
         if (index.IsOptional)
         {
@@ -22,10 +22,11 @@ public static partial class CelCompiler
 
         var operand = CompileNode(index.Operand, contextExpr, runtimeContextExpr, binders, scope);
         var indexExpr = CompileNode(index.Index, contextExpr, runtimeContextExpr, binders, scope);
+        RegisterSchemaIndexReference(index.Operand, index.Index, index);
         return CompileIndexAccess(operand, indexExpr, binders, index);
     }
 
-    private static CompiledOptional CompileOptionalIndex(CelIndex index, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, IReadOnlyDictionary<string, Expression>? scope)
+    private static CompiledOptional CompileOptionalIndex(CelIndex index, Expression contextExpr, Expression runtimeContextExpr, CelBinderSet binders, CelBindingScope scope)
     {
         if (TryCompileOptionalValue(index.Operand, contextExpr, runtimeContextExpr, binders, scope, out var operandOptional))
         {
@@ -44,11 +45,13 @@ public static partial class CelCompiler
                         innerOptional.Expression),
                     Expression.Call(s_optionalNone)));
 
+            RegisterSchemaIndexReference(index.Operand, index.Index, index);
             return new CompiledOptional(optionalExpression, innerOptional.ValueType);
         }
 
         var operand = CompileNode(index.Operand, contextExpr, runtimeContextExpr, binders, scope);
         var indexExpr = CompileNode(index.Index, contextExpr, runtimeContextExpr, binders, scope);
+        RegisterSchemaIndexReference(index.Operand, index.Index, index);
         return CompileOptionalIndexAccess(operand, indexExpr, binders, index);
     }
 

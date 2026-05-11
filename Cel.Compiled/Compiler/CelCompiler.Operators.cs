@@ -977,12 +977,5 @@ public static partial class CelCompiler
         return expr.Type.IsValueType ? Expression.Convert(expr, typeof(object)) : Expression.TypeAs(expr, typeof(object));
     }
 
-    private static IReadOnlyDictionary<string, Expression> ExtendScope(IReadOnlyDictionary<string, Expression>? scope, string name, Expression value)
-    {
-        var next = scope is null
-            ? new Dictionary<string, Expression>(StringComparer.Ordinal)
-            : new Dictionary<string, Expression>(scope, StringComparer.Ordinal);
-        next[name] = value;
-        return next;
-    }
+    private static CelBindingScope ExtendScope(CelBindingScope scope, string name, Expression value) => scope.Extend(name, value);
 }

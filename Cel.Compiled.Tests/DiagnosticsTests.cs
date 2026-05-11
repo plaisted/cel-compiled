@@ -8,6 +8,11 @@ namespace Cel.Compiled.Tests;
 
 public class DiagnosticsTests
 {
+    private sealed class DiagnosticEnvironmentContext
+    {
+        public JsonElement Payload { get; set; }
+    }
+
     [Fact]
     public void ParserAttachesSourceMapForRepresentativeNodes()
     {
@@ -45,6 +50,21 @@ public class DiagnosticsTests
     {
         var ex = Assert.Throws<CelCompilationException>(() => CelExpression.Compile<object>("1 + )"));
 
+        Assert.Equal("parse_error", ex.ErrorCode);
+        Assert.Equal(1, ex.Line);
+        Assert.Equal(5, ex.Column);
+        Assert.Equal("1 + )", ex.ExpressionText);
+        Assert.Equal(new CelSourceSpan(4, 5), ex.SourceSpan);
+    }
+
+    [Fact]
+    public void CheckParseFailureReturnsDiagnosticInsteadOfThrowing()
+    {
+        var result = CelExpression.Check<object>("1 + )");
+
+        Assert.False(result.Success);
+        Assert.Null(result.ResultType);
+        var ex = Assert.Single(result.Diagnostics);
         Assert.Equal("parse_error", ex.ErrorCode);
         Assert.Equal(1, ex.Line);
         Assert.Equal(5, ex.Column);
@@ -124,6 +144,29 @@ public class DiagnosticsTests
         Assert.Equal(new CelSourceSpan(0, 17), ex.SourceSpan);
         Assert.Equal(1, ex.Line);
         Assert.Equal(1, ex.Column);
+    }
+
+    [Fact]
+    public void CheckedCompilationSchemaFailureIncludesStructuredSourceLocation()
+    {
+        var options = new CelCompileOptions()
+            .AddSchemaMember<DiagnosticEnvironmentContext, JsonElement>(
+                x => x.Payload,
+                CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}"""),
+                CelValidationMode.Strict);
+
+        var result = CelExpression.Check<DiagnosticEnvironmentContext>("Payload.missing", options);
+
+        Assert.False(result.Success);
+        var ex = Assert.Single(result.Diagnostics);
+        Assert.Equal("Payload.missing", ex.ExpressionText);
+        Assert.Equal(new CelSourceSpan(0, 15), ex.SourceSpan);
+        Assert.Equal(1, ex.Line);
+        Assert.Equal(1, ex.Column);
+
+        var formatted = CelDiagnosticFormatter.Format(ex);
+        Assert.Contains("Payload.missing", formatted);
+        Assert.Contains("^", formatted);
     }
 
     [Fact]

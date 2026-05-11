@@ -9,7 +9,7 @@ It is designed for scenarios where expressions are compiled once and evaluated m
 ## Key Features
 
 - **High Performance**: Compiles to reusable programs with an unrestricted delegate helper for near-native execution speed.
-- **Modern .NET**: Built for .NET 10+ with optimized memory usage.
+- **Modern .NET**: Built for .NET 8+ with optimized memory usage.
 - **Broad Input Support**: Bind to POCOs, `JsonElement`, `JsonNode`, or custom type descriptors.
 - **Spec-Compliant**: Comprehensive support for CEL operators, functions, macros, and optional types.
 - **Extensible**: Easily register custom functions and receiver-style extensions.
@@ -77,6 +77,36 @@ var options = new CelCompileOptions
 var program = CelExpression.Compile<JsonElement, bool>(
     "name.trim().lowerAscii() == 'alice'",
     options);
+```
+
+### Schema-Backed Checking
+
+Use `CelCompileOptions` when you want schema-aware validation for JSON members on a strongly typed CLR context before compilation.
+
+```csharp
+using System.Text.Json;
+using Cel.Compiled;
+using Cel.Compiled.Compiler;
+
+public sealed class EvalContext
+{
+    public RequestContext Request { get; init; } = new();
+    public JsonElement Payload { get; init; }
+}
+
+var options = new CelCompileOptions()
+    .AddSchemaMember<EvalContext, JsonElement>(
+        x => x.Payload,
+        CelSchema.FromJson("""{"type":"object","properties":{"userId":{"type":"string"}}}"""),
+        CelValidationMode.Strict);
+
+var check = CelExpression.Check<EvalContext>("Request.UserId == Payload.userId", options);
+if (!check.Success)
+{
+    throw check.Diagnostics[0];
+}
+
+var program = CelExpression.CompileChecked<EvalContext, bool>("Request.UserId == Payload.userId", options);
 ```
 
 ### Runtime Safety For Untrusted Inputs
@@ -177,8 +207,7 @@ BenchmarkDotNet writes detailed reports to `BenchmarkDotNet.Artifacts/results/`.
 
 `Cel.Compiled` aims to be a practical, high-performance .NET CEL runtime, not a line-for-line clone of `cel-go`. The biggest current differences are:
 
-- **No dedicated static checking phase**: `cel-go` has an explicit parse -> check -> eval pipeline with a checked AST and richer type metadata. `Cel.Compiled` does perform compile-time binding and overload validation, but it does not currently expose a separate `Env.Check()`-style phase.
-- **Lighter environment model**: variables are primarily inferred from `TContext`, with functions and types supplied through `CelCompileOptions`. There is not yet a single first-class environment object that declaratively models variables, constants, functions, types, and checker inputs together.
+- **Static checking is present but intentionally scoped**: the library now exposes typed-root `Check(...)` / `CompileChecked(...)` workflows, including schema-backed JSON validation through `CelCompileOptions`. It does not yet expose a public checked AST or the broader tooling surface that `cel-go` builds around checked expressions.
 - **Runtime-first design**: the library is strongest when you compile once and reuse delegates. It is less optimized for one-off evaluation or tooling workflows built around checked AST inspection.
 - **No portable compiled-expression serialization**: compiled delegates are cached in-process, but there is no `cel-go`-style serialized checked-expression or compiled-plan format that can be saved and reloaded across processes.
 - **Partial evaluation and residualization are not implemented**: unknown propagation, residual AST generation, and richer evaluation-state tooling are still gaps.

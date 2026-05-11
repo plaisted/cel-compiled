@@ -36,6 +36,33 @@ public static class CelExpression
     }
 
     /// <summary>
+    /// Validates a CEL expression for a specific context type without compiling a reusable program.
+    /// </summary>
+    public static CelCheckResult Check<TContext>(string celExpression, CelCompileOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(celExpression);
+        return CelCompiler.Check<TContext>(celExpression, options);
+    }
+
+    /// <summary>
+    /// Compiles a CEL expression for a specific context type after validation.
+    /// </summary>
+    public static CelProgram<TContext, object?> CompileChecked<TContext>(string celExpression, CelCompileOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(celExpression);
+        return CelCompiler.CompileCheckedProgram<TContext>(celExpression, options);
+    }
+
+    /// <summary>
+    /// Compiles a CEL expression for a specific context type and result type after validation.
+    /// </summary>
+    public static CelProgram<TContext, TResult> CompileChecked<TContext, TResult>(string celExpression, CelCompileOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(celExpression);
+        return CelCompiler.CompileCheckedProgram<TContext, TResult>(celExpression, options);
+    }
+
+    /// <summary>
     /// Clears all cached compiled programs. Useful in long-running services that evaluate
     /// many distinct user-supplied expressions and need to bound memory growth.
     /// </summary>

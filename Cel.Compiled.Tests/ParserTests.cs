@@ -35,14 +35,18 @@ public class ParserTests
     [InlineData("R\"hello\\nworld\"", "hello\\nworld")]
     [InlineData("r\"\\\\\"", "\\\\")]
     [InlineData("r\"\"\"hello\\nworld\"\"\"", "hello\\nworld")]
-    public void ParseLiterals(string input, object expected)
+    public void ParseLiterals(string input, object? expected)
     {
         var expr = CelParser.Parse(input);
-        Assert.IsType<CelConstant>(expr);
-        Assert.Equal(expected, ((CelConstant)expr).Value.Value);
-        if (expected != null)
+        var constant = Assert.IsType<CelConstant>(expr);
+        if (expected is null)
         {
-            Assert.Equal(expected.GetType(), ((CelConstant)expr).Value.Value!.GetType());
+            Assert.Null(constant.Value.Value);
+        }
+        else
+        {
+            Assert.Equal(expected, constant.Value.Value);
+            Assert.Equal(expected.GetType(), constant.Value.Value!.GetType());
         }
     }
 
